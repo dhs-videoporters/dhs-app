@@ -1,42 +1,45 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DHS App · PRUEBAS</title>
-<style>
-body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#eef1f5;margin:0;color:#1d2433}
-.top{background:#b45309;color:#fff;padding:10px 16px;font-weight:700}
-.card{max-width:420px;margin:40px auto;background:#fff;border-radius:10px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.1);text-align:center}
-#estado{margin-top:16px;font-size:14px;line-height:1.5}
-.ok{color:#1e8449}.ko{color:#c0392b}
-button{margin-top:12px;padding:6px 12px}
-</style>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>DHS App (pruebas)</title>
+<meta name="theme-color" content="#1f3a5f">
+<link rel="icon" type="image/png" href="../img/icono-64.png">
+<link rel="apple-touch-icon" href="../img/icono-180.png">
+<meta name="apple-mobile-web-app-title" content="DHS Pruebas">
+<link rel="stylesheet" href="../css/app.css?v=1">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="../js/config-pruebas.js"></script>
-</head><body>
-<div class="top">DHS App · VERSIÓN DE PRUEBAS (datos de prueba, no reales)</div>
-<div class="card">
-  <h2>Prueba de acceso</h2>
-  <p>Entra con tu cuenta de Google de DHS.</p>
-  <div id="btnGoogle"></div>
-  <div id="estado">Cargando…</div>
-</div>
-<script>
-firebase.initializeApp(DHS_CONFIG.firebase);
-const auth=firebase.auth(), db=firebase.firestore(), $e=document.getElementById("estado");
-function alEntrar(r){ auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(r.credential)).catch(e=>{$e.innerHTML='<span class="ko">Error al entrar: '+e.code+'</span>';}); }
-window.onload=()=>{ google.accounts.id.initialize({client_id:DHS_CONFIG.googleClientId,callback:alEntrar}); google.accounts.id.renderButton(document.getElementById("btnGoogle"),{theme:"filled_blue",size:"large",text:"signin_with",locale:"es"}); };
-auth.onAuthStateChanged(async u=>{
-  if(!u){ $e.textContent="Sin sesión iniciada."; return; }
-  const t=async(n,f,debe)=>{ try{ await f(); return (debe?'<span class="ok">✔ ':'<span class="ko">✘ ')+n+': permitido</span>'; }catch(e){ return (debe?'<span class="ko">✘ ':'<span class="ok">✔ ')+n+': rechazado</span>'; } };
-  const r=[
-    await t("Leer administraciones (debe dejar)",()=>db.collection("dhs_admins").limit(1).get(),true),
-    await t("Escribir en el registro firmado (debe dejar)",()=>db.collection("dhs_registro").add({por:u.email.toLowerCase(),accion:"prueba",en:new Date()}),true),
-    await t("Escribir en el registro firmado por otro (debe rechazar)",()=>db.collection("dhs_registro").add({por:"otro@x.com",accion:"prueba",en:new Date()}),false),
-    await t("Leer una colección no permitida (debe rechazar)",()=>db.collection("prueba").doc("x").get(),false)
-  ].join("<br>");
-  $e.innerHTML='<span class="ok">Sesión iniciada como <b>'+u.email+'</b>.</span><br>'+r+'<br><button onclick="firebase.auth().signOut()">Salir</button>';
-});
-</script>
-</body></html>
+<script src="../js/config-pruebas.js?v=1"></script>
+<script src="../js/app.js?v=1"></script>
+</head>
+<body>
+<div class="entorno oculto">VERSIÓN DE PRUEBAS · datos de prueba, no reales</div>
+
+<!-- Entrada -->
+<section id="pantallaEntrada" class="entrada">
+  <div class="caja">
+    <img src="../img/logo.png" alt="DHS Videoporters">
+    <h1>DHS App</h1>
+    <p>Trabajos, calendario y comunidades</p>
+    <div id="btnGoogle" class="btnG"></div>
+    <div id="msgEntrada" class="msg">Cargando…</div>
+    <p style="margin:12px 0 0"><button id="btnOtraCuenta" class="oculto" style="border:0;background:none;color:var(--azul);text-decoration:underline">Entrar con otra cuenta</button></p>
+  </div>
+</section>
+
+<!-- App -->
+<section id="pantallaApp" class="oculto">
+  <header class="barra">
+    <div class="marca"><img src="../img/logo.png" alt="">DHS <span>App</span></div>
+    <nav id="menu" class="menu"></nav>
+    <div class="usuario"><span id="nombreUsuario" class="nombre"></span><button id="btnSalir">Salir</button></div>
+  </header>
+  <main id="contenido"></main>
+  <nav id="menuMovil" class="menu-movil"></nav>
+</section>
+</body>
+</html>
