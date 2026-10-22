@@ -29,9 +29,13 @@ function alEntrar(r){ auth.signInWithCredential(firebase.auth.GoogleAuthProvider
 window.onload=()=>{ google.accounts.id.initialize({client_id:DHS_CONFIG.googleClientId,callback:alEntrar}); google.accounts.id.renderButton(document.getElementById("btnGoogle"),{theme:"filled_blue",size:"large",text:"signin_with",locale:"es"}); };
 auth.onAuthStateChanged(async u=>{
   if(!u){ $e.textContent="Sin sesión iniciada."; return; }
-  let r;
-  try{ await db.collection("prueba").doc("x").get(); r='<span class="ko">La base de datos ha dejado leer: revisar reglas.</span>'; }
-  catch(e){ r='<span class="ok">Base de datos protegida: lectura rechazada sin permiso ('+e.code+').</span>'; }
+  const t=async(n,f,debe)=>{ try{ await f(); return (debe?'<span class="ok">✔ ':'<span class="ko">✘ ')+n+': permitido</span>'; }catch(e){ return (debe?'<span class="ko">✘ ':'<span class="ok">✔ ')+n+': rechazado</span>'; } };
+  const r=[
+    await t("Leer administraciones (debe dejar)",()=>db.collection("dhs_admins").limit(1).get(),true),
+    await t("Escribir en el registro firmado (debe dejar)",()=>db.collection("dhs_registro").add({por:u.email.toLowerCase(),accion:"prueba",en:new Date()}),true),
+    await t("Escribir en el registro firmado por otro (debe rechazar)",()=>db.collection("dhs_registro").add({por:"otro@x.com",accion:"prueba",en:new Date()}),false),
+    await t("Leer una colección no permitida (debe rechazar)",()=>db.collection("prueba").doc("x").get(),false)
+  ].join("<br>");
   $e.innerHTML='<span class="ok">Sesión iniciada como <b>'+u.email+'</b>.</span><br>'+r+'<br><button onclick="firebase.auth().signOut()">Salir</button>';
 });
 </script>
