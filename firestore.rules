@@ -1,0 +1,118 @@
+rules_version = '2';
+// Reglas de seguridad — App DHS (trabajos). Versión 1 (22/10/2026), para el proyecto de PRUEBAS (dhs-pruebas).
+// Norma: sin cuenta de Google autorizada no se lee ni se escribe nada. Solo la oficina borra.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Quién es quién ----------
+    function conSesion() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function correo() {
+      return request.auth.token.email.lower();
+    }
+    // Ángel y Joel: oficina siempre, aunque falte su ficha de usuario.
+    function esDireccion() {
+      return conSesion() && correo() in ['herrerazarzoso@gmail.com', 'dhsvideoporters@gmail.com'];
+    }
+    function ficha() {
+      return get(/databases/$(database)/documents/dhs_usuarios/$(correo())).data;
+    }
+    function tieneFicha() {
+      return conSesion() && exists(/databases/$(database)/documents/dhs_usuarios/$(correo()));
+    }
+    function esOficina() {
+      return esDireccion() || (tieneFicha() && ficha().rol == 'admin' && ficha().get('activo', true) == true);
+    }
+    function esTecnico() {
+      return tieneFicha() && ficha().rol == 'tecnico' && ficha().get('activo', true) == true;
+    }
+    function esUsuario() {
+      return esOficina() || esTecnico();
+    }
+    // El documento nuevo lleva la marca de quién lo ha cambiado, y es quien dice ser.
+    function firmaBien() {
+      return request.resource.data.modificado.por == correo();
+    }
+    function soloCambia(campos) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
+    }
+
+    // ---------- Usuarios ----------
+    match /dhs_usuarios/{email} {
+      allow read: if esOficina() || (conSesion() && email == correo());
+      allow write: if esOficina();
+    }
+
+    // ---------- Administraciones: solo Ángel y Joel las cambian ----------
+    match /dhs_admins/{id} {
+      allow read: if esUsuario();
+      allow create, update: if esDireccion() && firmaBien();
+      allow delete: if esDireccion();
+    }
+
+    // ---------- Comunidades / clientes ----------
+    match /dhs_comunidades/{id} {
+      allow read: if esUsuario();
+      allow create: if esOficina() && firmaBien();
+      // El técnico solo puede tocar las notas de la ficha.
+      allow update: if esOficina() && firmaBien()
+                    || esTecnico() && firmaBien() && soloCambia(['notas', 'modificado']);
+      allow delete: if esOficina();
+
+      // Contactos de vecinos: los técnicos pueden añadir y corregir; borrar solo la oficina.
+      match /contactos/{c} {
+        allow read: if esUsuario();
+        allow create, update: if esUsuario() && firmaBien();
+        allow delete: if esOficina();
+      }
+    }
+
+    // ---------- Personal y ausencias ----------
+    match /dhs_personal/{id} {
+      allow read: if esUsuario();
+      allow write: if esOficina();
+    }
+    match /dhs_ausencias/{id} {
+      allow read: if esUsuario();
+      allow write: if esOficina();
+    }
+
+    // ---------- Trabajos ----------
+    match /dhs_trabajos/{id} {
+      allow read: if esUsuario();
+      // Los técnicos pueden crear trabajos (avisos en la calle).
+      allow create: if esUsuario() && firmaBien()
+                    && request.resource.data.creado.por == correo();
+      // Oficina: todo. Técnico: solo su parte del trabajo.
+      allow update: if esOficina() && firmaBien()
+                    || esTecnico() && firmaBien()
+                       && soloCambia(['estado', 'material', 'tiempoReal', 'hechoPor', 'cobro',
+                                      'fotos', 'editando', 'modificado'])
+                       && request.resource.data.estado in ['nuevo', 'agendado', 'amedias', 'hecho'];
+      allow delete: if esOficina();
+
+      // Observaciones: cada uno firma las suyas; no se cambian ni se borran (salvo oficina).
+      match /notas/{n} {
+        allow read: if esUsuario();
+        allow create: if esUsuario() && request.resource.data.por == correo();
+        allow update, delete: if esOficina();
+      }
+    }
+
+    // ---------- Numeración (2026-0001, P2026-0001) ----------
+    match /dhs_contadores/{id} {
+      allow read: if esUsuario();
+      allow create: if esUsuario() && request.resource.data.valor == 1;
+      allow update: if esUsuario() && request.resource.data.valor == resource.data.valor + 1;
+    }
+
+    // ---------- Registro de cambios: se escribe, no se toca ----------
+    match /dhs_registro/{id} {
+      allow read: if esOficina();
+      allow create: if esUsuario() && request.resource.data.por == correo();
+    }
+
+    // Todo lo demás: cerrado.
+  }
+}
