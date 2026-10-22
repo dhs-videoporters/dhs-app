@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DHS App · PRUEBAS · Carga de lista maestra</title>
+<style>
+body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#eef1f5;margin:0;color:#1d2433}
+.top{background:#b45309;color:#fff;padding:10px 16px;font-weight:700}
+.card{max-width:760px;margin:24px auto;background:#fff;border-radius:10px;padding:20px 24px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+h2{margin-top:0}.ok{color:#1e8449}.ko{color:#c0392b}.muted{color:#5a6577;font-size:13px}
+label{display:block;margin:12px 0 4px;font-weight:600}
+button{padding:8px 14px;border-radius:6px;border:0;background:#1f3a5f;color:#fff;font-weight:600;cursor:pointer}
+button:disabled{background:#9aa5b5;cursor:default}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:8px}
+td,th{border-bottom:1px solid #e5e9f0;padding:4px 6px;text-align:left}
+#log{white-space:pre-wrap;font-size:13px;margin-top:12px}
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="../js/config-pruebas.js"></script>
+</head><body>
+<div class="top">DHS App · VERSIÓN DE PRUEBAS · Carga de la lista maestra</div>
+<div class="card">
+  <h2>Carga de administraciones y comunidades</h2>
+  <p class="muted">Solo para Ángel o Joel. Los archivos se leen en este ordenador y se guardan en la base de datos de <b>pruebas</b>; no se suben a ningún otro sitio.</p>
+  <div id="btnGoogle"></div>
+  <div id="sesion" class="muted"></div>
+  <label>1. Copia de Cobros (dhs-cobros-copia-….json)</label><input type="file" id="fCob" accept=".json">
+  <label>2. Copia de Cámaras (dhs-camaras-copia-….json)</label><input type="file" id="fCam" accept=".json">
+  <p><button id="bPrev" disabled>Ver resumen</button> <button id="bCarga" disabled>Cargar en pruebas</button></p>
+  <div id="res"></div>
+  <div id="log"></div>
+</div>
+<script>
+firebase.initializeApp(DHS_CONFIG.firebase);
+const auth=firebase.auth(), db=firebase.firestore();
+const $=id=>document.getElementById(id);
+const OFICINA=["herrerazarzoso@gmail.com","dhsvideoporters@gmail.com"];
+let usuario=null, plan=null;
+
+// Lista de administraciones confirmada por Ángel el 22/10/2026
+const ADMINS=[
+ ["a3-assessoria","A3 Assessoria",["A3","A3 ASSESSORIA"],["a3@a3assessoria.es"]],
+ ["admi-finques","Admi Finques",["ADMI FINQUES","ADMIFINCAS","ADMI FINCAS"],["admi@admifinques.es"]],
+ ["anvigar","Anvigar",["ANVIGAR"],["comunitats@anvigar.cat"]],
+ ["lucmar-fincas","Lucmar Fincas",["LUCMA","LUCMAR"],["info@lucmarfincas.es"]],
+ ["romarc","Romarc",["ROMARC"],["administracio@romarc.es"]],
+ ["urbe-finques","Urbe Finques",["URBE","URBE FINQUES"],["horitzontal@urbefinques.es"]],
+ ["afincar","Afincar",["AFINCAR"],["info@afincar.com"]],
+ ["ati-fincas","Ati Fincas",["ATI FINCAS","ATI"],[]],
+ ["ciudadela","Ciudadela",["CIUDADELA"],[]],
+ ["campoamor","Campoamor",["CAMPOAMOR"],[]],
+ ["suberna","Suberna",["SUBERNA"],[]],
+ ["econom","Ecónom",["ECONOM","ECÓNOM"],[]],
+ ["administracio-m-uriol","Administració M. Uriol",["M URIOL","URIOL"],[]],
+ ["doscc-castellar","DOSCC Castellar",["DOSCC","DOSCC CASTELLAR"],[]],
+ ["nostrallar","Nostrallar",["NOSTRALLAR"],[]],
+ ["finques-martin","Finques Martín",["FINQUES MARTIN","FINCAS MARTIN"],[]],
+ ["fincamps","Fincamps",["FINCAMPS"],[]]
+];
+const sinAcentos=s=>(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().trim();
+const aliasA={}; ADMINS.forEach(([id,n,al])=>{ [n,...al].forEach(a=>aliasA[sinAcentos(a)]="a_"+id); });
+const PALABRAS=/\b(CDAD|COMUNIDAD|COMUNITAT|DE|PROP|PROPIETARIOS|PROPIETARIS|CP|CPP|CCPP|CL|C|LA|DEL|PZ|PL|PLAZA|PZA|CTRA|CR|CARRETERA|AV|AVDA|AVINGUDA|RD|RDA|VECINOS|SABADELL|BARBERA|VALLES|EDIF|EDIFICI)\b/g;
+const norm=s=>sinAcentos(s).replace(/[^\w ]/g," ").replace(PALABRAS," ").replace(/\bJAIME\b/g,"JAUME").replace(/\s+/g," ").trim();
+const slug=s=>sinAcentos(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50);
+const tipoPorNif=n=>{ const c=(n||"").toUpperCase()[0]||""; return c==="H"?"comunidad":("ABCDEFGJNPQRSUVW".includes(c)?"empresa":"particular"); };
+const firma=()=>({por:usuario.email.toLowerCase(),en:firebase.firestore.FieldValue.serverTimestamp()});
+
+function alEntrar(r){ auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(r.credential)).catch(e=>$("sesion").textContent="Error: "+e.code); }
+window.onload=()=>{ google.accounts.id.initialize({client_id:DHS_CONFIG.googleClientId,callback:alEntrar}); google.accounts.id.renderButton($("btnGoogle"),{theme:"filled_blue",size:"large",locale:"es"}); };
+auth.onAuthStateChanged(u=>{ usuario=u;
+  if(!u){ $("sesion").textContent="Sin sesión."; $("bPrev").disabled=true; return; }
+  const ok=OFICINA.includes(u.email.toLowerCase());
+  $("sesion").innerHTML=ok?'<span class="ok">Dentro como '+u.email+'</span>':'<span class="ko">'+u.email+' no puede hacer la carga.</span>';
+  $("bPrev").disabled=!ok;
+});
+const leer=f=>new Promise((ok,ko)=>{ if(!f) return ko("Falta un archivo"); const r=new FileReader(); r.onload=()=>{ try{ ok(JSON.parse(r.result)); }catch(e){ ko("Archivo no válido: "+f.name); } }; r.readAsText(f); });
+
+$("bPrev").onclick=async()=>{
+  try{
+    const cob=await leer($("fCob").files[0]), cam=await leer($("fCam").files[0]);
+    if(!cob.docs) throw "El archivo 1 no es una copia de Cobros";
+    if(!cam.instalaciones) throw "El archivo 2 no es una copia de Cámaras";
+    const coms={}, sinAdmin=[];
+    // 1. Clientes de Cobros (id = NIF)
+    Object.values(cob.docs).filter(d=>d.tipo==="cliente").forEach(c=>{
+      const nif=(c.nif||"").toUpperCase(), id="c_"+nif;
+      const adm=c.admin?aliasA[sinAcentos(c.admin)]||null:null;
+      if(c.admin && !adm && !["ALAMO","ARMENGOL"].includes(sinAcentos(c.admin))) sinAdmin.push(c.admin);
+      coms[id]={tipo:tipoPorNif(nif),nombre:c.nombre,nif,csId:c.csId||null,adminId:adm,direccion:"",poblacion:"",
+        presidente:{nombre:"",piso:"",telefono:""},vecinos:null,videoportero:{marca:"",modelo:"",año:null,monitores:""},
+        tv:{antena:"",multibanda:null,parabolica:null},camaras:{tiene:false,instalacionId:null,numero:null},acceso:"",notas:"",activo:true,origen:["cobros"]};
+    });
+    // 2. Instalaciones de Cámaras: se unen a su comunidad si coincide el nombre; si no, comunidad nueva
+    const porNombre={}; Object.entries(coms).forEach(([id,c])=>{ porNombre[norm(c.nombre)]=id; });
+    let unidas=[], nuevas=[];
+    Object.entries(cam.instalaciones).forEach(([iid,i])=>{
+      const adm=i.admin?aliasA[sinAcentos(i.admin)]||null:null;
+      if(i.admin && !adm) sinAdmin.push(i.admin);
+      let id=porNombre[norm(i.comunidad)];
+      if(id){ unidas.push(i.comunidad+" → "+coms[id].nombre); }
+      else{ id="c_"+slug(i.comunidad); nuevas.push(i.comunidad);
+        coms[id]={tipo:"comunidad",nombre:i.comunidad,nif:"",csId:null,adminId:null,direccion:"",poblacion:"",
+          presidente:{nombre:"",piso:"",telefono:""},vecinos:null,videoportero:{marca:"",modelo:"",año:null,monitores:""},
+          tv:{antena:"",multibanda:null,parabolica:null},camaras:{tiene:false,instalacionId:null,numero:null},acceso:"",notas:"",activo:true,origen:[]}; }
+      const c=coms[id];
+      c.adminId=c.adminId||adm; c.direccion=c.direccion||i.direccion||""; c.poblacion=c.poblacion||i.ciudad||"";
+      if(i.contacto||i.telefono) c.presidente={nombre:i.contacto||"",piso:"",telefono:i.telefono||""};
+      c.camaras={tiene:true,instalacionId:iid,numero:i.camaras??null};
+      if(i.notas) c.notas=(c.notas?c.notas+"\n":"")+i.notas;
+      c.origen=[...new Set([...c.origen,"camaras"])];
+    });
+    plan={coms};
+    const t={comunidad:0,empresa:0,particular:0}; Object.values(coms).forEach(c=>t[c.tipo]++);
+    $("res").innerHTML=`<p><b>${ADMINS.length}</b> administraciones · <b>${Object.keys(coms).length}</b> clientes (${t.comunidad} comunidades, ${t.empresa} empresas, ${t.particular} particulares)</p>
+      <p><b>${unidas.length}</b> instalaciones de cámaras unidas a su comunidad de cobros:</p><table>${unidas.map(x=>"<tr><td>"+x+"</td></tr>").join("")}</table>
+      <p><b>${nuevas.length}</b> comunidades nuevas (solo estaban en cámaras): <span class="muted">${nuevas.join(" · ")}</span></p>
+      <p>Clientes con administración asignada: <b>${Object.values(coms).filter(c=>c.adminId).length}</b>. ${sinAdmin.length?'<span class="ko">Administraciones sin reconocer: '+[...new Set(sinAdmin)].join(", ")+'</span>':'<span class="ok">Todas las administraciones reconocidas (ALAMO y ARMENGOL quedan como clientes empresa).</span>'}</p>`;
+    $("bCarga").disabled=false;
+  }catch(e){ $("res").innerHTML='<span class="ko">'+e+'</span>'; }
+};
+
+$("bCarga").onclick=async()=>{
+  if(!plan) return; $("bCarga").disabled=true; $("log").textContent="Cargando…";
+  try{
+    const ops=[];
+    ADMINS.forEach(([id,nombre,alias,emails])=>ops.push(["dhs_admins","a_"+id,{nombre,alias,emails,telefono:"",web:"",direccion:"",notas:"",personas:[],activo:true,creado:firma(),modificado:firma()}]));
+    Object.entries(plan.coms).forEach(([id,c])=>ops.push(["dhs_comunidades",id,{...c,creado:firma(),modificado:firma()}]));
+    for(let i=0;i<ops.length;i+=400){ const b=db.batch(); ops.slice(i,i+400).forEach(([col,id,d])=>b.set(db.collection(col).doc(id),d)); await b.commit(); }
+    await db.collection("dhs_registro").add({por:usuario.email.toLowerCase(),accion:"carga inicial lista maestra",coleccion:"dhs_admins+dhs_comunidades",n:ops.length,en:firebase.firestore.FieldValue.serverTimestamp()});
+    const [a,c]=await Promise.all([db.collection("dhs_admins").get(),db.collection("dhs_comunidades").get()]);
+    $("log").innerHTML='<span class="ok">Carga hecha. En la base de pruebas hay ahora '+a.size+' administraciones y '+c.size+' clientes.</span>';
+  }catch(e){ $("log").innerHTML='<span class="ko">Error: '+(e.code||e)+'</span>'; $("bCarga").disabled=false; }
+};
+</script>
+</body></html>
