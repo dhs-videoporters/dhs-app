@@ -1,0 +1,14 @@
+// Configuración PÚBLICA del proyecto Firebase de PRUEBAS (dhs-pruebas).
+// Estas claves no son secretas: la seguridad la ponen las reglas de Firestore.
+window.DHS_CONFIG = {
+  entorno: "pruebas",
+  firebase: {
+    apiKey: "AIzaSyA8RF2qbRo5b89OHkTClQLMZxzeHqXdKNc",
+    authDomain: "dhs-pruebas.firebaseapp.com",
+    projectId: "dhs-pruebas",
+    storageBucket: "dhs-pruebas.firebasestorage.app",
+    messagingSenderId: "564284457863",
+    appId: "1:564284457863:web:a22f9ca96bb889c4c54922"
+  },
+  googleClientId: "564284457863-brbfrs1kq8limfe0cdpa2m8jtvu0me1h.apps.googleusercontent.com"
+};
