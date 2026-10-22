@@ -1,4 +1,4 @@
-# Modelo de datos — App DHS (v1, 22/10/2026)
+# Modelo de datos — App DHS (v1, 22/10/2026 — confirmado por Ángel)
 
 Todo vive en Firebase (Firestore). Oficial: proyecto `dhs-camaras` (el mismo de cobros y cámaras, para compartir la lista maestra). Pruebas: proyecto `dhs-pruebas`, con la misma estructura y datos de prueba.
 
@@ -47,7 +47,7 @@ Subcolección `contactos` (vecinos por piso): {piso, nombre, telefono, nota}.
 ### `dhs_trabajos`
 | Campo | Ejemplo | Nota |
 |---|---|---|
-| numero | 2026-0001 | correlativo por año |
+| numero | 2026-0001 | correlativo por año. Presupuestos: P2026-0001. Facturas: el número lo pone Contasimple (hoy 2026-0001; para usar la F, cambiar serie en Contasimple tras consultar al gestor) |
 | comunidadId | `c_H61745162` | |
 | origen | administracion / particular | |
 | tipo | reparacion / instalacion / tv / mantenimiento / pequeño / visita-presupuesto | |
@@ -88,7 +88,7 @@ Subcolección `notas`: {texto, por, en} (las observaciones que se van añadiendo
 | | Oficina (admin) | Técnico |
 |---|---|---|
 | Administraciones y comunidades | ver, crear, cambiar | ver; añadir contactos y notas |
-| Trabajos | todo | ver; en los suyos: notas, material, tiempo, fotos, estado (A medias / Hecho) |
+| Trabajos | todo | ver; **crear trabajos nuevos** (avisos en la calle; quedan en su agenda y la oficina los ve como "Nuevo · creado por …"); en los suyos: notas, material, tiempo, fotos, estado (A medias / Hecho) |
 | Precios | ver y cambiar | ver |
 | Personal, usuarios, ausencias | todo | ver |
 | Registro de cambios | ver | — |
