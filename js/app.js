@@ -9,9 +9,9 @@
 
   // Secciones del menú. "soloOficina": no aparece a los técnicos.
   const SECCIONES = [
+    {id:"comunidades",    nombre:"Comunidades",     ico:"🏢"},
     {id:"calendario",     nombre:"Calendario",      ico:"📅"},
     {id:"trabajos",       nombre:"Trabajos",        ico:"🛠️"},
-    {id:"comunidades",    nombre:"Comunidades",     ico:"🏢"},
     {id:"administradores",nombre:"Administradores", ico:"👥", soloOficina:true}
   ];
 
@@ -56,7 +56,7 @@
     Object.assign(S, {usuario:u, rol:q.rol, nombre:q.nombre});
     montarMenu();
     mostrar("app");
-    irA(location.hash.slice(1) || "calendario");
+    irA(location.hash.slice(1) || "comunidades");
   });
 
   function mostrar(cual){
@@ -73,11 +73,14 @@
   }
   window.addEventListener("hashchange", () => S.usuario && irA(location.hash.slice(1)));
 
-  function irA(id){
-    if(!secciones().some(s => s.id === id)) id = "calendario";
+  function irA(ruta){
+    const [id0, arg] = decodeURIComponent(ruta||"").split("/");
+    let id = id0 === "comunidad" ? "comunidades" : id0;
+    if(!secciones().some(s => s.id === id)) id = "comunidades";
     document.querySelectorAll("#menu a, #menuMovil a").forEach(a => a.classList.toggle("on", a.dataset.id === id));
     const sec = SECCIONES.find(s => s.id === id);
     document.title = sec.nombre + " · DHS App" + (C.entorno === "pruebas" ? " (pruebas)" : "");
+    if(id0 === "comunidad" && arg) return window.DHS_COM.ficha($("#contenido"), arg);
     (VISTAS[id] || (()=>{}))($("#contenido"));
   }
 
@@ -86,16 +89,7 @@
   const VISTAS = {
     calendario: el => el.innerHTML = panel("Calendario", "Aquí irá el calendario a 15 días vista (fase 4)."),
     trabajos:   el => el.innerHTML = panel("Trabajos", "Aquí irán los trabajos (fase 3)."),
-    comunidades: async el => {
-      el.innerHTML = panel("Comunidades", "Cargando…");
-      try{
-        const s = await db.collection("dhs_comunidades").get();
-        const t = {comunidad:0, empresa:0, particular:0}; let conAdm = 0;
-        s.forEach(d => { const c=d.data(); t[c.tipo]=(t[c.tipo]||0)+1; if(c.adminId) conAdm++; });
-        el.innerHTML = panel("Comunidades", "La lista y la ficha de cada comunidad llegan en las sesiones 12 y 13.",
-          `<div class="cifras"><div class="cifra"><b>${t.comunidad}</b><span>comunidades</span></div><div class="cifra"><b>${t.empresa}</b><span>empresas</span></div><div class="cifra"><b>${t.particular}</b><span>particulares</span></div><div class="cifra"><b>${s.size-conAdm}</b><span>sin administración</span></div></div>`);
-      }catch(e){ el.innerHTML = panel("Comunidades", "No se han podido leer los datos ("+e.code+")."); }
-    },
+    comunidades: el => window.DHS_COM.lista(el),
     administradores: async el => {
       el.innerHTML = panel("Administradores", "Cargando…");
       try{
