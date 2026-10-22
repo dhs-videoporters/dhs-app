@@ -13,7 +13,8 @@ Regla general: cada documento guarda `creado` y `modificado` = `{por: correo, en
 | nombre | A3 Assessoria | nombre oficial, el que sale en el desplegable |
 | alias | ["A3", "A3 ASSESSORIA"] | cómo aparece escrito en las apps antiguas; sirve para unificar |
 | emails | ["a3@a3assessoria.es"] | a donde van resúmenes y actas |
-| telefono, contacto, notas | | |
+| telefono, web, direccion, notas | | |
+| personas | [{nombre, cargo, telefono, movil, email, nota}] | las personas con las que hablamos en cada administración; se rellenan desde el botón **Administradores** de la web |
 | activo | true | se desactiva, nunca se borra |
 
 ### `dhs_comunidades` — Clientes: comunidades, particulares y empresas (lista maestra)
