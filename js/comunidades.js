@@ -182,5 +182,34 @@
     };
   }
 
-  window.DHS_COM = { lista, ficha, recargar: () => cargar(true) };
+  // ---------- BUSCADOR GLOBAL (barra de arriba) ----------
+  function buscadorGlobal(input, caja){
+    let sel = -1, res = [];
+    const cerrar = () => { caja.classList.add("oculto"); sel = -1; };
+    const abrir = id => { cerrar(); input.value = ""; input.blur(); location.hash = "comunidad/" + encodeURIComponent(id); };
+    input.oninput = async () => {
+      const q = sinAc(input.value.trim());
+      if(q.length < 2){ cerrar(); return; }
+      try{ await cargar(); }catch(e){ return; }
+      res = Object.entries(CACHE.coms).filter(([id,c]) => c.activo !== false &&
+        sinAc([c.nombre,c.direccion,c.poblacion,c.nif,nombreAdmin(c.adminId),(c.presidente||{}).nombre].join(" ")).includes(q))
+        .sort((a,b) => a[1].nombre.localeCompare(b[1].nombre)).slice(0, 12);
+      sel = -1;
+      caja.innerHTML = res.length ? res.map(([id,c],i) => `<div class="r-item" data-i="${i}"><b>${esc(c.nombre)}</b><span>${esc([c.direccion,c.poblacion,nombreAdmin(c.adminId)].filter(Boolean).join(" · "))}</span></div>`).join("")
+        : `<div class="r-vacio">Sin resultados</div>`;
+      caja.classList.remove("oculto");
+      caja.querySelectorAll(".r-item").forEach(d => d.onmousedown = e => { e.preventDefault(); abrir(res[d.dataset.i][0]); });
+    };
+    input.onkeydown = e => {
+      const items = caja.querySelectorAll(".r-item");
+      if(e.key === "ArrowDown"){ sel = Math.min(sel+1, items.length-1); e.preventDefault(); }
+      else if(e.key === "ArrowUp"){ sel = Math.max(sel-1, 0); e.preventDefault(); }
+      else if(e.key === "Enter"){ if(res.length) abrir(res[Math.max(sel,0)][0]); return; }
+      else if(e.key === "Escape"){ cerrar(); return; }
+      items.forEach((d,i) => d.classList.toggle("sel", i === sel));
+    };
+    input.onblur = () => setTimeout(cerrar, 150);
+  }
+
+  window.DHS_COM = { lista, ficha, buscadorGlobal, recargar: () => cargar(true) };
 })();

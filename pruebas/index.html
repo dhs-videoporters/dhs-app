@@ -8,14 +8,14 @@
 <link rel="icon" type="image/png" href="../img/icono-64.png">
 <link rel="apple-touch-icon" href="../img/icono-180.png">
 <meta name="apple-mobile-web-app-title" content="DHS Pruebas">
-<link rel="stylesheet" href="../css/app.css?v=2">
+<link rel="stylesheet" href="../css/app.css?v=3">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="../js/config-pruebas.js?v=1"></script>
-<script src="../js/comunidades.js?v=1"></script>
-<script src="../js/app.js?v=2"></script>
+<script src="../js/comunidades.js?v=2"></script>
+<script src="../js/app.js?v=3"></script>
 </head>
 <body>
 <div class="entorno oculto">VERSIÓN DE PRUEBAS · datos de prueba, no reales</div>
@@ -37,6 +37,7 @@
   <header class="barra">
     <div class="marca"><img src="../img/logo.png" alt="">DHS <span>App</span></div>
     <nav id="menu" class="menu"></nav>
+    <div class="buscador"><input id="buscaGlobal" placeholder="🔍 Buscar comunidad, calle, NIF…" autocomplete="off"><div id="resGlobal" class="res-global oculto"></div></div>
     <div class="usuario"><span id="nombreUsuario" class="nombre"></span><button id="btnSalir">Salir</button></div>
   </header>
   <main id="contenido"></main>

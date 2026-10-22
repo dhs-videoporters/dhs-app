@@ -9,8 +9,8 @@
 
   // Secciones del menú. "soloOficina": no aparece a los técnicos.
   const SECCIONES = [
-    {id:"comunidades",    nombre:"Comunidades",     ico:"🏢"},
     {id:"calendario",     nombre:"Calendario",      ico:"📅"},
+    {id:"comunidades",    nombre:"Comunidades",     ico:"🏢"},
     {id:"trabajos",       nombre:"Trabajos",        ico:"🛠️"},
     {id:"administradores",nombre:"Administradores", ico:"👥", soloOficina:true}
   ];
@@ -55,8 +55,9 @@
     }
     Object.assign(S, {usuario:u, rol:q.rol, nombre:q.nombre});
     montarMenu();
+    window.DHS_COM.buscadorGlobal(document.querySelector("#buscaGlobal"), document.querySelector("#resGlobal"));
     mostrar("app");
-    irA(location.hash.slice(1) || "comunidades");
+    irA(location.hash.slice(1) || "calendario");
   });
 
   function mostrar(cual){
@@ -76,7 +77,7 @@
   function irA(ruta){
     const [id0, arg] = decodeURIComponent(ruta||"").split("/");
     let id = id0 === "comunidad" ? "comunidades" : id0;
-    if(!secciones().some(s => s.id === id)) id = "comunidades";
+    if(!secciones().some(s => s.id === id)) id = "calendario";
     document.querySelectorAll("#menu a, #menuMovil a").forEach(a => a.classList.toggle("on", a.dataset.id === id));
     const sec = SECCIONES.find(s => s.id === id);
     document.title = sec.nombre + " · DHS App" + (C.entorno === "pruebas" ? " (pruebas)" : "");
