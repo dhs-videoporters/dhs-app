@@ -241,7 +241,7 @@
   }
 
   // ---------- LISTA (pendientes primero, por prioridad) ----------
-  const filtro = {ver:"pendientes", espec:"todas"};
+  const filtro = {ver:"pendientes", espec:"todas", quien:"todos", estado:"todos", texto:""};
   async function lista(el){
     const {S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
@@ -258,18 +258,30 @@
           <button class="chip ${filtro.espec==="todas"?"on":""}" data-k="todas">Todo</button>
           ${Object.entries(ESPEC).map(([k,[i,n]]) => `<button class="chip ${filtro.espec===k?"on":""}" data-k="${k}">${i} ${n}</button>`).join("")}
         </div>
+        <div class="filtros-int">
+          <input id="busInt" placeholder="Buscar calle, número, descripción…" value="${esc(filtro.texto)}">
+          <select id="selQuien"><option value="todos">Todo el equipo</option><option value="nadie" ${filtro.quien==="nadie"?"selected":""}>Sin asignar</option>${Object.entries(P).filter(([k,p]) => p.activo !== false).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,p]) => `<option value="${esc(k)}" ${filtro.quien===k?"selected":""}>${esc(p.nombre)}</option>`).join("")}</select>
+          <select id="selEstado"><option value="todos">Todos los estados</option>${Object.entries(ESTADOS).map(([k,n]) => `<option value="${k}" ${filtro.estado===k?"selected":""}>${n}</option>`).join("")}</select>
+        </div>
         <p class="vacio" style="margin-top:8px">${ORDEN_PRIOR.map(k => PRIOR[k][0] + " " + PRIOR[k][1]).join(" · ")}${S.puede("trabajos","todo") ? " — toca el punto para cambiar la prioridad" : ""}</p>
-        <div class="lista" id="listaInt" style="margin-top:8px"></div>
+        <p id="cuentaInt" class="vacio" style="margin-top:4px;font-weight:600"></p><div class="lista" id="listaInt" style="margin-top:4px"></div>
       </div>`;
     const pintar = () => {
       const vis = docs.filter(t => (filtro.ver === "todas" || (filtro.ver === "pendientes" ? !CERRADOS.includes(t.estado) : CERRADOS.includes(t.estado)))
-                              && (filtro.espec === "todas" || t.especialidad === filtro.espec)).sort(porPrioridad);
+                              && (filtro.espec === "todas" || t.especialidad === filtro.espec)
+                              && (filtro.estado === "todos" || t.estado === filtro.estado)
+                              && (filtro.quien === "todos" || (filtro.quien === "nadie" ? !(t.asignados||[]).length : (t.asignados||[]).includes(filtro.quien)))
+                              && (!filtro.texto || sinAc([t.numero, t.nombre, t.direccion, t.poblacion, t.descripcion, t.avisa && t.avisa.nombre].join(" ")).includes(sinAc(filtro.texto)))).sort(porPrioridad);
+      el.querySelector("#cuentaInt").textContent = vis.length + (vis.length === 1 ? " intervención" : " intervenciones");
       const caja = el.querySelector("#listaInt");
       caja.innerHTML = vis.map(t => fila(t, P)).join("") || `<p class="vacio" style="padding:10px 0">No hay intervenciones aquí.</p>`;
       activarPrioridad(caja, docs, pintar);
     };
     const chips = (sel, campo) => el.querySelectorAll(sel + " .chip").forEach(b => b.onclick = () => { filtro[campo] = b.dataset.k; el.querySelectorAll(sel + " .chip").forEach(x => x.classList.toggle("on", x === b)); pintar(); });
     chips("#chVer", "ver"); chips("#chEsp", "espec");
+    el.querySelector("#busInt").oninput = e => { filtro.texto = e.target.value.trim(); pintar(); };
+    el.querySelector("#selQuien").onchange = e => { filtro.quien = e.target.value; pintar(); };
+    el.querySelector("#selEstado").onchange = e => { filtro.estado = e.target.value; if(e.target.value !== "todos"){ filtro.ver = "todas"; el.querySelectorAll("#chVer .chip").forEach(x => x.classList.toggle("on", x.dataset.k === "todas")); } pintar(); };
     pintar();
   }
 
@@ -296,38 +308,177 @@
   }
   async function contar(comId){ try{ return (await leer(comId)).length; }catch(e){ return null; } }
 
-  // ---------- FICHA DE LA INTERVENCIÓN ----------
+  // ---------- FICHA DE LA INTERVENCIÓN (sesión 18: estados, historial, notas, cita) ----------
+  // Estados que puede poner cada uno. Con "editar" (técnicos) o "solo los suyos" (subcontratas): los del día a día.
+  // Con "todo" (Dirección, Oficina): además presupuesto, esperando respuesta, cancelado, facturado y cobrado.
+  const EST_TECNICO = ["nuevo","agendado","amedias","hecho"];
+  const EST_TODO = ["nuevo","presupuesto","esperando","agendado","amedias","hecho","facturado","cobrado","cancelado"];
+  const ICO_EST = {nuevo:"🆕", presupuesto:"📝", esperando:"⏳", agendado:"📅", amedias:"🔧", hecho:"✅", facturado:"🧾", cobrado:"💶", cancelado:"✖️"};
+  const horaReg = ts => ts && ts.toDate ? ts.toDate().toLocaleString("es-ES", {day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit"}) : "ahora";
+
   async function ficha(el, id){
     const {db, S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
-    let t, P;
-    try{ P = await personal(); const d = await db.collection("dhs_trabajos").doc(id).get(); if(!d.exists) throw {code:"no existe"}; t = d.data(); }
-    catch(e){ el.innerHTML = `<div class="panel">No se ha podido abrir la intervención (${esc(e.code)}). <a href="#intervenciones">Volver</a></div>`; return; }
+    const ref = db.collection("dhs_trabajos").doc(id);
+    let t, P, notas = [];
+    try{
+      P = await personal(); const d = await ref.get(); if(!d.exists) throw {code:"no existe"}; t = d.data();
+      (await ref.collection("notas").orderBy("en").get()).forEach(n => notas.push(n.data()));
+    }catch(e){ el.innerHTML = `<div class="panel">No se ha podido abrir la intervención (${esc(e.code)}). <a href="#intervenciones">Volver</a></div>`; return; }
+    const todo = S.puede("trabajos","todo");
+    const mio = (t.asignados||[]).includes(S.personalId);
+    const puedeTocar = todo || S.puede("trabajos","editar") || mio;
+    const estadosPosibles = todo ? EST_TODO : EST_TECNICO;
+    const yo = S.usuario.email.toLowerCase();
+    const nombreDe = correo => { const p = Object.values(P).find(x => (x.email||"").toLowerCase() === correo); return p ? p.nombre : (correo === "herrerazarzoso@gmail.com" ? "Ángel" : correo === "dhsvideoporters@gmail.com" ? "Joel" : correo); };
     const dato = (k, v) => `<div class="dato"><span>${k}</span><b>${v === "" || v == null ? "—" : v}</b></div>`;
     const conFicha = t.comunidadId && S.puede("comunidades");
     const cliente = conFicha ? `<a href="#comunidad/${encodeURIComponent(t.comunidadId)}">${esc(t.nombre)}</a>` : esc(t.nombre);
     const pr = PRIOR[t.urgencia] || PRIOR.normal;
+    const activos = Object.entries(P).filter(([k,p]) => p.activo !== false).sort((a,b) => a[1].nombre.localeCompare(b[1].nombre));
+    const cita0 = (t.citas||[])[0] || {};
+
     el.innerHTML = `
       <a href="#intervenciones" class="volver">‹ Intervenciones</a>
       <div class="panel cab-ficha">
         <div class="ico-ficha">${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] : "🛠️"}</div>
         <div class="cab-txt"><h1>${cliente}</h1>
           <div class="vacio">${esc(t.numero)} · ${esc([t.direccion, t.poblacion].filter(Boolean).join(" · "))}</div></div>
-        <div class="f-tags"><span class="tag">${pr[0]} ${pr[1]}</span><span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span></div>
+        <div class="f-tags"><span class="tag">${pr[0]} ${pr[1]}</span><span class="tag est-${esc(t.estado)}">${ICO_EST[t.estado]||""} ${esc(ESTADOS[t.estado]||t.estado)}</span></div>
       </div>
+
+      ${puedeTocar ? `<div class="panel" style="margin-top:14px">
+        <h3>Estado</h3>
+        <div class="estados">${estadosPosibles.map(k => `<button class="est-btn est-${k} ${t.estado===k?"on":""}" data-k="${k}" ${t.estado===k?"disabled":""}>${ICO_EST[k]} ${ESTADOS[k]}</button>`).join("")}</div>
+        <div id="cajaEstado" class="oculto" style="margin-top:10px">
+          <div id="cajaHecho" class="oculto"><div class="campo"><span>¿Quién lo ha hecho?</span>
+            <div class="personas-sel">${activos.map(([k,p]) => `<label><input type="checkbox" name="hechoPor" value="${k}" ${(t.hechoPor||[]).concat(t.asignados||[]).includes(k)?"checked":""}><i style="background:${esc(p.color)}"></i>${esc(p.nombre)}</label>`).join("")}</div></div></div>
+          <label class="campo"><span id="txtNotaEst">Nota (opcional)</span><textarea id="notaEst" rows="2"></textarea></label>
+          <button class="btn" id="okEst">Guardar</button> <button class="btn sec" id="noEst">Cancelar</button> <span id="msgEst" class="vacio"></span>
+        </div>
+        ${!todo ? `<p class="vacio" style="margin-top:6px">Presupuesto, cancelar, facturar y cobrar lo hace la oficina.</p>` : ""}
+      </div>` : ""}
+
       <div class="panel" style="margin-top:14px"><div class="rejilla">
         <div class="bloque"><h3>Intervención</h3>
-          ${dato("De qué es", esc(especTxt(t)))}${dato("Tipo", esc(TIPOS[t.tipo]))}${dato("Prioridad", pr[0] + " " + pr[1])}
+          ${dato("De qué es", esc(especTxt(t)))}${dato("Tipo", esc(TIPOS[t.tipo]))}
+          ${dato("Prioridad", todo && !CERRADOS.includes(t.estado) ? `<select id="selPrio">${ORDEN_PRIOR.map(k => `<option value="${k}" ${k===(t.urgencia||"normal")?"selected":""}>${PRIOR[k][0]} ${PRIOR[k][1]}</option>`).join("")}</select>` : pr[0] + " " + pr[1])}
           <p style="white-space:pre-wrap;margin-top:8px">${esc(t.descripcion)}</p></div>
         <div class="bloque"><h3>Contacto</h3>
           ${dato("Avisa", esc(t.avisa && t.avisa.nombre))}${dato("Teléfono", t.avisa && t.avisa.telefono ? `<a href="tel:${esc(t.avisa.telefono)}">${esc(t.avisa.telefono)}</a>` : "")}
           ${!t.comunidadId ? dato("Teléfono cliente", t.telefono ? `<a href="tel:${esc(t.telefono)}">${esc(t.telefono)}</a>` : "") + dato("Correo", esc(t.email)) : ""}</div>
         <div class="bloque"><h3>Cita</h3>
           ${(t.citas||[]).map(c => dato(esc(fmtFecha(c.fecha)) + " " + esc(c.hora), esc(durTxt(c.duracion)) + " · " + (c.personal||[]).map(k => P[k] ? `<span class="punto" style="background:${esc(P[k].color)}"></span>${esc(P[k].nombre)}` : "").join(", "))).join("") || `<p class="vacio">Sin fecha todavía.</p>`}
-          ${dato("Duración estimada", esc(durTxt(t.duracionEstimada||60)))}</div>
+          ${dato("Duración estimada", esc(durTxt(t.duracionEstimada||60)))}
+          ${(t.hechoPor||[]).length ? dato("Hecho por", (t.hechoPor).map(k => P[k] ? esc(P[k].nombre) : "").join(", ")) : ""}
+          ${todo && !CERRADOS.includes(t.estado) ? `<p style="margin-top:8px"><button class="btn sec" id="btnCita">${(t.citas||[]).length ? "Cambiar cita" : "Poner cita"}</button></p>
+          <form id="fCita" class="oculto" style="margin-top:8px">
+            <label class="campo"><span>Día</span><input name="fecha" type="date" value="${esc(cita0.fecha || new Date().toISOString().slice(0,10))}"></label>
+            <label class="campo"><span>Hora</span><select name="hora">${HORAS.map(h => `<option ${h===(cita0.hora||"09:00")?"selected":""}>${h}</option>`).join("")}</select></label>
+            <label class="campo"><span>Duración</span><select name="duracion">${DURACIONES.map(m => `<option value="${m}" ${m===(cita0.duracion||t.duracionEstimada||60)?"selected":""}>${durTxt(m)}</option>`).join("")}</select></label>
+            <div class="campo"><span>Quién va</span><div class="personas-sel">${activos.map(([k,p]) => `<label><input type="checkbox" name="asignados" value="${k}" ${(t.asignados||[]).includes(k)?"checked":""}><i style="background:${esc(p.color)}"></i>${esc(p.nombre)}</label>`).join("")}</div></div>
+            <button class="btn" type="submit">Guardar cita</button> <button class="btn sec" type="button" id="quitaCita">Quitar cita</button> <span id="msgCita" class="vacio"></span>
+          </form>` : ""}
+        </div>
       </div>
       ${conFicha ? `<p style="margin-top:12px"><a class="btn sec" href="#comunidad/${encodeURIComponent(t.comunidadId)}">Ver ficha de ${esc(t.nombre)}</a></p>` : ""}
-      <p class="vacio" style="margin-top:12px">Cambiar estado, notas, material, tiempo, fotos y "Hecho" llegan en las sesiones 18 y 19.</p></div>`;
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <h3>Historial y notas</h3>
+        <div class="historial">
+          <div class="h-item"><b>${horaReg(t.creado && t.creado.en)}</b> · ${esc(nombreDe(t.creado && t.creado.por))} · 🆕 Creada${t.creadoPorTecnico ? " (por técnico)" : ""}</div>
+          ${notas.map(n => `<div class="h-item ${n.tipo === "estado" ? "" : "nota"}"><b>${horaReg(n.en)}</b> · ${esc(nombreDe(n.por))} · ${n.tipo === "estado" ? (ICO_EST[n.a]||"") + " " + esc(ESTADOS[n.de]||n.de) + " → <b>" + esc(ESTADOS[n.a]||n.a) + "</b>" : (n.tipo === "cita" ? "📅 " : (n.tipo === "prioridad" ? "🎯 " : "📝 "))}${n.texto ? `<div class="h-txt">${esc(n.texto)}</div>` : ""}</div>`).join("")}
+        </div>
+        ${puedeTocar ? `<div style="margin-top:10px"><textarea id="nuevaNota" rows="2" placeholder="Añadir una nota (qué se ha visto, qué falta, a quién se ha llamado…)" style="width:100%;padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit"></textarea>
+          <p style="margin-top:6px"><button class="btn sec" id="btnNota">Añadir nota</button> <span id="msgNota" class="vacio"></span></p></div>` : ""}
+      </div>`;
+
+    const firma = () => ({por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
+    const nota = datos => ref.collection("notas").add({...datos, por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
+    const registro = accion => db.collection("dhs_registro").add({por:yo, en:firebase.firestore.FieldValue.serverTimestamp(), accion, coleccion:"dhs_trabajos", docId:id, nombre:t.numero + " · " + t.nombre});
+
+    // Cambiar estado
+    let elegido = null;
+    const caja = el.querySelector("#cajaEstado");
+    el.querySelectorAll(".est-btn").forEach(b => b.onclick = () => {
+      elegido = b.dataset.k;
+      el.querySelectorAll(".est-btn").forEach(x => x.classList.toggle("marcado", x === b));
+      caja.classList.remove("oculto");
+      el.querySelector("#cajaHecho").classList.toggle("oculto", elegido !== "hecho");
+      el.querySelector("#txtNotaEst").textContent = elegido === "amedias" ? "¿Qué falta? (material, otra visita…)" : (elegido === "cancelado" ? "Motivo de la cancelación" : "Nota (opcional)");
+    });
+    if(caja){
+      el.querySelector("#noEst").onclick = () => { caja.classList.add("oculto"); el.querySelectorAll(".est-btn").forEach(x => x.classList.remove("marcado")); };
+      el.querySelector("#okEst").onclick = async () => {
+        const m = x => el.querySelector("#msgEst").textContent = x;
+        const texto = el.querySelector("#notaEst").value.trim();
+        if(elegido === "amedias" && !texto) return m("Escribe qué falta.");
+        if(elegido === "cancelado" && !texto) return m("Escribe el motivo.");
+        const cambio = {estado:elegido, modificado:firma()};
+        if(elegido === "hecho"){
+          const hp = [...el.querySelectorAll('input[name=hechoPor]:checked')].map(x => x.value);
+          if(!hp.length) return m("Marca quién lo ha hecho.");
+          cambio.hechoPor = hp;
+        }
+        m("Guardando…");
+        try{
+          await ref.update(cambio);
+          await nota({tipo:"estado", de:t.estado, a:elegido, texto});
+          await registro("estado " + (ESTADOS[t.estado]||t.estado) + " → " + ESTADOS[elegido]);
+          ficha(el, id);
+        }catch(e){ m("No se ha podido cambiar (" + (e.code||e) + ")."); }
+      };
+    }
+
+    // Prioridad desde la ficha
+    const sp = el.querySelector("#selPrio");
+    if(sp) sp.onchange = async () => {
+      const ant = t.urgencia || "normal", nuevo = sp.value;
+      try{
+        await ref.update({urgencia:nuevo, modificado:firma()});
+        await nota({tipo:"prioridad", texto:"Prioridad: " + PRIOR[ant][1] + " → " + PRIOR[nuevo][1]});
+        await registro("prioridad " + PRIOR[ant][1] + " → " + PRIOR[nuevo][1]);
+        ficha(el, id);
+      }catch(e){ sp.value = ant; alert("No se ha podido cambiar (" + (e.code||e) + ")."); }
+    };
+
+    // Cita (solo "todo": Dirección y Oficina)
+    const fC = el.querySelector("#fCita");
+    if(fC){
+      el.querySelector("#btnCita").onclick = () => fC.classList.toggle("oculto");
+      const guardarCita = async (citas, asignados, texto) => {
+        const m = x => el.querySelector("#msgCita").textContent = x;
+        const cambio = {citas, asignados, modificado:firma()};
+        if(citas.length && ["nuevo"].includes(t.estado)) cambio.estado = "agendado";
+        if(!citas.length && t.estado === "agendado") cambio.estado = "nuevo";
+        m("Guardando…");
+        try{
+          await ref.update(cambio);
+          await nota({tipo:"cita", texto});
+          if(cambio.estado) await nota({tipo:"estado", de:t.estado, a:cambio.estado, texto:""});
+          await registro("cita: " + texto);
+          ficha(el, id);
+        }catch(e){ m("No se ha podido guardar (" + (e.code||e) + ")."); }
+      };
+      fC.onsubmit = ev => {
+        ev.preventDefault();
+        const fd = new FormData(fC), as = fd.getAll("asignados");
+        if(!as.length) return el.querySelector("#msgCita").textContent = "Marca quién va.";
+        const c = {fecha:fd.get("fecha"), hora:fd.get("hora"), duracion:Number(fd.get("duracion")), personal:as};
+        guardarCita([c], as, fmtFecha(c.fecha) + " " + c.hora + " · " + durTxt(c.duracion) + " · " + as.map(k => P[k] ? P[k].nombre : "").join(", "));
+      };
+      el.querySelector("#quitaCita").onclick = () => { if(confirm("¿Quitar la cita? La intervención queda sin fecha.")) guardarCita([], t.asignados || [], "Cita quitada"); };
+    }
+
+    // Notas
+    const bN = el.querySelector("#btnNota");
+    if(bN) bN.onclick = async () => {
+      const tx = el.querySelector("#nuevaNota").value.trim(); if(!tx) return;
+      bN.disabled = true;
+      try{ await nota({tipo:"nota", texto:tx}); ficha(el, id); }
+      catch(e){ el.querySelector("#msgNota").textContent = "No se ha podido guardar (" + (e.code||e) + ")."; bN.disabled = false; }
+    };
   }
 
   window.DHS_TRAB = { nueva, lista, ficha, deComunidad, contar, recargarPersonal: () => { PERSONAL = null; } };

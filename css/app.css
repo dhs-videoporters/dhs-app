@@ -190,3 +190,15 @@ a.fila-eq:hover{background:#f6f8fb}
 .tag.est-nuevo{background:#e8eef7}.tag.est-agendado{background:#dbe8ff;color:#2f6fd6}.tag.est-amedias{background:#fff1dc;color:#9a5b00}
 .tag.est-hecho,.tag.est-cobrado{background:#dcf3e3;color:#1d7a3e}.tag.est-presupuesto,.tag.est-esperando{background:#f3e6ff;color:#6b2fa3}
 .tag.est-cancelado{background:#eef0f3;color:var(--gris);text-decoration:line-through}
+.filtros-int{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.filtros-int input,.filtros-int select{padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit}
+.filtros-int input{flex:1;min-width:200px}
+.estados{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.est-btn{border:1px solid #cfd7e3;background:#fff;border-radius:999px;padding:7px 12px;font:inherit;font-size:14px;cursor:pointer}
+.est-btn.on{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:600;cursor:default}
+.est-btn.marcado{outline:3px solid #f0a000;outline-offset:1px}
+.historial{border-left:3px solid var(--linea);padding-left:12px;margin-top:8px}
+.h-item{padding:6px 0;font-size:14px;border-bottom:1px dashed var(--linea)}
+.h-item b:first-child{color:var(--gris);font-weight:600}
+.h-txt{white-space:pre-wrap;margin-top:3px;color:var(--texto)}
+.h-item.nota .h-txt{background:#fffbea;border-radius:6px;padding:5px 8px}
