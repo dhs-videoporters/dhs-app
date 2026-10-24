@@ -137,3 +137,15 @@ main{padding:16px;max-width:1300px;margin:0 auto}
   .veci{grid-template-columns:30px 1fr 28px;grid-template-areas:"e p l" "n n n" "t t t" "x x x"}
   .veci .estrella{grid-area:e}.veci .v-piso{grid-area:p}.veci .v-llamar{grid-area:l}.veci .v-nombre{grid-area:n}.veci .v-tel{grid-area:t}.veci .v-presi{grid-area:x}
 }
+
+/* Ajustes: equipo y registro */
+.fila-eq,.fila-reg{display:grid;grid-template-columns:200px 1fr auto;gap:10px;align-items:center;padding:10px 6px;border-bottom:1px solid var(--linea);text-decoration:none;color:inherit}
+a.fila-eq:hover{background:#f6f8fb}
+.fila-eq.baja{opacity:.55}
+.fila-reg{grid-template-columns:120px 90px 1fr;font-size:13px}
+.punto{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px;vertical-align:-1px}
+.colores{display:flex;gap:8px;flex-wrap:wrap}
+.colores input{display:none}
+.colores i{display:block;width:28px;height:28px;border-radius:50%;border:3px solid transparent;cursor:pointer}
+.colores input:checked+i{border-color:var(--negro)}
+@media (max-width:760px){ .fila-eq{grid-template-columns:1fr auto} .fila-eq .vacio{grid-column:1/-1;grid-row:2} .fila-reg{grid-template-columns:1fr auto} .fila-reg span:last-child{grid-column:1/-1} }

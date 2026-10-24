@@ -12,7 +12,8 @@
     {id:"calendario",     nombre:"Calendario",      ico:"📅"},
     {id:"comunidades",    nombre:"Comunidades",     ico:"🏢"},
     {id:"trabajos",       nombre:"Trabajos",        ico:"🛠️"},
-    {id:"administradores",nombre:"Administradores", ico:"👥", soloOficina:true}
+    {id:"administradores",nombre:"Administradores", ico:"👥", soloOficina:true},
+    {id:"ajustes",        nombre:"Ajustes",         ico:"⚙️", soloOficina:true}
   ];
 
   const S = { usuario:null, rol:null, nombre:"" };
@@ -92,7 +93,8 @@
     calendario: el => el.innerHTML = panel("Calendario", "Aquí irá el calendario a 15 días vista (fase 4)."),
     trabajos:   el => el.innerHTML = panel("Trabajos", "Aquí irán los trabajos (fase 3)."),
     comunidades: el => window.DHS_COM.lista(el),
-    administradores: el => window.DHS_ADM.lista(el)
+    administradores: el => window.DHS_ADM.lista(el),
+    ajustes: el => window.DHS_AJ.vista(el)
   };
 
   // ---------- Arranque ----------
