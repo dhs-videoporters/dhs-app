@@ -1,5 +1,5 @@
 rules_version = '2';
-// Reglas de seguridad — App DHS (intervenciones). Versión 6 (24/10/2026): v5 (el técnico rellena al terminar qué se ha hecho, qué falta y la fecha) + fotos de la finca.
+// Reglas de seguridad — App DHS (intervenciones). Versión 6 (24/10/2026): v5 (el técnico rellena al terminar qué se ha hecho, qué falta y la fecha) + fotos de la finca + estado "En curso" (el técnico pulsa Empiezo).
 // Proyecto de PRUEBAS (dhs-pruebas).
 // Norma: sin cuenta de Google autorizada no se lee ni se escribe nada.
 // Cada usuario tiene un perfil (dhs_perfiles) con un nivel por apartado: no / propios / ver / editar / todo.
@@ -123,8 +123,8 @@ service cloud.firestore {
       allow create: if puede('trabajos', 2) && firmaBien() && request.resource.data.creado.por == correo();
       allow update: if puede('trabajos', 3) && firmaBien()
                     || (puede('trabajos', 2) || (soloPropios('trabajos') && asignadoA(resource.data))) && firmaBien()
-                       && soloCambia(['estado', 'material', 'tiempoReal', 'hechoPor', 'resumenHecho', 'falta', 'fechaHecho', 'cobro', 'fotos', 'editando', 'modificado'])
-                       && request.resource.data.estado in ['nuevo', 'agendado', 'amedias', 'hecho'];
+                       && soloCambia(['estado', 'empezado', 'material', 'tiempoReal', 'hechoPor', 'resumenHecho', 'falta', 'fechaHecho', 'cobro', 'fotos', 'editando', 'modificado'])
+                       && request.resource.data.estado in ['nuevo', 'agendado', 'encurso', 'amedias', 'hecho'];
       allow delete: if puede('trabajos', 3);
 
       match /notas/{n} {

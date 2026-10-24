@@ -51,6 +51,7 @@
       (await db.collection("dhs_ausencias").get()).forEach(d => ausencias.push({id:d.id, ...d.data()}));
     }catch(e){ el.innerHTML = `<div class="panel">No se ha podido leer el calendario (${esc(e.code)}).</div>`; return; }
 
+    const ahoraMin = new Date().getHours()*60 + new Date().getMinutes();
     const fin = masDias(inicio, 13), dIni = iso(inicio), dFin = iso(fin), hoy = iso(new Date());
     // Citas del periodo: una entrada por persona de cada cita
     const citas = [];
@@ -83,6 +84,7 @@
             <div class="cal-cabdia"><b>${DIAS[(d.getDay()+6)%7]} ${d.getDate()}</b>${d.getDate() === 1 || d === verDias[0] ? ` <span>${d.toLocaleDateString("es-ES",{month:"short"})}</span>` : ""}</div>
             <div class="cal-quien">${visibles.map(([k,p]) => `<span style="--c:${esc(p.color||"#9aa5b5")}" title="${esc(p.nombre)}">${esc((p.nombre||"").slice(0,3))}</span>`).join("")}</div>
             <div class="cal-cols" style="height:${(H_FIN-H_INI)*PX_H}px">
+              ${f === hoy && ahoraMin >= H_INI*60 && ahoraMin <= H_FIN*60 ? `<div class="cal-ahora" style="top:${(ahoraMin - H_INI*60) / 60 * PX_H}px"></div>` : ""}
               ${visibles.map(([k,p]) => {
                 const aus = ausencias.filter(a => a.personalId === k && a.desde <= f && a.hasta >= f);
                 const mias = citas.filter(x => x.k === k && x.c.fecha === f);
@@ -91,10 +93,10 @@
                   ${mias.map(x => {
                     const ini = Math.max(aMin(x.c.hora), H_INI*60), dur = Math.max(Number(x.c.duracion)||60, 30);
                     const top = (ini - H_INI*60) / 60 * PX_H, alto = Math.min(dur, H_FIN*60 - ini) / 60 * PX_H;
-                    return `<a class="cal-cita ${x.t.estado === "hecho" ? "hecha" : ""} ${x.t.estado === "amedias" ? "medias" : ""}" data-id="${x.t.id}" data-com="${esc(x.t.comunidadId||"")}"
+                    return `<a class="cal-cita ${x.t.estado === "hecho" ? "hecha" : ""} ${x.t.estado === "amedias" ? "medias" : ""} ${x.t.estado === "encurso" ? "encurso" : ""}" data-id="${x.t.id}" data-com="${esc(x.t.comunidadId||"")}"
                       style="top:${top}px;height:${Math.max(alto, 18)}px;--c:${esc(p.color||"#9aa5b5")}"
                       title="${esc(x.c.hora)} · ${esc(p.nombre)} · ${esc(x.t.direccion || x.t.nombre)} — ${esc(x.t.descripcion||"")}">
-                      <b>${x.t.estado === "amedias" ? "🔧 " : ""}${esc(x.t.direccion || x.t.nombre)}</b><span>${PRIOR[x.t.urgencia]||""}${ESPEC[x.t.especialidad]||""} ${esc(x.c.hora)}</span></a>`;
+                      <b>${x.t.estado === "amedias" ? "🔧 " : ""}${x.t.estado === "encurso" ? "▶️ " : ""}${esc(x.t.direccion || x.t.nombre)}</b><span>${PRIOR[x.t.urgencia]||""}${ESPEC[x.t.especialidad]||""} ${esc(x.c.hora)}</span></a>`;
                   }).join("")}
                 </div>`;
               }).join("")}

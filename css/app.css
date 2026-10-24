@@ -272,3 +272,11 @@ a.fila-eq:hover{background:#f6f8fb}
 .aviso-cal{background:#e6eefb;border-radius:8px;padding:8px 10px;margin-top:8px}
 .por-admin{margin:2px 0 8px}.por-admin summary{cursor:pointer;color:var(--azul);font-size:13px;margin-bottom:6px}
 .r-nueva{background:#fff7e6}.r-nueva b{color:#9a5b00}
+.cal-cols{position:relative}
+.cal-ahora{position:absolute;left:0;right:0;height:0;border-top:2px solid #e0362c;z-index:7;pointer-events:none}
+.cal-ahora::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:#e0362c}
+.cal-cita.encurso{outline:3px solid #ffb300;outline-offset:1px;animation:latido 1.6s ease-in-out infinite;z-index:4}
+@keyframes latido{0%,100%{outline-color:#ffb300}50%{outline-color:rgba(255,179,0,.25)}}
+.btn-empiezo{width:100%;padding:14px;font-size:17px;background:#e08a00}
+.en-curso{margin-top:10px;background:#fff3d6;border-radius:8px;padding:10px;font-weight:700;color:#8a5a00}
+.tag.est-encurso{background:#fff3d6;color:#8a5a00}

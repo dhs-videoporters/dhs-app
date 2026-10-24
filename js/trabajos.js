@@ -10,7 +10,7 @@
   // Prioridad con puntos de color. Joel la cambia tocando el punto en la lista.
   const PRIOR = {urgente:["🔴","Urgente",0], alta:["🟠","Alta",1], normal:["🟡","Normal",2], baja:["🟢","Baja",3]};
   const ORDEN_PRIOR = ["urgente","alta","normal","baja"];
-  const ESTADOS = {nuevo:"Nuevo", presupuesto:"Pendiente de presupuesto", esperando:"Esperando respuesta", agendado:"Agendado", amedias:"A medias", hecho:"Hecho", facturado:"Facturado", cobrado:"Cobrado", cancelado:"Cancelado"};
+  const ESTADOS = {nuevo:"Nuevo", presupuesto:"Pendiente de presupuesto", esperando:"Esperando respuesta", agendado:"Agendado", encurso:"En curso", amedias:"A medias", hecho:"Hecho", facturado:"Facturado", cobrado:"Cobrado", cancelado:"Cancelado"};
   const CERRADOS = ["hecho","facturado","cobrado","cancelado"];
   const DURACIONES = [30,60,90,120,150,180,240,300,360,420,480];
   const durTxt = m => m < 60 ? m + " min" : (m % 60 ? Math.floor(m/60) + " h " + (m%60) + " min" : (m/60) + (m === 60 ? " hora" : " horas"));
@@ -403,9 +403,9 @@
   // ---------- FICHA DE LA INTERVENCIÓN (sesión 18: estados, historial, notas, cita) ----------
   // Estados que puede poner cada uno. Con "editar" (técnicos) o "solo los suyos" (subcontratas): los del día a día.
   // Con "todo" (Dirección, Oficina): además presupuesto, esperando respuesta, cancelado, facturado y cobrado.
-  const EST_TECNICO = ["nuevo","agendado","amedias","hecho"];
-  const EST_TODO = ["nuevo","presupuesto","esperando","agendado","amedias","hecho","facturado","cobrado","cancelado"];
-  const ICO_EST = {nuevo:"🆕", presupuesto:"📝", esperando:"⏳", agendado:"📅", amedias:"🔧", hecho:"✅", facturado:"🧾", cobrado:"💶", cancelado:"✖️"};
+  const EST_TECNICO = ["nuevo","agendado","encurso","amedias","hecho"];
+  const EST_TODO = ["nuevo","presupuesto","esperando","agendado","encurso","amedias","hecho","facturado","cobrado","cancelado"];
+  const ICO_EST = {nuevo:"🆕", presupuesto:"📝", esperando:"⏳", agendado:"📅", encurso:"▶️", amedias:"🔧", hecho:"✅", facturado:"🧾", cobrado:"💶", cancelado:"✖️"};
   const horaReg = ts => ts && ts.toDate ? ts.toDate().toLocaleString("es-ES", {day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit"}) : "ahora";
 
   // ---------- Aviso de edición simultánea (18b) ----------
@@ -656,7 +656,7 @@
       (lista.map(t => `<a class="tarjeta-t" href="#trabajo/${t.id}">
         <div class="tt-hora">${fecha(t) ? (fecha(t) === hoy ? esc(hora(t)) : esc(fmtFecha(fecha(t))) + "<br>" + esc(hora(t))) : "—"}</div>
         <div class="tt-cuerpo"><b>${(PRIOR[t.urgencia]||PRIOR.normal)[0]} ${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] : ""} ${esc(t.direccion || t.nombre)}</b>
-          <span>${esc(t.poblacion||"")}${t.estado === "amedias" ? " · 🔧 a medias" : ""}</span>
+          <span>${esc(t.poblacion||"")}${t.estado === "amedias" ? " · 🔧 a medias" : ""}${t.estado === "encurso" ? " · ▶️ en curso" : ""}</span>
           <span class="tt-desc">${esc((t.descripcion||"").slice(0,90))}</span></div></a>`).join("") || `<p class="vacio">Nada.</p>`);
     const ord = (a,b) => (fecha(a)+hora(a)).localeCompare(fecha(b)+hora(b)) || porPrioridad(a,b);
     el.innerHTML = `<div class="panel mi-trabajo">
@@ -682,6 +682,8 @@
     const tel = (n, v) => v ? `<a class="btn-tel" href="tel:${esc(v)}">📞 ${esc(n)}</a>` : "";
     const vp = (c && c.videoportero) || {}, tv = (c && c.tv) || {}, pres = (c && c.presidente) || {};
     const cerrado = CERRADOS.includes(t.estado);
+    const transcurrido = t.estado === "encurso" && t.empezado ? Math.round((Date.now() - t.empezado) / 900000) * 15 : 0;
+    const tiempoDefecto = t.tiempoReal || (transcurrido >= 15 ? Math.min(transcurrido, 600) : 0) || (cita && cita.duracion) || 60;
     const puede = S.puede("trabajos","editar") || (t.asignados||[]).includes(S.personalId);
     el.innerHTML = `
       <a href="#mitrabajo" class="volver">‹ Mi trabajo</a>
@@ -691,6 +693,9 @@
         <h1>${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.direccion || t.nombre)}</h1>
         <p class="vacio">${esc([t.nombre !== t.direccion ? t.nombre : "", t.poblacion].filter(Boolean).join(" · "))}</p>
         <p style="margin-top:8px"><a class="btn sec" href="${mapa(t)}" target="_blank" rel="noopener">🗺️ Cómo llegar</a></p>
+        ${!cerrado && puede ? (t.estado === "encurso"
+          ? `<p class="en-curso">▶️ En curso desde las ${t.empezado ? new Date(t.empezado).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}) : "—"}</p>`
+          : `<p style="margin-top:10px"><button class="btn btn-empiezo" id="btnEmpiezo">▶️ Empiezo</button></p>`) : ""}
         ${cita ? `<p style="margin-top:8px">📅 <b>${esc(fmtFecha(cita.fecha))} · ${esc(cita.hora)}</b> · ${esc(durTxt(cita.duracion))}${(cita.personal||[]).length > 1 ? " · con " + (cita.personal).filter(k => k !== S.personalId).map(k => P[k] ? esc(P[k].nombre) : "").join(", ") : ""}</p>` : ""}
 
         <div class="ft-bloque"><h3>Qué hay que hacer</h3>
@@ -726,7 +731,7 @@
           <div class="campo"><span>Material usado</span>
             <div id="lineasMat">${(t.material||[]).map(m => lineaMat(m)).join("") || lineaMat()}</div>
             <button type="button" class="btn sec" id="masMat">+ Otro material</button></div>
-          <label class="campo"><span>Tiempo que ha llevado</span><select name="tiempo">${TIEMPOS.map(m => `<option value="${m}" ${m === (t.tiempoReal || (cita && cita.duracion) || 60) ? "selected" : ""}>${durTxt(m)}</option>`).join("")}</select></label>
+          <label class="campo"><span>Tiempo que ha llevado</span><select name="tiempo">${TIEMPOS.map(m => `<option value="${m}" ${m === tiempoDefecto ? "selected" : ""}>${durTxt(m)}</option>`).join("")}</select></label>
           <div class="campo"><span>¿Quién lo ha hecho?</span><div class="personas-sel">${Object.entries(P).filter(([k,p]) => p.activo !== false).map(([k,p]) => `<label><input type="checkbox" name="hechoPor" value="${k}" ${(t.asignados||[]).includes(k) ? "checked" : ""}><i style="background:${esc(p.color)}"></i>${esc(p.nombre)}</label>`).join("")}</div></div>
           <div id="cajaFalta" class="oculto"><label class="campo"><span>¿Qué falta? *</span><textarea name="falta" rows="2" placeholder="Ej.: Pedir monitor Fermax, volver el martes.">${esc(t.falta||"")}</textarea></label></div>
           <div class="ft-botones"><button type="button" class="btn btn-ok" id="btnHecho">✅ Hecho</button><button type="button" class="btn sec" id="btnMedias">🔧 Queda a medias</button></div>
@@ -736,6 +741,16 @@
       </div>`;
 
     window.DHS_FOTOS.bloqueTrabajo(el.querySelector("#bFotos"), id, t, puede);
+    const bE = el.querySelector("#btnEmpiezo");
+    if(bE) bE.onclick = async () => {
+      bE.disabled = true;
+      const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
+      try{
+        await ref.update({estado:"encurso", empezado:Date.now(), modificado:{por:yo, en}});
+        await ref.collection("notas").add({tipo:"estado", de:t.estado, a:"encurso", texto:"", por:yo, en});
+        fichaTrabajo(el, id);
+      }catch(e){ bE.disabled = false; alert("No se ha podido marcar (" + (e.code||e) + ")."); }
+    };
     const f = el.querySelector("#fFin"); if(!f) return;
     const empiezo = marcarEdicion(ref);
     f.addEventListener("input", empiezo); f.addEventListener("change", empiezo);
