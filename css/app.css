@@ -253,12 +253,13 @@ a.fila-eq:hover{background:#f6f8fb}
 .cal-dia.pasado{background:#fafbfc}
 .cal-cols{display:flex;background-image:repeating-linear-gradient(to bottom,#f0f2f5 0,#f0f2f5 1px,transparent 1px,transparent 44px)}
 .cal-col{flex:1;position:relative;border-left:1px dashed #edf0f4;min-width:0}.cal-col:first-child{border-left:0}
-.cal-cita{position:absolute;left:2px;right:2px;border-radius:5px;background:color-mix(in srgb,var(--c) 22%,#fff);border-left:4px solid var(--c);padding:2px 4px;font-size:11px;line-height:1.25;overflow:hidden;text-decoration:none;color:var(--texto);cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.cal-cita:hover{z-index:5;box-shadow:0 3px 10px rgba(0,0,0,.2)}
+.cal-cita{position:absolute;left:2px;right:2px;border-radius:5px;background:var(--c);border-left:4px solid color-mix(in srgb,var(--c) 70%,#000);padding:2px 4px;font-size:11px;line-height:1.25;overflow:hidden;text-decoration:none;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.35);cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.cal-cita:hover{z-index:5;box-shadow:0 3px 10px rgba(0,0,0,.28)}
 .cal-cita b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-cita span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal-cita.hecha{opacity:.55;background:#eef0f3}.cal-cita.hecha b::after{content:" ✅"}
-.cal-cita.medias{background-image:repeating-linear-gradient(45deg,transparent 0 6px,rgba(240,160,0,.15) 6px 12px)}
+/* Hecha: el mismo color, muy clarito */
+.cal-cita.hecha{background:color-mix(in srgb,var(--c) 16%,#fff);border-left-color:color-mix(in srgb,var(--c) 45%,#fff);color:#5b6675;text-shadow:none;box-shadow:none}
+.cal-cita.hecha b::before{content:"✅ "}
 .cal-aus{position:absolute;inset:0;background:repeating-linear-gradient(45deg,#e9ecf1 0 8px,#f4f6f9 8px 16px);color:var(--gris);font-size:11px;text-align:center;padding-top:6px;cursor:pointer;writing-mode:horizontal-tb}
 .cal-sinfecha{width:240px;flex:none;border:1px solid var(--linea);border-radius:8px;padding:10px;background:#fff;max-height:calc(2*(30px + 9*44px) + 14px);overflow:auto}
 .sf-item{display:block;padding:7px 4px;border-bottom:1px solid var(--linea);text-decoration:none;color:inherit;font-size:13px}

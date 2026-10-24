@@ -20,14 +20,34 @@
   let inicio = null;   // lunes de la primera semana que se ve
   let ocultos = {};    // técnicos ocultados con el filtro
 
-  async function vista(el){
+  // En vivo: el calendario escucha los cambios de las intervenciones (cuando Pedro marca "Hecho" en el móvil,
+  // en el ordenador se ve al momento sin recargar).
+  let VIVO = null;   // {unsub, trabajos}
+  const enCalendario = () => { const h = location.hash.replace("#",""); return h === "" || h === "calendario"; };
+  function escuchar(el){
+    if(VIVO) return Promise.resolve(VIVO.trabajos);
+    return new Promise((ok, ko) => {
+      let primera = true, unsub = () => {};
+      unsub = D().db.collection("dhs_trabajos").onSnapshot(q => {
+        const L = []; q.forEach(d => L.push({id:d.id, ...d.data()}));
+        if(VIVO) VIVO.trabajos = L;
+        if(primera){ primera = false; VIVO = {unsub: () => unsub(), trabajos:L}; ok(L); return; }
+        if(!enCalendario() || !el.isConnected || !el.querySelector(".cal")){ unsub(); VIVO = null; return; }
+        vista(el, true);
+      }, e => { VIVO = null; ko(e); });
+    });
+  }
+  window.addEventListener("hashchange", () => { if(VIVO && !enCalendario()){ VIVO.unsub(); VIVO = null; } });
+
+  async function vista(el, refresco){
     const {db, S} = D();
     if(!inicio) inicio = lunesDe(new Date());
-    el.innerHTML = `<div class="panel">Cargando…</div>`;
+    if(!refresco) el.innerHTML = `<div class="panel">Cargando…</div>`;
+    const scroll = [...el.querySelectorAll(".cal-semanas")].map(x => x.scrollLeft);
     let P = {}, trabajos = [], ausencias = [];
     try{
       (await db.collection("dhs_personal").get()).forEach(d => P[d.id] = d.data());
-      if(S.puede("trabajos","ver")) (await db.collection("dhs_trabajos").get()).forEach(d => trabajos.push({id:d.id, ...d.data()}));
+      if(S.puede("trabajos","ver")) trabajos = await escuchar(el);
       (await db.collection("dhs_ausencias").get()).forEach(d => ausencias.push({id:d.id, ...d.data()}));
     }catch(e){ el.innerHTML = `<div class="panel">No se ha podido leer el calendario (${esc(e.code)}).</div>`; return; }
 
@@ -74,7 +94,7 @@
                     return `<a class="cal-cita ${x.t.estado === "hecho" ? "hecha" : ""} ${x.t.estado === "amedias" ? "medias" : ""}" data-id="${x.t.id}" data-com="${esc(x.t.comunidadId||"")}"
                       style="top:${top}px;height:${Math.max(alto, 18)}px;--c:${esc(p.color||"#9aa5b5")}"
                       title="${esc(x.c.hora)} · ${esc(p.nombre)} · ${esc(x.t.direccion || x.t.nombre)} — ${esc(x.t.descripcion||"")}">
-                      <b>${esc(x.t.direccion || x.t.nombre)}</b><span>${PRIOR[x.t.urgencia]||""}${ESPEC[x.t.especialidad]||""} ${esc(x.c.hora)}</span></a>`;
+                      <b>${x.t.estado === "amedias" ? "🔧 " : ""}${esc(x.t.direccion || x.t.nombre)}</b><span>${PRIOR[x.t.urgencia]||""}${ESPEC[x.t.especialidad]||""} ${esc(x.c.hora)}</span></a>`;
                   }).join("")}
                 </div>`;
               }).join("")}
@@ -114,6 +134,7 @@
         </div>
       </div>`;
 
+    el.querySelectorAll(".cal-semanas").forEach((x, i) => { if(scroll[i]) x.scrollLeft = scroll[i]; });
     el.querySelectorAll("[data-mov]").forEach(b => b.onclick = () => { const n = Number(b.dataset.mov); inicio = n ? masDias(inicio, n) : lunesDe(new Date()); vista(el); });
     el.querySelectorAll(".cal-leyenda input").forEach(i => i.onchange = () => { ocultos[i.dataset.k] = !i.checked; vista(el); });
     // Pulsar una cita → ficha de la comunidad, pestaña Intervenciones (si es particular, la intervención)
