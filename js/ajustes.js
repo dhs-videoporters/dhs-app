@@ -3,8 +3,8 @@
   const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const D = () => window.DHS;
   const COLORES = [["#2f6fd6","Azul"],["#e8891c","Naranja"],["#2f9e5b","Verde"],["#8a5cc7","Morado"],["#d63384","Rosa"],["#0d9488","Turquesa"],["#a16207","Marrón"],["#64748b","Gris"]];
-  const TIPOS = {plantilla:"Plantilla", subcontrata:"Subcontrata (electricista…)", otros:"Otros"};
-  const ROLES = {"":"Sin acceso a la app", tecnico:"Técnico", admin:"Oficina"};
+  const TIPOS = {direccion:"Dirección", plantilla:"Plantilla", subcontrata:"Subcontrata (electricista…)", otros:"Otros"};
+  const ROLES = {"":"Sin acceso a la app", tecnico:"Técnico", admin:"Oficina", direccion:"Dirección"};
   let pest = "equipo";
 
   function vista(el){
@@ -32,8 +32,8 @@
       <div class="cab-vecinos"><h3>Equipo · quién hace los trabajos</h3><button class="btn" id="btnNuevoP">+ Añadir persona</button></div>
       <p class="vacio" style="margin-bottom:8px">Cada persona es una columna del calendario, con su color. Solo entran en la app quienes tengan cuenta de Google y acceso (las subcontratas no).</p>
       <div class="lista">
-        <div class="fila-eq"><b>Ángel</b><span class="vacio">herrerazarzoso@gmail.com</span><span class="tag">Oficina · fijo</span></div>
-        <div class="fila-eq"><b>Joel</b><span class="vacio">dhsvideoporters@gmail.com</span><span class="tag">Oficina · fijo</span></div>
+        <div class="fila-eq"><b>Ángel</b><span class="vacio">herrerazarzoso@gmail.com</span><span class="tag">Dirección · fijo</span></div>
+        <div class="fila-eq"><b>Joel</b><span class="vacio">dhsvideoporters@gmail.com</span><span class="tag">Dirección · fijo</span></div>
         ${personal.map(p => `
           <a class="fila-eq ${p.activo===false?"baja":""}" href="javascript:void 0" data-id="${p.id}">
             <b><span class="punto" style="background:${esc(p.color)}"></span>${esc(p.nombre)}</b>
@@ -56,8 +56,8 @@
         <label class="campo"><span>Tipo</span><select name="tipo">${Object.entries(TIPOS).map(([k,n]) => `<option value="${k}" ${p.tipo===k?"selected":""}>${n}</option>`).join("")}</select></label>
         <div class="campo"><span>Color en el calendario</span><div class="colores">${COLORES.map(([c,n]) => `<label title="${n}"><input type="radio" name="color" value="${c}" ${p.color===c?"checked":""}><i style="background:${c}"></i></label>`).join("")}</div></div>
         <label class="campo"><span>Cuenta de Google (para entrar en la app)</span><input name="email" type="email" value="${esc(p.email)}" placeholder="pedro.dhs@gmail.com"></label>
-        <label class="campo"><span>Acceso a la app</span><select name="rol">${Object.entries(ROLES).map(([k,n]) => `<option value="${k}" ${rolActual===k?"selected":""}>${n}</option>`).join("")}</select></label>
-        <p class="vacio" style="margin-bottom:8px">Técnico: ve todo, crea trabajos y rellena los suyos; no borra ni ve Administradores. Oficina: todo, salvo editar Administradores (solo Ángel y Joel).</p>
+        <label class="campo"><span>Acceso a la app</span><select name="rol">${Object.entries(ROLES).filter(([k]) => k !== "direccion" || D().S.direccion || rolActual === "direccion").map(([k,n]) => `<option value="${k}" ${rolActual===k?"selected":""}>${n}</option>`).join("")}</select></label>
+        <p class="vacio" style="margin-bottom:8px"><b>Técnico:</b> ve todo, crea trabajos y rellena los suyos; no borra ni ve Administradores ni Ajustes. <b>Oficina:</b> todo, salvo editar Administradores y nombrar Dirección. <b>Dirección:</b> todo.</p>
         <p><button class="btn" type="submit">Guardar</button> <button class="btn sec" type="button" id="cancP">Cancelar</button>
           ${id ? `<button class="btn sec" type="button" id="bajaP" style="float:right">${p.activo===false ? "Volver a dar de alta" : "Dar de baja"}</button>` : ""}
           <span id="msgP" class="vacio"></span></p>
@@ -92,6 +92,7 @@
       const email = (f.email||"").trim();
       if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return msg("Revisa el correo.");
       if(f.rol && !email) return msg("Para dar acceso hace falta su cuenta de Google.");
+      if(f.rol === "direccion" && !D().S.direccion) return msg("Solo Dirección puede dar acceso de Dirección.");
       if(f.rol && f.tipo === "subcontrata" && !confirm("Las subcontratas normalmente no entran en la app. ¿Seguro que quieres darle acceso?")) return;
       guardar({nombre, tipo:f.tipo, color:f.color || COLORES[0][0], email, activo: p.activo !== false}, f.rol, id ? "cambio" : "alta");
     };

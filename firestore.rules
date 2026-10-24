@@ -1,5 +1,5 @@
 rules_version = '2';
-// Reglas de seguridad — App DHS (trabajos). Versión 1 (22/10/2026), para el proyecto de PRUEBAS (dhs-pruebas).
+// Reglas de seguridad — App DHS (trabajos). Versión 2 (24/10/2026: rol Dirección), para el proyecto de PRUEBAS (dhs-pruebas).
 // Norma: sin cuenta de Google autorizada no se lee ni se escribe nada. Solo la oficina borra.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -11,21 +11,25 @@ service cloud.firestore {
     function correo() {
       return request.auth.token.email.lower();
     }
-    // Ángel y Joel: oficina siempre, aunque falte su ficha de usuario.
-    function esDireccion() {
-      return conSesion() && correo() in ['herrerazarzoso@gmail.com', 'dhsvideoporters@gmail.com'];
-    }
     function ficha() {
       return get(/databases/$(database)/documents/dhs_usuarios/$(correo())).data;
     }
     function tieneFicha() {
       return conSesion() && exists(/databases/$(database)/documents/dhs_usuarios/$(correo()));
     }
+    function activa() {
+      return ficha().get('activo', true) == true;
+    }
+    // Dirección: Ángel y Joel siempre (fijos, nunca se quedan fuera) + quien tenga rol 'direccion'.
+    function esDireccion() {
+      return conSesion() && (correo() in ['herrerazarzoso@gmail.com', 'dhsvideoporters@gmail.com']
+        || (tieneFicha() && ficha().rol == 'direccion' && activa()));
+    }
     function esOficina() {
-      return esDireccion() || (tieneFicha() && ficha().rol == 'admin' && ficha().get('activo', true) == true);
+      return esDireccion() || (tieneFicha() && ficha().rol == 'admin' && activa());
     }
     function esTecnico() {
-      return tieneFicha() && ficha().rol == 'tecnico' && ficha().get('activo', true) == true;
+      return tieneFicha() && ficha().rol == 'tecnico' && activa();
     }
     function esUsuario() {
       return esOficina() || esTecnico();
@@ -39,9 +43,12 @@ service cloud.firestore {
     }
 
     // ---------- Usuarios ----------
+    // Solo Dirección puede dar o quitar el rol de Dirección; Oficina gestiona técnicos y oficina.
     match /dhs_usuarios/{email} {
       allow read: if esOficina() || (conSesion() && email == correo());
-      allow write: if esOficina();
+      allow create: if esOficina() && (request.resource.data.rol != 'direccion' || esDireccion());
+      allow update: if esOficina() && ((request.resource.data.rol != 'direccion' && resource.data.rol != 'direccion') || esDireccion());
+      allow delete: if esDireccion();
     }
 
     // ---------- Administraciones: solo Ángel y Joel las cambian ----------

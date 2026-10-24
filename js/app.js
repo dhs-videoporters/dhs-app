@@ -39,6 +39,7 @@
       if(!d.exists) return null;
       const f = d.data();
       if(f.activo === false) return null;
+      if(f.rol === "direccion") return {rol:"oficina", nombre:f.nombre || email, direccion:true};
       if(f.rol === "admin") return {rol:"oficina", nombre:f.nombre || email};
       if(f.rol === "tecnico") return {rol:"tecnico", nombre:f.nombre || email};
       return null;
@@ -54,7 +55,7 @@
       $("#btnOtraCuenta").classList.remove("oculto");
       return;
     }
-    Object.assign(S, {usuario:u, rol:q.rol, nombre:q.nombre, direccion: DIRECCION.includes(u.email.toLowerCase())});
+    Object.assign(S, {usuario:u, rol:q.rol, nombre:q.nombre, direccion: DIRECCION.includes(u.email.toLowerCase()) || q.direccion === true});
     montarMenu();
     window.DHS_COM.buscadorGlobal(document.querySelector("#buscaGlobal"), document.querySelector("#resGlobal"));
     mostrar("app");
@@ -71,7 +72,7 @@
   function montarMenu(){
     $("#menu").innerHTML = secciones().map(s => `<a href="#${s.id}" data-id="${s.id}">${s.nombre}</a>`).join("");
     $("#menuMovil").innerHTML = secciones().map(s => `<a href="#${s.id}" data-id="${s.id}"><span class="ico">${s.ico}</span>${s.nombre}</a>`).join("");
-    $("#nombreUsuario").textContent = S.nombre + (S.rol === "oficina" ? " · Oficina" : " · Técnico");
+    $("#nombreUsuario").textContent = S.nombre + (S.direccion ? " · Dirección" : (S.rol === "oficina" ? " · Oficina" : " · Técnico"));
   }
   window.addEventListener("hashchange", () => S.usuario && irA(location.hash.slice(1)));
 
