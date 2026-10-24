@@ -280,3 +280,8 @@ a.fila-eq:hover{background:#f6f8fb}
 .btn-empiezo{width:100%;padding:14px;font-size:17px;background:#e08a00}
 .en-curso{margin-top:10px;background:#fff3d6;border-radius:8px;padding:10px;font-weight:700;color:#8a5a00}
 .tag.est-encurso{background:#fff3d6;color:#8a5a00}
+.cal-tirador{position:absolute;left:0;right:0;bottom:0;height:7px;cursor:ns-resize}
+.cal-tirador:hover{background:rgba(255,255,255,.45)}
+.cal-cita.moviendo{opacity:.55;z-index:8}
+.cal-cita.solapa{box-shadow:0 0 0 2px #e0362c}
+.cal-cita.solapa b::before{content:"⚠️ "}

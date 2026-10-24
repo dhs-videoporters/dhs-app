@@ -14,6 +14,20 @@
   const iso = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
   const lunesDe = d => { const x = new Date(d); x.setHours(12,0,0,0); x.setDate(x.getDate() - ((x.getDay()+6) % 7)); return x; };
   const masDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  // Citas que se pisan en la misma columna: una al lado de la otra y marcadas
+  function carriles(L){
+    const iv = x => [aMin(x.c.hora), aMin(x.c.hora) + (Number(x.c.duracion)||60)];
+    L = L.slice().sort((a,b) => iv(a)[0] - iv(b)[0]);
+    const finCarril = [];
+    L.forEach(x => {
+      const [i, f] = iv(x); let c = finCarril.findIndex(e => e <= i);
+      if(c < 0){ c = finCarril.length; finCarril.push(f); } else finCarril[c] = f;
+      x.carril = c;
+      x.solapa = L.some(y => y !== x && iv(y)[0] < f && iv(y)[1] > i);
+    });
+    L.forEach(x => x.carriles = Math.max(1, finCarril.length));
+    return L;
+  }
   const hhmm = m => String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
   const aMin = h => { const [a,b] = (h||"09:00").split(":").map(Number); return a*60 + (b||0); };
 
@@ -55,10 +69,10 @@
     const fin = masDias(inicio, 13), dIni = iso(inicio), dFin = iso(fin), hoy = iso(new Date());
     // Citas del periodo: una entrada por persona de cada cita
     const citas = [];
-    trabajos.filter(t => !CERRADOS.includes(t.estado)).forEach(t => (t.citas||[]).forEach(c => {
+    trabajos.filter(t => !CERRADOS.includes(t.estado)).forEach(t => (t.citas||[]).forEach((c, ci) => {
       if(!c.fecha || c.fecha < dIni || c.fecha > dFin) return;
       const quien = (c.personal && c.personal.length) ? c.personal : ((t.asignados||[]).length ? t.asignados : ["_sin"]);
-      quien.forEach(k => citas.push({t, c, k}));
+      quien.forEach(k => citas.push({t, c, k, ci}));
     }));
     const sinFecha = trabajos.filter(t => !CERRADOS.includes(t.estado) && t.estado !== "hecho" && !(t.citas||[]).length)
       .sort((a,b) => (["urgente","alta","normal","baja"].indexOf(a.urgencia||"normal") - ["urgente","alta","normal","baja"].indexOf(b.urgencia||"normal")) || (a.numero||"").localeCompare(b.numero||""));
@@ -71,6 +85,7 @@
     const visibles = tecnicos.filter(([k]) => !ocultos[k]);
     const puedeAus = S.puede("calendario","editar");
     const puedeCrear = S.puede("trabajos","editar");
+    const puedeMover = S.puede("trabajos","todo");   // mover citas: Dirección y Oficina
 
     const semana = lunes => {
       const dias = [0,1,2,3,4,5,6].map(i => masDias(lunes, i));
@@ -87,16 +102,16 @@
               ${f === hoy && ahoraMin >= H_INI*60 && ahoraMin <= H_FIN*60 ? `<div class="cal-ahora" style="top:${(ahoraMin - H_INI*60) / 60 * PX_H}px"></div>` : ""}
               ${visibles.map(([k,p]) => {
                 const aus = ausencias.filter(a => a.personalId === k && a.desde <= f && a.hasta >= f);
-                const mias = citas.filter(x => x.k === k && x.c.fecha === f);
+                const mias = carriles(citas.filter(x => x.k === k && x.c.fecha === f));
                 return `<div class="cal-col ${puedeCrear && k !== "_sin" ? "crea" : ""}" data-k="${esc(k)}" data-f="${f}" title="${esc(p.nombre)}">
                   ${aus.map(a => `<div class="cal-aus" data-aus="${a.id}" title="${esc(p.nombre)}: ${esc(a.motivo)}">${esc(a.motivo)}</div>`).join("")}
                   ${mias.map(x => {
                     const ini = Math.max(aMin(x.c.hora), H_INI*60), dur = Math.max(Number(x.c.duracion)||60, 30);
                     const top = (ini - H_INI*60) / 60 * PX_H, alto = Math.min(dur, H_FIN*60 - ini) / 60 * PX_H;
-                    return `<a class="cal-cita ${x.t.estado === "hecho" ? "hecha" : ""} ${x.t.estado === "amedias" ? "medias" : ""} ${x.t.estado === "encurso" ? "encurso" : ""}" data-id="${x.t.id}" data-com="${esc(x.t.comunidadId||"")}"
-                      style="top:${top}px;height:${Math.max(alto, 18)}px;--c:${esc(p.color||"#9aa5b5")}"
+                    return `<a class="cal-cita ${x.solapa ? "solapa" : ""} ${x.t.estado === "hecho" ? "hecha" : ""} ${x.t.estado === "amedias" ? "medias" : ""} ${x.t.estado === "encurso" ? "encurso" : ""}" data-id="${x.t.id}" data-com="${esc(x.t.comunidadId||"")}" data-ci="${x.ci}" data-k="${esc(x.k)}"
+                      style="top:${top}px;height:${Math.max(alto, 18)}px;--c:${esc(p.color||"#9aa5b5")};left:calc(${x.carril / x.carriles * 100}% + 2px);right:auto;width:calc(${100 / x.carriles}% - 4px)"
                       title="${esc(x.c.hora)} · ${esc(p.nombre)} · ${esc(x.t.direccion || x.t.nombre)} — ${esc(x.t.descripcion||"")}">
-                      <b>${x.t.estado === "amedias" ? "🔧 " : ""}${x.t.estado === "encurso" ? "▶️ " : ""}${esc(x.t.direccion || x.t.nombre)}</b><span>${PRIOR[x.t.urgencia]||""}${ESPEC[x.t.especialidad]||""} ${esc(x.c.hora)}</span></a>`;
+                      <b>${x.t.estado === "amedias" ? "🔧 " : ""}${x.t.estado === "encurso" ? "▶️ " : ""}${esc(x.t.direccion || x.t.nombre)}</b><span>${PRIOR[x.t.urgencia]||""}${ESPEC[x.t.especialidad]||""} ${esc(x.c.hora)}</span>${puedeMover && x.t.estado !== "hecho" ? `<i class="cal-tirador" title="Estirar para cambiar la duración"></i>` : ""}</a>`;
                   }).join("")}
                 </div>`;
               }).join("")}
@@ -116,7 +131,7 @@
           ${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Intervención</a>` : ""}
           ${puedeAus ? `<button class="btn sec" id="btnAus">+ Ausencia</button>` : ""}
         </div>
-        ${puedeCrear && tecnicos.length ? `<p class="vacio" style="margin-top:6px">Para apuntar una intervención: <b>arrastra</b> en la columna del técnico desde la hora de inicio hasta la de fin (en el móvil, <b>toca</b> la hora).</p>` : ""}
+        ${puedeCrear && tecnicos.length ? `<p class="vacio" style="margin-top:6px">Para apuntar una intervención: <b>arrastra</b> en la columna del técnico desde la hora de inicio hasta la de fin (en el móvil, <b>toca</b> la hora).${puedeMover ? " Para <b>mover</b> una cita, arrástrala a otro día, hora o técnico; para cambiar lo que dura, <b>estira</b> su borde de abajo." : ""}</p>` : ""}
         ${!tecnicos.length ? `<p class="vacio" style="margin-top:10px">Da de alta al equipo (Pedro, Alberto…) en Ajustes › Equipo para que salgan sus columnas.</p>` : ""}
         <form id="fAus" class="oculto bloque" style="margin-top:10px">
           <h3>Nueva ausencia</h3>
@@ -140,8 +155,65 @@
     el.querySelectorAll("[data-mov]").forEach(b => b.onclick = () => { const n = Number(b.dataset.mov); inicio = n ? masDias(inicio, n) : lunesDe(new Date()); vista(el); });
     el.querySelectorAll(".cal-leyenda input").forEach(i => i.onchange = () => { ocultos[i.dataset.k] = !i.checked; vista(el); });
     // Pulsar una cita → ficha de la comunidad, pestaña Intervenciones (si es particular, la intervención)
+    // ---------- Mover (arrastrar a otro día, hora o técnico) y estirar (duración) — sesión 26 ----------
+    let arrastrado = false;
+    if(puedeMover) el.querySelectorAll(".cal-cita").forEach(a => {
+      if(a.classList.contains("hecha")) return;
+      a.addEventListener("pointerdown", ev => {
+        if(ev.pointerType !== "mouse" || ev.button > 0) return;   // en el móvil no se arrastra (se cambia desde la ficha)
+        ev.preventDefault();
+        const estirar = ev.target.classList.contains("cal-tirador");
+        const t = trabajos.find(x => x.id === a.dataset.id), ci = Number(a.dataset.ci), c0 = t.citas[ci];
+        const y0 = ev.clientY, x0 = ev.clientX, ini0 = aMin(c0.hora), dur0 = Number(c0.duracion) || 60;
+        let destino = null, fantasma = null; arrastrado = false;
+        const colEn = (x, y) => { a.style.pointerEvents = "none"; const c = document.elementFromPoint(x, y); a.style.pointerEvents = ""; return c && c.closest(".cal-col.crea"); };
+        const mover = e => {
+          if(!arrastrado && Math.abs(e.clientY - y0) + Math.abs(e.clientX - x0) < 6) return;
+          arrastrado = true; a.classList.add("moviendo");
+          if(estirar){
+            const dur = Math.max(30, Math.round((dur0 + (e.clientY - y0) / PX_H * 60) / 30) * 30);
+            const d2 = Math.min(dur, H_FIN*60 - ini0);
+            a.style.height = d2 / 60 * PX_H + "px"; a.querySelector("span").textContent = hhmm(ini0) + "–" + hhmm(ini0 + d2);
+            destino = {fecha:c0.fecha, hora:c0.hora, k:a.dataset.k, duracion:d2};
+            return;
+          }
+          const col = colEn(e.clientX, e.clientY - (y0 - a.getBoundingClientRect().top));
+          if(!col){ if(fantasma) fantasma.remove(); fantasma = null; destino = null; return; }
+          const r = col.getBoundingClientRect();
+          let m = H_INI*60 + Math.round((e.clientY - (y0 - a.getBoundingClientRect().top) - r.top) / PX_H * 2) * 30;
+          m = Math.min(Math.max(m, H_INI*60), H_FIN*60 - 30);
+          destino = {fecha:col.dataset.f, hora:hhmm(m), k:col.dataset.k, duracion:dur0};
+          if(!fantasma || fantasma.parentNode !== col){ if(fantasma) fantasma.remove(); fantasma = document.createElement("div"); fantasma.className = "cal-sel"; col.appendChild(fantasma); }
+          fantasma.style.top = (m - H_INI*60) / 60 * PX_H + "px"; fantasma.style.height = Math.min(dur0, H_FIN*60 - m) / 60 * PX_H + "px";
+          fantasma.textContent = hhmm(m) + " · " + ((P[destino.k]||{}).nombre || "");
+        };
+        const soltar = async () => {
+          document.removeEventListener("pointermove", mover); document.removeEventListener("pointerup", soltar);
+          if(fantasma) fantasma.remove(); a.classList.remove("moviendo");
+          if(!arrastrado || !destino) return;
+          if(destino.fecha === c0.fecha && destino.hora === c0.hora && destino.k === a.dataset.k && destino.duracion === dur0) return;
+          // Nueva cita: cambia día/hora/duración; si cambia de técnico, se sustituye solo esa persona
+          const pers = (c0.personal && c0.personal.length ? c0.personal : (t.asignados||[])).filter(k => k !== "_sin");
+          const nuevaPers = destino.k === a.dataset.k ? pers : [...new Set(pers.map(k => k === a.dataset.k ? destino.k : k).concat(a.dataset.k === "_sin" ? [destino.k] : []))];
+          const citas2 = t.citas.map((c, i) => i === ci ? {...c, fecha:destino.fecha, hora:destino.hora, duracion:destino.duracion, personal:nuevaPers} : c);
+          const asign2 = [...new Set(citas2.flatMap(c => c.personal || []))];
+          const quien = nuevaPers.map(k => (P[k]||{}).nombre || "").join(", ");
+          const texto = (estirar ? "Duración: " : "Movida a ") + (estirar ? "" : new Date(destino.fecha + "T12:00").toLocaleDateString("es-ES",{weekday:"short", day:"numeric", month:"short"}) + " " + destino.hora + " · ") + (destino.duracion/60) + " h · " + quien;
+          const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
+          try{
+            const ref = db.collection("dhs_trabajos").doc(t.id);
+            await ref.update({citas:citas2, asignados:asign2, modificado:{por:yo, en}});
+            await ref.collection("notas").add({tipo:"cita", texto, por:yo, en});
+            await db.collection("dhs_registro").add({por:yo, en, accion:"cita: " + texto, coleccion:"dhs_trabajos", docId:t.id, nombre:(t.numero||"") + " · " + (t.nombre||"")});
+          }catch(e){ alert("No se ha podido mover (" + (e.code||e) + ")."); vista(el, true); }
+        };
+        document.addEventListener("pointermove", mover); document.addEventListener("pointerup", soltar);
+      });
+    });
+
     el.querySelectorAll(".cal-cita").forEach(a => a.onclick = ev => {
       ev.preventDefault();
+      if(arrastrado){ arrastrado = false; return; }
       if(a.dataset.com && S.puede("comunidades")){ window.DHS_COM.abrirPestana("intervenciones"); location.hash = "comunidad/" + encodeURIComponent(a.dataset.com); }
       else location.hash = "intervencion/" + a.dataset.id;
     });
@@ -157,7 +229,7 @@
         return [de, a2];
       };
       col.addEventListener("pointerdown", ev => {
-        if(ev.target.closest(".cal-cita, .cal-aus") || ev.button > 0) return;
+        if(ev.target.closest(".cal-cita, .cal-aus, .cal-sel") || ev.button > 0) return;
         ini = minDe(ev); pintar(ini, ini);
         if(ev.pointerType === "mouse") col.setPointerCapture(ev.pointerId);
       });
