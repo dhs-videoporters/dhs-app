@@ -21,17 +21,31 @@
   // Horas trabajadas de un día a partir de sus fichajes
   function calcular(L){
     L = L.slice().sort((a,b) => ms(a) - ms(b));
-    let total = 0, desde = null, estado = "fuera", primera = null, ultima = null;
+    let total = 0, desde = null, estado = "fuera", primera = null, ultima = null, fPrimera = null, fUltima = null;
     L.forEach(f => {
       const t = tipoReal(f), m = ms(f);
-      if(t === "entrada" || t === "vuelta"){ if(desde === null) desde = m; estado = "dentro"; if(t === "entrada" && primera === null) primera = m; }
-      else { if(desde !== null){ total += (m - desde) / 60000; desde = null; } estado = t === "pausa" ? "pausa" : "fuera"; if(t === "salida") ultima = m; }
+      if(t === "entrada" || t === "vuelta"){ if(desde === null) desde = m; estado = "dentro"; if(t === "entrada" && primera === null){ primera = m; fPrimera = f; } }
+      else { if(desde !== null){ total += (m - desde) / 60000; desde = null; } estado = t === "pausa" ? "pausa" : "fuera"; if(t === "salida"){ ultima = m; fUltima = f; } }
     });
     const abierto = desde !== null;
     // Abierto hoy: cuenta hasta ahora. Abierto de un día pasado (sin salida): no se cuenta hasta que se corrija.
     if(abierto && iso(new Date(desde)) === iso(new Date())) total += (Date.now() - desde) / 60000;
-    return {total, estado, primera, ultima, abierto, correcciones: L.filter(f => f.tipo === "correccion").length};
+    return {total, estado, primera, ultima, fPrimera, fUltima, abierto, correcciones: L.filter(f => f.tipo === "correccion").length};
   }
+
+  // Ubicación SOLO en el momento de fichar (decisión de Ángel 24/10; el trabajador lo tiene firmado en el contrato).
+  // Si el móvil no la da (permiso denegado, sin GPS…), se ficha igualmente y queda "sin ubicación".
+  function ubicacion(){
+    return new Promise(ok => {
+      if(!navigator.geolocation) return ok({sin:"no disponible"});
+      navigator.geolocation.getCurrentPosition(
+        p => ok({lat:Math.round(p.coords.latitude*1e6)/1e6, lng:Math.round(p.coords.longitude*1e6)/1e6, precision:Math.round(p.coords.accuracy)}),
+        e => ok({sin: e.code === 1 ? "permiso denegado" : "no disponible"}),
+        {enableHighAccuracy:true, timeout:10000, maximumAge:60000});
+    });
+  }
+  const mapaUbi = u => u && u.lat != null ? `https://www.google.com/maps/search/?api=1&query=${u.lat},${u.lng}` : "";
+  const pinUbi = u => !u ? "" : (u.lat != null ? ` <a class="pin" href="${mapaUbi(u)}" target="_blank" rel="noopener" title="Ubicación al fichar (±${u.precision} m)">📍</a>` : ` <span class="pin sin" title="Sin ubicación: ${esc(u.sin)}">📍✕</span>`);
 
   // ---------- Tarjeta de fichaje en "Mi trabajo" ----------
   // ¿Tiene que fichar antes de trabajar? (plantilla, día laborable y hoy todavía nada fichado)
@@ -64,13 +78,16 @@
       <div class="fi-cab"><b>⏱️ Fichaje de hoy</b><span>${c.estado === "dentro" ? "Trabajando" : (c.estado === "pausa" ? "En pausa" : (hoyL.length ? "Jornada cerrada" : "Sin fichar"))} · ${durTxt(c.total)}</span></div>
       <div class="fi-botones">${botones.map(t => `<button class="btn fi-${t}" data-t="${t}">${ICO[t]} ${TIPOS[t]}</button>`).join("")}</div>
       ${hoyL.length ? `<p class="fi-lista">${hoyL.sort((a,b) => ms(a) - ms(b)).map(f => `${ICO[tipoReal(f)]} ${hhmm(ms(f))}${f.tipo === "correccion" ? "*" : ""}`).join(" · ")}</p>` : ""}
-      <p class="msg-fi vacio"></p></div>`;
+      <p class="msg-fi vacio"></p>
+      <p class="fi-nota">📍 Al fichar se guarda tu ubicación en ese momento (solo entonces).</p></div>`;
     el.querySelectorAll("[data-t]").forEach(b => b.onclick = async () => {
       const t = b.dataset.t;
       if(t === "salida" && !confirm("¿Fichar la salida? Terminas la jornada de hoy.")) return;
       el.querySelectorAll("[data-t]").forEach(x => x.disabled = true);
       try{
-        await db.collection("dhs_fichajes").add({tipo:t, email:yo, personalId:S.personalId, nombre:S.nombre, fecha:hoy, en:firebase.firestore.FieldValue.serverTimestamp()});
+        el.querySelector(".msg-fi").textContent = "Fichando…";
+        const u = await ubicacion();
+        await db.collection("dhs_fichajes").add({tipo:t, email:yo, personalId:S.personalId, nombre:S.nombre, fecha:hoy, ubicacion:u, en:firebase.firestore.FieldValue.serverTimestamp()});
         FICHADO_HOY = hoy;
         if(alFichar) alFichar(t); else tarjeta(el);
       }catch(e){ el.querySelector(".msg-fi").textContent = "No se ha podido fichar (" + (e.code||e) + ")."; el.querySelectorAll("[data-t]").forEach(x => x.disabled = false); }
@@ -121,8 +138,8 @@
             const malo = nada && cuenta(x.f) && (x.citas > 0 || x.f < hoy);
             return `<tr class="${malo ? "fi-mal" : ""} ${x.c.abierto && x.f < hoy ? "fi-abierto" : ""}">
               <td>${new Date(x.f + "T12:00").toLocaleDateString("es-ES", {weekday:"short", day:"numeric"})}</td>
-              <td>${x.c.primera ? hhmm(x.c.primera) : (nada ? "—" : "")}</td>
-              <td>${x.c.ultima ? hhmm(x.c.ultima) : (x.c.abierto ? (x.f < hoy ? "⚠️ sin salida" : "trabajando") : "—")}</td>
+              <td>${x.c.primera ? hhmm(x.c.primera) + pinUbi(x.c.fPrimera.ubicacion) : (nada ? "—" : "")}</td>
+              <td>${x.c.ultima ? hhmm(x.c.ultima) + pinUbi(x.c.fUltima.ubicacion) : (x.c.abierto ? (x.f < hoy ? "⚠️ sin salida" : "trabajando") : "—")}</td>
               <td>${x.c.abierto && x.f < hoy ? "?" : (x.c.total ? durTxt(x.c.total) : "")}${x.c.correcciones ? " *" : ""}</td>
               <td>${x.citas || ""}</td>
               <td>${S.direccion ? `<button class="btn sec mini-btn" data-k="${k}" data-f="${x.f}">Corregir</button>` : ""}</td></tr>`;
@@ -139,8 +156,8 @@
       </form>`;
     el.querySelector("#mesFi").onchange = e => { mesSel = e.target.value || mesSel; vista(el); };
     el.querySelector("#csvFi").onclick = () => {
-      const L = [["Trabajador","Fecha","Tipo","Hora","Corrección","Motivo","Corregido por"]];
-      F.slice().sort((a,b) => (a.nombre||"").localeCompare(b.nombre||"") || ms(a) - ms(b)).forEach(f => L.push([(P[f.personalId]||{}).nombre || f.nombre || f.email, f.fecha, TIPOS[tipoReal(f)] || tipoReal(f), hhmm(ms(f)), f.tipo === "correccion" ? "Sí" : "", f.motivo || "", f.por || ""]));
+      const L = [["Trabajador","Fecha","Tipo","Hora","Corrección","Motivo","Corregido por","Ubicación"]];
+      F.slice().sort((a,b) => (a.nombre||"").localeCompare(b.nombre||"") || ms(a) - ms(b)).forEach(f => L.push([(P[f.personalId]||{}).nombre || f.nombre || f.email, f.fecha, TIPOS[tipoReal(f)] || tipoReal(f), hhmm(ms(f)), f.tipo === "correccion" ? "Sí" : "", f.motivo || "", f.por || "", f.ubicacion ? (f.ubicacion.lat != null ? f.ubicacion.lat + "," + f.ubicacion.lng : "sin ubicación") : ""]));
       const csv = "﻿" + L.map(r => r.map(x => '"' + String(x).replace(/"/g,'""') + '"').join(";")).join("\r\n");
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"})); a.download = "fichajes-" + mesSel + ".csv"; a.click();
     };

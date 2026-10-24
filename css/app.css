@@ -326,3 +326,5 @@ a.fila-eq:hover{background:#f6f8fb}
 .tabla-fi tr.fi-mal td{background:#fdecea}.tabla-fi tr.fi-abierto td{background:#fff7e6}
 .mini-btn{padding:2px 8px;font-size:12px}
 .aviso-fi{background:#fdecea;color:#8a1f15}
+.pin{text-decoration:none;font-size:12px}.pin.sin{opacity:.6}
+.fi-nota{font-size:11px;color:var(--gris);margin-top:6px}
