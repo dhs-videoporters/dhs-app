@@ -23,3 +23,9 @@
 
 ## Clientes
 - `/entities/…` (cobros usa `/entities/{id}/bankaccounts`)
+
+## Prueba real (24/10/2026 15:29, Apps Script "Programa DHS", función probarContasimple)
+- Acceso con la clave "DHS App" (API Rest, creada 24/10 15:19; guardada SOLO en Propiedades del script › CS_KEY): OK.
+- Catálogo: **154 productos/servicios** (campos: id, name, price, vat, discountPercentage, description, active, internalCode…). Ej.: ABREPUERTAS CON MEMORIA AUTOMATICO 59,90 € · AMPLIACION MONITOR FERMAX XL 59,29 € · ANTENA UHF FILTRO 5G NOVA ERA 85,55 €. Ojo: alguno tiene IVA 0 (AUDIO GOLMAR + 3 TELÉFONOS).
+- Numeración de presupuestos: formato id 883703 «Presupuestos», máscara P-AAAA-#### (por defecto). Siguiente: P-2026-0351.
+- Presupuesto creado sin cliente: **P-2026-0351** (id 5239781), 1 línea «PRUEBA DHS App» 1 € + IVA, estado Creado. PDF descargado (83 KB). → Se puede borrar en Contasimple.
