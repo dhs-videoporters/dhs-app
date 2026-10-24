@@ -27,6 +27,7 @@
 
   // Secciones del menú y apartado que hay que poder "ver" para que salgan.
   const SECCIONES = [
+    {id:"mitrabajo",      nombre:"Mi trabajo",      ico:"📋", ap:"trabajos", minimo:"propios", conPersonal:true},
     {id:"calendario",     nombre:"Calendario",      ico:"📅", ap:"calendario"},
     {id:"comunidades",    nombre:"Comunidades",     ico:"🏢", ap:"comunidades"},
     {id:"intervenciones", nombre:"Intervenciones",  ico:"🛠️", ap:"trabajos", minimo:"propios"},
@@ -93,7 +94,7 @@
     document.querySelector(".buscador").classList.toggle("oculto", !S.puede("comunidades"));
     if(S.puede("comunidades")) window.DHS_COM.buscadorGlobal(document.querySelector("#buscaGlobal"), document.querySelector("#resGlobal"));
     mostrar("app");
-    irA(location.hash.slice(1) || "calendario");
+    irA(location.hash.slice(1) || (S.personalId && !S.puede("trabajos","todo") ? "mitrabajo" : "calendario"));
     window.DHS_COPIAS.avisoAlEntrar();
   });
 
@@ -103,7 +104,7 @@
   }
 
   // ---------- Menú ----------
-  function secciones(){ return SECCIONES.filter(s => S.puede(s.ap, s.minimo || "ver")); }
+  function secciones(){ return SECCIONES.filter(s => S.puede(s.ap, s.minimo || "ver") && (!s.conPersonal || S.personalId)); }
   function montarMenu(){
     $("#menu").innerHTML = secciones().map(s => `<a href="#${s.id}" data-id="${s.id}">${s.nombre}</a>`).join("");
     $("#menuMovil").innerHTML = secciones().map(s => `<a href="#${s.id}" data-id="${s.id}"><span class="ico">${s.ico}</span>${s.nombre}</a>`).join("");
@@ -114,6 +115,11 @@
   function irA(ruta){
     const [id0, arg] = decodeURIComponent(ruta||"").split("/");
     const ALIAS = {comunidad:"comunidades", administrador:"administradores", intervencion:"intervenciones", "nueva-intervencion":"intervenciones", trabajos:"intervenciones"};
+    // La ficha de trabajo la abre el técnico (desde Mi trabajo) y también la oficina (desde la intervención).
+    if(id0 === "trabajo" && arg && S.puede("trabajos","propios")){
+      document.querySelectorAll("#menu a, #menuMovil a").forEach(a => a.classList.toggle("on", a.dataset.id === "mitrabajo"));
+      return window.DHS_TRAB.fichaTrabajo($("#contenido"), arg);
+    }
     let id = ALIAS[id0] || id0;
     if(!secciones().some(s => s.id === id)) id = (secciones()[0] || {}).id;
     if(!id){ $("#contenido").innerHTML = panel("Sin permisos", "Tu perfil no tiene ningún apartado visible. Habla con la oficina."); return; }
@@ -133,6 +139,7 @@
   const VISTAS = {
     calendario: el => el.innerHTML = panel("Calendario", "Aquí irá el calendario a 15 días vista (fase 4)."),
     intervenciones: el => window.DHS_TRAB.lista(el),
+    mitrabajo: el => window.DHS_TRAB.miTrabajo(el),
     comunidades: el => window.DHS_COM.lista(el),
     administradores: el => window.DHS_ADM.lista(el),
     ajustes: el => window.DHS_AJ.vista(el)

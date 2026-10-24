@@ -221,7 +221,7 @@
       <button class="prio ${cambia ? "cambia" : ""}" data-id="${t.id}" title="Prioridad: ${pr[1]}${cambia ? " (toca para cambiar)" : ""}" ${cambia ? "" : "disabled"}>${pr[0]}</button>
       <a class="f-cuerpo" href="#intervencion/${t.id}">
         <div class="f-nombre">${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.nombre)} <span class="vacio">· ${esc(t.numero)}</span></div>
-        <div class="f-sub">${esc((t.descripcion||"").slice(0,110))}</div>
+        <div class="f-sub">${CERRADOS.includes(t.estado) && t.resumenHecho ? "✅ " + (t.fechaHecho ? esc(fmtFecha(t.fechaHecho)) + " · " : "") + esc(t.resumenHecho.slice(0,110)) : esc((t.descripcion||"").slice(0,110))}${t.estado === "amedias" && t.falta ? ` <span class="tag aviso">Falta: ${esc(t.falta.slice(0,60))}</span>` : ""}</div>
         <div class="f-tags">${quien}<span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span>${cita ? `<span class="tag gris">${esc(fmtFecha(cita.fecha))} ${esc(cita.hora)}</span>` : `<span class="tag aviso">Sin fecha</span>`}</div>
       </a></div>`;
   }
@@ -381,7 +381,12 @@
           </form>` : ""}
         </div>
       </div>
-      ${conFicha ? `<p style="margin-top:12px"><a class="btn sec" href="#comunidad/${encodeURIComponent(t.comunidadId)}">Ver ficha de ${esc(t.nombre)}</a></p>` : ""}
+      ${t.resumenHecho || (t.material||[]).length || t.tiempoReal ? `<div class="bloque" style="margin-top:14px"><h3>Lo que se ha hecho${t.fechaHecho ? " · " + esc(fmtFecha(t.fechaHecho)) : ""}</h3>
+        ${t.resumenHecho ? `<p style="white-space:pre-wrap">${esc(t.resumenHecho)}</p>` : ""}
+        ${t.falta ? `<p class="ft-nota">🔧 Falta: ${esc(t.falta)}</p>` : ""}
+        ${(t.material||[]).length ? dato("Material", (t.material).map(x => esc(x.cant + " × " + x.desc)).join("<br>")) : ""}
+        ${t.tiempoReal ? dato("Tiempo", esc(durTxt(t.tiempoReal))) : ""}</div>` : ""}
+      <p style="margin-top:12px">${conFicha ? `<a class="btn sec" href="#comunidad/${encodeURIComponent(t.comunidadId)}">Ver ficha de ${esc(t.nombre)}</a> ` : ""}<a class="btn sec" href="#trabajo/${id}">📋 Ficha de trabajo (lo que ve el técnico)</a></p>
       </div>
 
       <div class="panel" style="margin-top:14px">
@@ -481,5 +486,135 @@
     };
   }
 
-  window.DHS_TRAB = { nueva, lista, ficha, deComunidad, contar, recargarPersonal: () => { PERSONAL = null; } };
+  // ---------- ZONA DE TRABAJO DEL TÉCNICO (sesión 19, idea de Ángel 24/10) ----------
+  // "Mi trabajo": solo mis intervenciones. "Ficha de trabajo": solo la información justa para ir y hacerlo
+  // (nada de precios, cobros ni datos de la administración). Al terminar, lo hecho pasa a la intervención
+  // y a la pestaña Intervenciones de la comunidad.
+  const hoyISO = () => new Date().toISOString().slice(0,10);
+  const TIEMPOS = []; for(let m = 15; m <= 600; m += 15) TIEMPOS.push(m);
+  const mapa = t => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([t.direccion, t.poblacion].filter(Boolean).join(", "));
+
+  async function miTrabajo(el){
+    const {db, S} = D();
+    el.innerHTML = `<div class="panel">Cargando…</div>`;
+    if(!S.personalId){ el.innerHTML = `<div class="panel"><h2>Mi trabajo</h2><p class="vacio">Tu cuenta no está unida a nadie del equipo. Pide a la oficina que lo haga en Ajustes › Equipo.</p></div>`; return; }
+    let docs = [];
+    try{ (await db.collection("dhs_trabajos").where("asignados", "array-contains", S.personalId).get()).forEach(d => docs.push({id:d.id, ...d.data()})); }
+    catch(e){ el.innerHTML = `<div class="panel">No se han podido leer tus intervenciones (${esc(e.code)}).</div>`; return; }
+    const hoy = hoyISO(), fecha = t => ((t.citas||[])[0] || {}).fecha || "", hora = t => ((t.citas||[])[0] || {}).hora || "";
+    const abiertas = docs.filter(t => !CERRADOS.includes(t.estado));
+    const grupo = (titulo, lista) => `<h3 style="margin-top:14px">${titulo} <span class="vacio">(${lista.length})</span></h3>` +
+      (lista.map(t => `<a class="tarjeta-t" href="#trabajo/${t.id}">
+        <div class="tt-hora">${fecha(t) ? (fecha(t) === hoy ? esc(hora(t)) : esc(fmtFecha(fecha(t))) + "<br>" + esc(hora(t))) : "—"}</div>
+        <div class="tt-cuerpo"><b>${(PRIOR[t.urgencia]||PRIOR.normal)[0]} ${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] : ""} ${esc(t.direccion || t.nombre)}</b>
+          <span>${esc(t.poblacion||"")}${t.estado === "amedias" ? " · 🔧 a medias" : ""}</span>
+          <span class="tt-desc">${esc((t.descripcion||"").slice(0,90))}</span></div></a>`).join("") || `<p class="vacio">Nada.</p>`);
+    const ord = (a,b) => (fecha(a)+hora(a)).localeCompare(fecha(b)+hora(b)) || porPrioridad(a,b);
+    el.innerHTML = `<div class="panel mi-trabajo">
+      <h2>Mi trabajo</h2>
+      <p class="vacio">${new Date().toLocaleDateString("es-ES", {weekday:"long", day:"numeric", month:"long"})}</p>
+      ${grupo("Hoy", abiertas.filter(t => fecha(t) && fecha(t) <= hoy).sort(ord))}
+      ${grupo("Próximos días", abiertas.filter(t => fecha(t) > hoy).sort(ord))}
+      ${grupo("Sin fecha", abiertas.filter(t => !fecha(t)).sort(porPrioridad))}
+      ${grupo("Hecho hoy", docs.filter(t => CERRADOS.includes(t.estado) && t.fechaHecho === hoy))}
+    </div>`;
+  }
+
+  async function fichaTrabajo(el, id){
+    const {db, S} = D();
+    el.innerHTML = `<div class="panel">Cargando…</div>`;
+    const ref = db.collection("dhs_trabajos").doc(id);
+    let t, P, c = null, admins = {}, anteriores = [];
+    try{ P = await personal(); const d = await ref.get(); if(!d.exists) throw {code:"no existe"}; t = d.data(); }
+    catch(e){ el.innerHTML = `<div class="panel">No se ha podido abrir (${esc(e.code)}). <a href="#mitrabajo">Volver</a></div>`; return; }
+    if(t.comunidadId && S.puede("comunidades")){ try{ const C = await window.DHS_COM.datos(); c = C.coms[t.comunidadId] || null; admins = C.admins; }catch(e){} }
+    if(t.comunidadId && S.puede("trabajos","ver")){ try{ anteriores = (await leer(t.comunidadId)).filter(x => x.id !== id && CERRADOS.includes(x.estado)).sort((a,b) => (b.fechaHecho||b.numero||"").localeCompare(a.fechaHecho||a.numero||"")).slice(0,3); }catch(e){} }
+    const pr = PRIOR[t.urgencia] || PRIOR.normal, cita = (t.citas||[])[0];
+    const tel = (n, v) => v ? `<a class="btn-tel" href="tel:${esc(v)}">📞 ${esc(n)}</a>` : "";
+    const vp = (c && c.videoportero) || {}, tv = (c && c.tv) || {}, pres = (c && c.presidente) || {};
+    const cerrado = CERRADOS.includes(t.estado);
+    const puede = S.puede("trabajos","editar") || (t.asignados||[]).includes(S.personalId);
+    el.innerHTML = `
+      <a href="#mitrabajo" class="volver">‹ Mi trabajo</a>
+      <div class="panel ficha-trabajo">
+        <div class="ft-cab"><span class="ft-prio">${pr[0]} ${pr[1]}</span><span class="vacio">${esc(t.numero)}</span></div>
+        <h1>${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.direccion || t.nombre)}</h1>
+        <p class="vacio">${esc([t.nombre !== t.direccion ? t.nombre : "", t.poblacion].filter(Boolean).join(" · "))}</p>
+        <p style="margin-top:8px"><a class="btn sec" href="${mapa(t)}" target="_blank" rel="noopener">🗺️ Cómo llegar</a></p>
+        ${cita ? `<p style="margin-top:8px">📅 <b>${esc(fmtFecha(cita.fecha))} · ${esc(cita.hora)}</b> · ${esc(durTxt(cita.duracion))}${(cita.personal||[]).length > 1 ? " · con " + (cita.personal).filter(k => k !== S.personalId).map(k => P[k] ? esc(P[k].nombre) : "").join(", ") : ""}</p>` : ""}
+
+        <div class="ft-bloque"><h3>Qué hay que hacer</h3>
+          <p class="ft-desc">${esc(t.descripcion)}</p>
+          <p class="vacio">${esc(especTxt(t))} · ${esc(TIPOS[t.tipo]||"")}</p></div>
+
+        <div class="ft-bloque"><h3>A quién llamar</h3>
+          ${t.avisa && (t.avisa.nombre || t.avisa.telefono) ? `<p>Avisa: <b>${esc(t.avisa.nombre||"")}</b></p>${tel(t.avisa.nombre || "Llamar", t.avisa.telefono)}` : ""}
+          ${!t.comunidadId && t.telefono ? tel(t.nombre, t.telefono) : ""}
+          ${pres.nombre ? `<p style="margin-top:6px">Presidente: <b>★ ${esc([pres.nombre, pres.piso].filter(Boolean).join(" · "))}</b></p>${tel("Presidente", pres.telefono)}` : ""}
+          ${!(t.avisa && t.avisa.telefono) && !pres.telefono && !t.telefono ? `<p class="vacio">Sin teléfono.</p>` : ""}</div>
+
+        ${c ? `<div class="ft-bloque"><h3>La finca</h3>
+          ${c.acceso ? `<p>🔑 <b>Acceso:</b> ${esc(c.acceso)}</p>` : ""}
+          ${vp.marca || vp.modelo ? `<p>🔔 Videoportero: ${esc([vp.marca, vp.modelo, vp.año].filter(Boolean).join(" · "))}${vp.monitores ? " · " + esc(vp.monitores) + " monitores" : ""}</p>` : ""}
+          ${tv.antena || tv.parabolica ? `<p>📡 Antena: ${esc([tv.antena, tv.parabolica ? "con parabólica" : "", tv.multibanda ? "multibanda" : ""].filter(Boolean).join(" · "))}</p>` : ""}
+          ${c.camaras && c.camaras.tiene ? `<p>📹 Cámaras${c.camaras.numero ? ": " + esc(c.camaras.numero) : ""}</p>` : ""}
+          ${c.vecinos ? `<p>🏢 ${esc(c.vecinos)} vecinos</p>` : ""}
+          ${c.notas ? `<p class="ft-nota">📝 ${esc(c.notas)}</p>` : ""}
+          ${S.puede("vecinos") ? `<p style="margin-top:6px"><a href="#comunidad/${encodeURIComponent(t.comunidadId)}">Ver teléfonos de vecinos ›</a></p>` : ""}</div>` : ""}
+
+        ${anteriores.length ? `<div class="ft-bloque"><h3>Últimas veces que fuimos</h3>
+          ${anteriores.map(a => `<p>• <b>${esc(a.fechaHecho ? fmtFecha(a.fechaHecho) : a.numero)}</b> ${ESPEC[a.especialidad] ? ESPEC[a.especialidad][0] : ""} ${esc(a.resumenHecho || a.descripcion || "")}${(a.hechoPor||[]).length ? ` <span class="vacio">(${(a.hechoPor).map(k => P[k] ? esc(P[k].nombre) : "").join(", ")})</span>` : ""}</p>`).join("")}</div>` : ""}
+
+        ${cerrado ? `<div class="ft-bloque ok"><h3>✅ ${esc(ESTADOS[t.estado])}${t.fechaHecho ? " · " + esc(fmtFecha(t.fechaHecho)) : ""}</h3>
+          ${t.resumenHecho ? `<p>${esc(t.resumenHecho)}</p>` : ""}
+          ${(t.material||[]).length ? `<p class="vacio">Material: ${(t.material).map(m => esc(m.cant + " × " + m.desc)).join(" · ")}</p>` : ""}
+          ${t.tiempoReal ? `<p class="vacio">Tiempo: ${esc(durTxt(t.tiempoReal))}</p>` : ""}</div>`
+        : puede ? `<form id="fFin" class="ft-bloque fin"><h3>Al terminar</h3>
+          ${t.estado === "amedias" && t.falta ? `<p class="ft-nota">🔧 La última vez faltaba: ${esc(t.falta)}</p>` : ""}
+          <label class="campo"><span>¿Qué se ha hecho? *</span><textarea name="resumen" rows="3" placeholder="Ej.: Cambiado el monitor del 3º 1ª por uno nuevo. Probado y funciona.">${esc(t.resumenHecho||"")}</textarea></label>
+          <div class="campo"><span>Material usado</span>
+            <div id="lineasMat">${(t.material||[]).map(m => lineaMat(m)).join("") || lineaMat()}</div>
+            <button type="button" class="btn sec" id="masMat">+ Otro material</button></div>
+          <label class="campo"><span>Tiempo que ha llevado</span><select name="tiempo">${TIEMPOS.map(m => `<option value="${m}" ${m === (t.tiempoReal || (cita && cita.duracion) || 60) ? "selected" : ""}>${durTxt(m)}</option>`).join("")}</select></label>
+          <div class="campo"><span>¿Quién lo ha hecho?</span><div class="personas-sel">${Object.entries(P).filter(([k,p]) => p.activo !== false).map(([k,p]) => `<label><input type="checkbox" name="hechoPor" value="${k}" ${(t.asignados||[]).includes(k) ? "checked" : ""}><i style="background:${esc(p.color)}"></i>${esc(p.nombre)}</label>`).join("")}</div></div>
+          <div id="cajaFalta" class="oculto"><label class="campo"><span>¿Qué falta? *</span><textarea name="falta" rows="2" placeholder="Ej.: Pedir monitor Fermax, volver el martes.">${esc(t.falta||"")}</textarea></label></div>
+          <div class="ft-botones"><button type="button" class="btn btn-ok" id="btnHecho">✅ Hecho</button><button type="button" class="btn sec" id="btnMedias">🔧 Queda a medias</button></div>
+          <p id="msgFin" class="vacio" style="margin-top:6px"></p>
+        </form>` : ""}
+        ${S.puede("trabajos","ver") ? `<p style="margin-top:14px"><a href="#intervencion/${id}" class="vacio">Ver la intervención completa (historial) ›</a></p>` : ""}
+      </div>`;
+
+    const f = el.querySelector("#fFin"); if(!f) return;
+    el.querySelector("#masMat").onclick = () => el.querySelector("#lineasMat").insertAdjacentHTML("beforeend", lineaMat());
+    const m = x => el.querySelector("#msgFin").textContent = x;
+    let modoMedias = false;
+    const guardar = async estado => {
+      const fd = new FormData(f), resumen = (fd.get("resumen")||"").trim(), falta = (fd.get("falta")||"").trim();
+      const hp = fd.getAll("hechoPor");
+      const material = [...el.querySelectorAll(".linea-mat")].map(l => ({cant:Number(l.querySelector(".m-cant").value) || 1, desc:l.querySelector(".m-desc").value.trim()})).filter(x => x.desc);
+      if(!resumen) return m("Escribe qué se ha hecho.");
+      if(!hp.length) return m("Marca quién lo ha hecho.");
+      if(estado === "amedias" && !falta) return m("Escribe qué falta.");
+      const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
+      const cambio = {estado, resumenHecho:resumen, material, tiempoReal:Number(fd.get("tiempo")), hechoPor:hp, falta: estado === "amedias" ? falta : "", fechaHecho:hoyISO(), modificado:{por:yo, en}};
+      m("Guardando…");
+      try{
+        await ref.update(cambio);
+        await ref.collection("notas").add({tipo:"estado", de:t.estado, a:estado, texto: resumen + (estado === "amedias" ? "\nFalta: " + falta : ""), por:yo, en});
+        await db.collection("dhs_registro").add({por:yo, en, accion:"estado " + (ESTADOS[t.estado]||t.estado) + " → " + ESTADOS[estado] + " (ficha de trabajo)", coleccion:"dhs_trabajos", docId:id, nombre:t.numero + " · " + t.nombre});
+        location.hash = "mitrabajo";
+        if(!S.personalId) fichaTrabajo(el, id);
+      }catch(e){ m("No se ha podido guardar (" + (e.code||e) + ")."); }
+    };
+    el.querySelector("#btnHecho").onclick = () => guardar("hecho");
+    el.querySelector("#btnMedias").onclick = () => {
+      if(!modoMedias){ modoMedias = true; el.querySelector("#cajaFalta").classList.remove("oculto"); el.querySelector("#btnMedias").textContent = "🔧 Guardar a medias"; return; }
+      guardar("amedias");
+    };
+  }
+  function lineaMat(x = {}){
+    return `<div class="linea-mat"><input class="m-cant" type="number" min="1" value="${esc(x.cant || 1)}"><input class="m-desc" placeholder="Ej.: Monitor Fermax Duox" value="${esc(x.desc || "")}"></div>`;
+  }
+
+  window.DHS_TRAB = { nueva, lista, ficha, deComunidad, contar, miTrabajo, fichaTrabajo, recargarPersonal: () => { PERSONAL = null; } };
 })();
