@@ -127,11 +127,17 @@ const PUENTE = {
       presupuestoId: f.relatedEstimateId || null, rectificativa: !!f.isRectificationInvoice,
       pagos: (f.payments || []).map(p => ({ fecha: (p.date || p.paymentDate || '').slice(0, 10), importe: p.amount || p.totalAmount || 0 }))
     }));
+    // Facturas que no están en cobros: si son anteriores a la fecha desde la que cobros controla, no se cuentan
+    // (se dieron por cobradas al empezar); si son posteriores, aún no han pasado a cobros y se muestra lo de Contasimple.
+    const conf = cob.config || {};
+    const desdeCob = conf.desde || (new Date().getFullYear() + '-01-01');
     res.forEach(f => {
       const c = cob['f_' + f.id];
-      if (!c) { f.fuenteCobro = 'contasimple'; return; }
-      aplicarCobro_(f, c);
+      if (c) { aplicarCobro_(f, c); return; }
+      if (desdeCob && f.fecha && f.fecha < desdeCob) { f.fuenteCobro = 'antes'; f.pendiente = 0; f.estado = 'Payed'; f.pagos = []; return; }
+      f.fuenteCobro = 'contasimple'; f.sinCobros = true;
     });
+    delete cob.config;
     // Facturas metidas a mano en cobros (no están en Contasimple)
     Object.keys(cob).filter(k => cob[k].origen === 'manual').forEach(k => {
       const c = cob[k];
@@ -174,25 +180,30 @@ function cobros_() {
         { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Goog-User-Project': PROYECTO_COBROS }, muteHttpExceptions: true });
       if (r.getResponseCode() >= 300) throw new Error('cobros ' + r.getResponseCode());
       const j = JSON.parse(r.getContentText() || '{}');
-      (j.documents || []).forEach(d => { const v = aJSON_(d.fields || {}); if (v.tipo === 'factura') o[d.name.split('/').pop()] = v; });
+      (j.documents || []).forEach(d => { const id = d.name.split('/').pop(), v = aJSON_(d.fields || {}); if (v.tipo === 'factura' || id === 'config') o[id] = v; });
       token = j.nextPageToken || '';
     } while (token);
   } catch (e) { Logger.log('No se ha podido leer cobros: ' + e); }
   return o;
 }
-// Estado de cobro según los cargos de cobros: cobrado / pendiente (con lo que falta) y fecha del último cobro
+// Mismo criterio que la app de cobros: pendiente = cargos pendientes, devueltos o en la hoja del viernes.
+// Los "cargados" (ya en el banco) no cuentan como pendientes, igual que en cobros.
+const ABIERTO_ = ['pendiente', 'devuelto', 'enviar'];
 function aplicarCobro_(f, c) {
   const cargos = c.cargos || [];
-  const pend = cargos.filter(x => x.estado !== 'cobrado').reduce((n, x) => n + (Number(x.importe) || 0), 0);
+  const suma = L => Math.round(L.reduce((n, x) => n + (Number(x.importe) || 0), 0) * 100) / 100;
+  const pend = suma(cargos.filter(x => ABIERTO_.includes(x.estado)));
+  const banco = suma(cargos.filter(x => x.estado === 'cargado'));
   const cobrados = cargos.filter(x => x.estado === 'cobrado');
   f.fuenteCobro = 'cobros';
   f.estadoCobros = cargos.map(x => x.estado);
-  if (cargos.length && !pend) { f.estado = 'Payed'; f.pagado = f.total; f.pendiente = 0; }
-  else if (cargos.length) { f.estado = cobrados.length ? 'Incomplete' : 'Pending'; f.pendiente = Math.round(pend * 100) / 100; f.pagado = Math.round((f.total - pend) * 100) / 100; }
-  const fechas = cobrados.map(x => x.fechaCobro).filter(Boolean).sort();
-  if (fechas.length) f.pagos = cobrados.map(x => ({ fecha: x.fechaCobro || '', importe: Number(x.importe) || 0, via: x.via || '' }));
+  f.pendiente = pend; f.importeBanco = banco;
+  f.pagado = Math.round((suma(cargos) - pend - banco) * 100) / 100;
+  f.estado = pend ? (cobrados.length || banco ? 'Incomplete' : 'Pending') : 'Payed';
+  f.pagos = cobrados.map(x => ({ fecha: x.fechaCobro || '', importe: Number(x.importe) || 0, via: x.via || '' }));
   f.devuelto = cargos.some(x => x.estado === 'devuelto');
-  f.enBanco = cargos.some(x => x.estado === 'cargado' || x.estado === 'enviar');
+  f.enBanco = banco > 0;
+  f.enHoja = cargos.some(x => x.estado === 'enviar');
 }
 
 // ---------- Ayudas ----------

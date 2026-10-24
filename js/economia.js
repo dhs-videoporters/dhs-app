@@ -47,6 +47,8 @@
     // 3) Cobrado en el mes
     const cobr = []; F.forEach(f => (f.pagos||[]).forEach(p => { if((p.fecha||"").slice(0,7) === mes){ const com = comDe(f.clienteId); if(pasaAdmin(com)) cobr.push({...p, numero:f.numero, cliente:f.cliente, com}); } }));
     cobr.sort((a,b) => (b.fecha||"").localeCompare(a.fecha||""));
+    const nSin = pend.filter(f => f.sinCobros).length, tSin = r2(pend.filter(f => f.sinCobros).reduce((n,f) => n + (f.pendiente||0), 0));
+    const tBanco = r2(F.filter(f => !f.rectificativa && pasaAdmin(comDe(f.clienteId))).reduce((n,f) => n + (f.importeBanco||0), 0));
     const suma = (L, k) => r2(L.reduce((n,x) => n + (Number(x[k])||0), 0));
     // Previsión por meses de lo aceptado (según la fecha de su intervención)
     const prev = {}; acept.forEach(p => { const k = p.cita ? p.cita.slice(0,7) : "sin fecha"; prev[k] = r2((prev[k]||0) + p.pendienteFacturar); });
@@ -57,7 +59,7 @@
         <div class="cab-lista"><h2>Economía</h2>
           <select id="fAdm"><option value="">Todas las administraciones</option>${Object.entries(C.admins).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,a]) => `<option value="${esc(k)}" ${adminF===k?"selected":""}>${esc(a.nombre)}</option>`).join("")}<option value="-" ${adminF==="-"?"selected":""}>Sin administración</option></select>
           <button class="btn sec" id="btnRec">⟳ Actualizar</button></div>
-        <p class="vacio">El estado de cobro sale de la app de cobros; si una factura no está allí, de Contasimple.</p>
+        <p class="vacio">Pendiente de cobrar con el mismo criterio que la app de cobros (pendientes, devueltas y en la hoja del viernes; lo cargado en el banco no cuenta).${nSin ? ` Incluye ${nSin} factura${nSin===1?"":"s"} nueva${nSin===1?"":"s"} que aún no ha${nSin===1?"":"n"} pasado a cobros (${eur(tSin)}).` : ""}${tBanco ? ` En el banco, pendiente de confirmar: ${eur(tBanco)}.` : ""}</p>
         <div class="eco-cajas">
           <a class="eco-caja c1" href="#" data-ir="acept"><span>Aceptado, pendiente de hacer</span><b>${eur(suma(acept,"pendienteFacturar"))}</b><i>${acept.length} presupuesto${acept.length===1?"":"s"}</i></a>
           <a class="eco-caja c2" href="#" data-ir="pend"><span>Hecho, pendiente de cobrar</span><b>${eur(suma(pend,"pendiente"))}</b><i>${pend.length} factura${pend.length===1?"":"s"}</i></a>
@@ -76,7 +78,7 @@
           ${pend.map(f => `<tr class="${dias(f.fecha) > 60 ? "fi-mal" : ""}"><td>${esc(f.numero)}${f.manual ? ` <span class="tag gris">manual</span>` : ""}</td><td>${fch(f.fecha)} <span class="vacio">(${dias(f.fecha)} d)</span></td>
             <td>${f.com ? `<a href="#comunidad/${encodeURIComponent(porCs[String(f.clienteId)])}">${esc(f.com.nombre)}</a>` : esc(f.cliente)}</td><td>${esc(adminDe(f.com))}</td>
             <td><b>${eur(f.pendiente)}</b>${f.estado === "Incomplete" ? ` <span class="vacio">de ${eur(f.total)}</span>` : ""}</td>
-            <td>${f.devuelto ? `<span class="tag aviso">devuelto</span>` : ""}${f.enBanco ? `<span class="tag azul">en el banco</span>` : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio">Nada pendiente.</td></tr>`}
+            <td>${f.devuelto ? `<span class="tag aviso">devuelto</span>` : ""}${f.enHoja ? `<span class="tag azul">en la hoja del viernes</span>` : ""}${f.enBanco ? `<span class="tag azul">${eur(f.importeBanco)} en el banco</span>` : ""}${f.sinCobros ? `<span class="tag gris">aún no está en cobros</span>` : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio">Nada pendiente.</td></tr>`}
         </tbody></table>
 
         <h3 id="cobr" style="margin-top:16px">💶 Cobrado en ${esc(nomMes(mes))}</h3>
