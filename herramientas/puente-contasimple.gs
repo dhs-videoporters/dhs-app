@@ -117,7 +117,9 @@ const PUENTE = {
       const L = (r && r.data) || [];
       todas = todas.concat(L); if (L.length < 100 || todas.length > 5000) break; i += 100;
     }
-    return todas.map(f => ({
+    // Estado de cobro real: manda la app de cobros (proyecto dhs-camaras); si la factura no está allí, Contasimple.
+    const cob = cobros_();
+    const res = todas.map(f => ({
       id: f.id, numero: f.number, fecha: (f.invoiceDate || '').slice(0, 10), estado: f.status,
       total: f.totalAmount, pagado: f.totalPayedAmount || 0, pendiente: f.totalAmountPerPay,
       clienteId: (f.target && f.target.id) || f.originalTargetEntityID || null,
@@ -125,6 +127,18 @@ const PUENTE = {
       presupuestoId: f.relatedEstimateId || null, rectificativa: !!f.isRectificationInvoice,
       pagos: (f.payments || []).map(p => ({ fecha: (p.date || p.paymentDate || '').slice(0, 10), importe: p.amount || p.totalAmount || 0 }))
     }));
+    res.forEach(f => {
+      const c = cob['f_' + f.id];
+      if (!c) { f.fuenteCobro = 'contasimple'; return; }
+      aplicarCobro_(f, c);
+    });
+    // Facturas metidas a mano en cobros (no están en Contasimple)
+    Object.keys(cob).filter(k => cob[k].origen === 'manual').forEach(k => {
+      const c = cob[k];
+      const f = { id: k, numero: c.numero || '', fecha: c.fecha || '', total: c.total || 0, clienteId: null, cliente: c.cliNombre || '', manual: true, pagos: [] };
+      aplicarCobro_(f, c); res.push(f);
+    });
+    return res;
   },
 
   // Facturar (todo o un plazo) a partir de un presupuesto aceptado. SOLO Dirección.
@@ -148,6 +162,38 @@ const PUENTE = {
     return { id: inv.id, numero: inv.number || num, periodo: periodo, totales: totales_(lineas) };
   }
 };
+
+// ---------- Cobros (app de cobros, proyecto dhs-camaras): solo lectura ----------
+const PROYECTO_COBROS = 'dhs-camaras';
+function cobros_() {
+  const base = 'https://firestore.googleapis.com/v1/projects/' + PROYECTO_COBROS + '/databases/(default)/documents/dhs_cobros';
+  const o = {}; let token = '';
+  try {
+    do {
+      const r = UrlFetchApp.fetch(base + '?pageSize=300' + (token ? '&pageToken=' + encodeURIComponent(token) : ''),
+        { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Goog-User-Project': PROYECTO_COBROS }, muteHttpExceptions: true });
+      if (r.getResponseCode() >= 300) throw new Error('cobros ' + r.getResponseCode());
+      const j = JSON.parse(r.getContentText() || '{}');
+      (j.documents || []).forEach(d => { const v = aJSON_(d.fields || {}); if (v.tipo === 'factura') o[d.name.split('/').pop()] = v; });
+      token = j.nextPageToken || '';
+    } while (token);
+  } catch (e) { Logger.log('No se ha podido leer cobros: ' + e); }
+  return o;
+}
+// Estado de cobro según los cargos de cobros: cobrado / pendiente (con lo que falta) y fecha del último cobro
+function aplicarCobro_(f, c) {
+  const cargos = c.cargos || [];
+  const pend = cargos.filter(x => x.estado !== 'cobrado').reduce((n, x) => n + (Number(x.importe) || 0), 0);
+  const cobrados = cargos.filter(x => x.estado === 'cobrado');
+  f.fuenteCobro = 'cobros';
+  f.estadoCobros = cargos.map(x => x.estado);
+  if (cargos.length && !pend) { f.estado = 'Payed'; f.pagado = f.total; f.pendiente = 0; }
+  else if (cargos.length) { f.estado = cobrados.length ? 'Incomplete' : 'Pending'; f.pendiente = Math.round(pend * 100) / 100; f.pagado = Math.round((f.total - pend) * 100) / 100; }
+  const fechas = cobrados.map(x => x.fechaCobro).filter(Boolean).sort();
+  if (fechas.length) f.pagos = cobrados.map(x => ({ fecha: x.fechaCobro || '', importe: Number(x.importe) || 0, via: x.via || '' }));
+  f.devuelto = cargos.some(x => x.estado === 'devuelto');
+  f.enBanco = cargos.some(x => x.estado === 'cargado' || x.estado === 'enviar');
+}
 
 // ---------- Ayudas ----------
 function formatoPresupuesto_(tk) {
