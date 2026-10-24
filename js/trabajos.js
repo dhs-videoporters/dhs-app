@@ -16,6 +16,7 @@
   const durTxt = m => m < 60 ? m + " min" : (m % 60 ? Math.floor(m/60) + " h " + (m%60) + " min" : (m/60) + (m === 60 ? " hora" : " horas"));
   const HORAS = []; for(let h = 9; h < 18; h++){ HORAS.push(String(h).padStart(2,"0")+":00"); HORAS.push(String(h).padStart(2,"0")+":30"); }
   const fmtFecha = f => f ? new Date(f + "T12:00").toLocaleDateString("es-ES", {weekday:"short", day:"numeric", month:"short"}) : "";
+  const avisaTxt = t => t.avisa ? [t.avisa.nombre, t.avisa.piso].filter(Boolean).join(" · ") : "";
   const especTxt = t => ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " + ESPEC[t.especialidad][1] : "";
 
   let PERSONAL = null;
@@ -53,7 +54,11 @@
   }
 
   // ---------- ALTA ----------
+  // Desde el calendario: día, hora, duración y técnico vienen ya puestos.
+  let PREFIJO = null;
+  const prefijar = p => { PREFIJO = p; };
   async function nueva(el, comId){
+    const pre = PREFIJO; PREFIJO = null;
     const {S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
     let C = {coms:{}, admins:{}}, P;
@@ -65,9 +70,10 @@
     const activos = Object.entries(P).filter(([k,p]) => p.activo !== false).sort((a,b) => a[1].nombre.localeCompare(b[1].nombre));
     const hoy = new Date().toISOString().slice(0,10);
     el.innerHTML = `
-      <a href="${com ? "#comunidad/" + encodeURIComponent(comId) : "#intervenciones"}" class="volver">‹ ${com ? esc(com.nombre) : "Intervenciones"}</a>
+      <a href="${pre ? "#calendario" : (com ? "#comunidad/" + encodeURIComponent(comId) : "#intervenciones")}" class="volver">‹ ${pre ? "Calendario" : (com ? esc(com.nombre) : "Intervenciones")}</a>
       <form id="fT" class="panel form">
         <h2>Nueva intervención</h2>
+        ${pre ? `<p class="aviso-cal">📅 <b>${esc(fmtFecha(pre.fecha))} · ${esc(pre.hora)} (${esc(durTxt(pre.duracion))})</b> · ${(pre.personal||[]).map(k => P[k] ? esc(P[k].nombre) : "").join(", ")} — elige la comunidad y qué hay que hacer.</p>` : ""}
         <div class="rejilla" style="margin-top:10px">
           <div class="bloque"><h3>Cliente</h3>
             <div class="seg2">
@@ -102,8 +108,11 @@
             <div class="campo"><span>Prioridad</span><div class="seg2 grande">${ORDEN_PRIOR.map(k => `<label><input type="radio" name="urgencia" value="${k}" ${k==="normal"?"checked":""}> ${PRIOR[k][0]} ${PRIOR[k][1]}</label>`).join("")}</div></div>
             <label class="campo"><span>Tipo</span><select name="tipo">${Object.entries(TIPOS).map(([k,n]) => `<option value="${k}">${n}</option>`).join("")}</select></label>
             <label class="campo"><span>Descripción *</span><textarea name="descripcion" rows="4" placeholder="Ej.: No funciona el monitor del 3º 1ª, no se oye."></textarea></label>
-            <label class="campo"><span>Quién avisa (nombre y piso)</span><input name="avisaNombre" placeholder="Raquel, 3º 1ª"></label>
-            <label class="campo"><span>Teléfono de quien avisa</span><input name="avisaTel" type="tel"></label>
+            <div class="campo"><span>Quién avisa</span>
+              <div id="avisaPisoCaja"><input name="avisaPisoTxt" placeholder="Piso (ej.: 3º 1ª)"></div>
+              <input name="avisaNombre" placeholder="Nombre" style="margin-top:6px">
+              <input name="avisaTel" type="tel" placeholder="Teléfono" style="margin-top:6px">
+              <p id="avisaInfo" class="vacio" style="margin-top:4px"></p></div>
           </div>
           <div class="bloque"><h3>Cita</h3>
             <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="sinFecha"> Todavía sin fecha</label>
@@ -125,13 +134,43 @@
     const pintarOrigen = () => { el.querySelector("#bloqueCom").classList.toggle("oculto", origen() !== "comunidad"); el.querySelector("#bloquePart").classList.toggle("oculto", origen() !== "particular"); };
     f.querySelectorAll('input[name=origen]').forEach(r => r.onchange = pintarOrigen); pintarOrigen();
     el.querySelector("#sinFecha").onchange = e => el.querySelector("#bloqueCita").classList.toggle("oculto", e.target.checked);
+    if(pre){
+      f.fecha.value = pre.fecha; f.hora.value = pre.hora;
+      if(![...f.duracion.options].some(o => Number(o.value) === pre.duracion)) f.duracion.insertAdjacentHTML("beforeend", `<option value="${pre.duracion}">${durTxt(pre.duracion)}</option>`);
+      f.duracion.value = String(pre.duracion);
+      f.querySelectorAll('input[name=asignados]').forEach(i => i.checked = (pre.personal||[]).includes(i.value));
+    }
 
     // 1 · administración → 2 · comunidades de esa administración → ficha a la vista
     const selAdm = el.querySelector("#selAdm"), selCom = el.querySelector("#selCom"), info = el.querySelector("#infoCom");
+    // Vecinos de la comunidad: al elegir el piso salen nombre y teléfono; si no estaba guardado, se guarda al dar de alta.
+    let VEC = {}, PISOS = [];
+    const cajaPiso = el.querySelector("#avisaPisoCaja"), avInfo = x => el.querySelector("#avisaInfo").textContent = x;
+    async function cargarVecinos(id){
+      VEC = {}; PISOS = [];
+      const c = id ? C.coms[id] : null;
+      if(c && c.estructura && window.DHS_COM.pisos){
+        PISOS = window.DHS_COM.pisos(c.estructura);
+        if(S.puede("vecinos")){ try{ (await D().db.collection("dhs_comunidades").doc(id).collection("contactos").get()).forEach(d => VEC[d.id] = d.data()); }catch(e){} }
+        const pr = c.presidente || {};
+        cajaPiso.innerHTML = `<select name="avisaClave"><option value="">— Piso —</option>${PISOS.map(p => `<option value="${p.clave}">${esc(p.piso)}${VEC[p.clave] && VEC[p.clave].nombre ? " · " + esc(VEC[p.clave].nombre) : ""}${pr.clave === p.clave ? " ★" : ""}</option>`).join("")}<option value="_otro">Otro (portería, zona común…)</option></select><input name="avisaPisoTxt" placeholder="¿Dónde?" class="oculto" style="margin-top:6px">`;
+        const sel = cajaPiso.querySelector("select");
+        sel.onchange = () => {
+          const k = sel.value, g = VEC[k] || (pr.clave === k ? {nombre:pr.nombre, telefono:pr.telefono} : {});
+          cajaPiso.querySelector("input").classList.toggle("oculto", k !== "_otro");
+          f.avisaNombre.value = g.nombre || ""; f.avisaTel.value = g.telefono || "";
+          avInfo(!k || k === "_otro" ? "" : (g.nombre || g.telefono ? "Guardado en los vecinos de la comunidad." : (S.puede("vecinos","editar") ? "No está guardado: lo que escribas se guardará en los vecinos de la comunidad." : "")));
+        };
+      } else {
+        cajaPiso.innerHTML = `<input name="avisaPisoTxt" placeholder="Piso (ej.: 3º 1ª)">`;
+        avInfo(c ? "Esta comunidad no tiene configurados los pisos (Ficha › Vecinos)." : "");
+      }
+    }
     const elegir = id => {
       f.comunidadId.value = id || "";
       const c = C.coms[id];
       info.innerHTML = c ? miniFicha(c, C.admins) : "";
+      cargarVecinos(c ? id : null);
       if(selCom.value !== (id || "")) selCom.value = id || "";
     };
     const pintarComs = () => {
@@ -177,6 +216,9 @@
       }
       if(!v("especialidad")) return msg("Marca de qué es: videoportero, antena, electricidad, cámaras u otros.");
       if(!v("descripcion")) return msg("Escribe qué hay que hacer.");
+      const clave = cliente.comunidadId && v("avisaClave") && v("avisaClave") !== "_otro" ? v("avisaClave") : "";
+      const pisoTxt = clave ? (PISOS.find(p => p.clave === clave) || {}).piso || "" : v("avisaPisoTxt");
+      const avisa = {nombre:v("avisaNombre"), piso:pisoTxt, telefono:v("avisaTel"), clave};
       if(!sinFecha && !asignados.length && !confirm("No has elegido quién va. ¿Guardar igualmente?")) return;
       const {db} = D(), yo = S.usuario.email.toLowerCase();
       const firma = {por:yo, en:firebase.firestore.FieldValue.serverTimestamp()};
@@ -188,15 +230,25 @@
         const datos = {
           numero, ...cliente, especialidad:v("especialidad"), tipo:v("tipo"), urgencia:v("urgencia") || "normal",
           estado: citas.length ? "agendado" : (v("tipo") === "presupuesto" ? "presupuesto" : "nuevo"),
-          descripcion:v("descripcion"), avisa:{nombre:v("avisaNombre"), telefono:v("avisaTel")},
+          descripcion:v("descripcion"), avisa:avisa,
           duracionEstimada:dur, citas, asignados, hechoPor:[], material:[], tiempoReal:null, fotos:[],
           creadoPorTecnico: !S.puede("trabajos","todo"),
           creado:firma, modificado:firma
         };
         const ref = await db.collection("dhs_trabajos").add(datos);
         await db.collection("dhs_registro").add({por:yo, en:firma.en, accion:"alta", coleccion:"dhs_trabajos", docId:ref.id, nombre:numero + " · " + cliente.nombre});
+        // El vecino que avisa se guarda (o se completa) en los vecinos de la comunidad
+        const g = VEC[clave] || {};
+        if(clave && S.puede("vecinos","editar") && (avisa.nombre || avisa.telefono) && ((avisa.nombre && avisa.nombre !== (g.nombre||"")) || (avisa.telefono && avisa.telefono !== (g.telefono||"")))){
+          try{
+            await db.collection("dhs_comunidades").doc(cliente.comunidadId).collection("contactos").doc(clave)
+              .set({piso:avisa.piso, nombre:avisa.nombre || g.nombre || "", telefono:avisa.telefono || g.telefono || "", modificado:firma}, {merge:true});
+            await db.collection("dhs_registro").add({por:yo, en:firma.en, accion:"cambio (desde intervención " + numero + ")", coleccion:"dhs_comunidades/contactos", docId:cliente.comunidadId, nombre:cliente.nombre + " · " + avisa.piso});
+          }catch(e){ console.warn("Vecino no guardado", e.code); }
+        }
         // Al guardar: si es de una comunidad, se abre su ficha en la pestaña Intervenciones.
-        if(cliente.comunidadId && S.puede("comunidades")){ window.DHS_COM.abrirPestana("intervenciones"); location.hash = "comunidad/" + encodeURIComponent(cliente.comunidadId); }
+        if(pre) location.hash = "calendario";        // apuntada desde el calendario: se vuelve a él con la cita puesta
+        else if(cliente.comunidadId && S.puede("comunidades")){ window.DHS_COM.abrirPestana("intervenciones"); location.hash = "comunidad/" + encodeURIComponent(cliente.comunidadId); }
         else location.hash = "intervencion/" + ref.id;
       }catch(e){ msg("No se ha podido guardar (" + (e.code||e) + ")."); }
     };
@@ -271,7 +323,7 @@
                               && (filtro.espec === "todas" || t.especialidad === filtro.espec)
                               && (filtro.estado === "todos" || t.estado === filtro.estado)
                               && (filtro.quien === "todos" || (filtro.quien === "nadie" ? !(t.asignados||[]).length : (t.asignados||[]).includes(filtro.quien)))
-                              && (!filtro.texto || sinAc([t.numero, t.nombre, t.direccion, t.poblacion, t.descripcion, t.avisa && t.avisa.nombre].join(" ")).includes(sinAc(filtro.texto)))).sort(porPrioridad);
+                              && (!filtro.texto || sinAc([t.numero, t.nombre, t.direccion, t.poblacion, t.descripcion, avisaTxt(t)].join(" ")).includes(sinAc(filtro.texto)))).sort(porPrioridad);
       el.querySelector("#cuentaInt").textContent = vis.length + (vis.length === 1 ? " intervención" : " intervenciones");
       const caja = el.querySelector("#listaInt");
       caja.innerHTML = vis.map(t => fila(t, P)).join("") || `<p class="vacio" style="padding:10px 0">No hay intervenciones aquí.</p>`;
@@ -343,7 +395,7 @@
     l.push(`📍 ${[t.direccion || t.nombre, t.poblacion].filter(Boolean).join(", ")}`);
     if(cita) l.push(`📅 ${fmtFecha(cita.fecha)} a las ${cita.hora} (${durTxt(cita.duracion)})`);
     l.push(""); l.push(t.descripcion || "");
-    if(t.avisa && (t.avisa.nombre || t.avisa.telefono)) l.push("", `📞 Avisa: ${[t.avisa.nombre, t.avisa.telefono].filter(Boolean).join(" · ")}`);
+    if(t.avisa && (t.avisa.nombre || t.avisa.telefono || t.avisa.piso)) l.push("", `📞 Avisa: ${[avisaTxt(t), t.avisa.telefono].filter(Boolean).join(" · ")}`);
     else if(!t.comunidadId && t.telefono) l.push("", `📞 ${t.nombre} · ${t.telefono}`);
     if(c && c.acceso) l.push(`🔑 ${c.acceso}`);
     l.push("", "🗺️ " + mapa(t));
@@ -401,7 +453,7 @@
           ${dato("Prioridad", todo && !CERRADOS.includes(t.estado) ? `<select id="selPrio">${ORDEN_PRIOR.map(k => `<option value="${k}" ${k===(t.urgencia||"normal")?"selected":""}>${PRIOR[k][0]} ${PRIOR[k][1]}</option>`).join("")}</select>` : pr[0] + " " + pr[1])}
           <p style="white-space:pre-wrap;margin-top:8px">${esc(t.descripcion)}</p></div>
         <div class="bloque"><h3>Contacto</h3>
-          ${dato("Avisa", esc(t.avisa && t.avisa.nombre))}${dato("Teléfono", t.avisa && t.avisa.telefono ? `<a href="tel:${esc(t.avisa.telefono)}">${esc(t.avisa.telefono)}</a>` : "")}
+          ${dato("Avisa", esc(avisaTxt(t)))}${dato("Teléfono", t.avisa && t.avisa.telefono ? `<a href="tel:${esc(t.avisa.telefono)}">${esc(t.avisa.telefono)}</a>` : "")}
           ${!t.comunidadId ? dato("Teléfono cliente", t.telefono ? `<a href="tel:${esc(t.telefono)}">${esc(t.telefono)}</a>` : "") + dato("Correo", esc(t.email)) : ""}</div>
         <div class="bloque"><h3>Cita</h3>
           ${(t.citas||[]).map(c => dato(esc(fmtFecha(c.fecha)) + " " + esc(c.hora), esc(durTxt(c.duracion)) + " · " + (c.personal||[]).map(k => P[k] ? `<span class="punto" style="background:${esc(P[k].color)}"></span>${esc(P[k].nombre)}` : "").join(", "))).join("") || `<p class="vacio">Sin fecha todavía.</p>`}
@@ -606,7 +658,7 @@
           <p class="vacio">${esc(especTxt(t))} · ${esc(TIPOS[t.tipo]||"")}</p></div>
 
         <div class="ft-bloque"><h3>A quién llamar</h3>
-          ${t.avisa && (t.avisa.nombre || t.avisa.telefono) ? `<p>Avisa: <b>${esc(t.avisa.nombre||"")}</b></p>${tel(t.avisa.nombre || "Llamar", t.avisa.telefono)}` : ""}
+          ${t.avisa && (t.avisa.nombre || t.avisa.telefono || t.avisa.piso) ? `<p>Avisa: <b>${esc(avisaTxt(t))}</b></p>${tel(t.avisa.nombre || t.avisa.piso || "Llamar", t.avisa.telefono)}` : ""}
           ${!t.comunidadId && t.telefono ? tel(t.nombre, t.telefono) : ""}
           ${pres.nombre ? `<p style="margin-top:6px">Presidente: <b>★ ${esc([pres.nombre, pres.piso].filter(Boolean).join(" · "))}</b></p>${tel("Presidente", pres.telefono)}` : ""}
           ${!(t.avisa && t.avisa.telefono) && !pres.telefono && !t.telefono ? `<p class="vacio">Sin teléfono.</p>` : ""}</div>
@@ -678,5 +730,5 @@
     return `<div class="linea-mat"><input class="m-cant" type="number" min="1" value="${esc(x.cant || 1)}"><input class="m-desc" placeholder="Ej.: Monitor Fermax Duox" value="${esc(x.desc || "")}"></div>`;
   }
 
-  window.DHS_TRAB = { nueva, lista, ficha, deComunidad, contar, miTrabajo, fichaTrabajo, recargarPersonal: () => { PERSONAL = null; } };
+  window.DHS_TRAB = { prefijar, nueva, lista, ficha, deComunidad, contar, miTrabajo, fichaTrabajo, recargarPersonal: () => { PERSONAL = null; } };
 })();

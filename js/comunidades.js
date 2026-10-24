@@ -352,5 +352,5 @@
     input.onblur = () => setTimeout(cerrar, 150);
   }
 
-  window.DHS_COM = { abrirPestana: k => { pestanaActual = k; }, lista, ficha, buscadorGlobal, recargar: () => cargar(true), datos: async () => { await cargar(); return CACHE; } };
+  window.DHS_COM = { pisos, abrirPestana: k => { pestanaActual = k; }, lista, ficha, buscadorGlobal, recargar: () => cargar(true), datos: async () => { await cargar(); return CACHE; } };
 })();

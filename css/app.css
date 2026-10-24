@@ -234,3 +234,38 @@ a.fila-eq:hover{background:#f6f8fb}
 .sube-finca{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .sube-finca select{padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit}
 .aviso-edicion{background:#fff1dc;border:1px solid #f0c27a;color:#7a4a00;border-radius:8px;padding:10px 12px;margin:0 0 12px}
+/* ---------- Calendario ---------- */
+.cal-barra{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cal-nav{display:flex;gap:4px}.cal-nav .btn{padding:6px 12px}
+.cal-leyenda{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.cal-leyenda label{display:flex;align-items:center;gap:5px;font-size:13px;border:1px solid #cfd7e3;border-radius:999px;padding:3px 10px;cursor:pointer}
+.cal-leyenda label.off{opacity:.45}.cal-leyenda input{display:none}
+.cal-leyenda i{width:11px;height:11px;border-radius:50%}
+.fila-form{display:flex;gap:10px;flex-wrap:wrap}.fila-form .campo{min-width:150px}
+.cal-cuerpo{display:flex;gap:12px;margin-top:12px;align-items:flex-start}
+.cal-semanas{flex:1;min-width:0;overflow-x:auto}
+.cal-semana{display:grid;grid-template-columns:44px repeat(var(--ncol),minmax(120px,1fr));border:1px solid var(--linea);border-radius:8px;margin-bottom:14px;background:#fff;min-width:680px}
+.cal-cabdia{height:30px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:13px;border-bottom:1px solid var(--linea);background:#f6f9fd}
+.cal-cabdia span{color:var(--gris);font-size:12px}
+.cal-hora{font-size:11px;color:var(--gris);text-align:right;padding-right:4px;border-top:1px solid #f0f2f5;box-sizing:border-box}
+.cal-dia{border-left:1px solid var(--linea)}
+.cal-dia.hoy .cal-cabdia{background:var(--azul);color:#fff}.cal-dia.hoy .cal-cabdia span{color:#dbe6f5}
+.cal-dia.pasado{background:#fafbfc}
+.cal-cols{display:flex;background-image:repeating-linear-gradient(to bottom,#f0f2f5 0,#f0f2f5 1px,transparent 1px,transparent 44px)}
+.cal-col{flex:1;position:relative;border-left:1px dashed #edf0f4;min-width:0}.cal-col:first-child{border-left:0}
+.cal-cita{position:absolute;left:2px;right:2px;border-radius:5px;background:color-mix(in srgb,var(--c) 22%,#fff);border-left:4px solid var(--c);padding:2px 4px;font-size:11px;line-height:1.25;overflow:hidden;text-decoration:none;color:var(--texto);cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.cal-cita:hover{z-index:5;box-shadow:0 3px 10px rgba(0,0,0,.2)}
+.cal-cita b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-cita span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-cita.hecha{opacity:.55;background:#eef0f3}.cal-cita.hecha b::after{content:" ✅"}
+.cal-cita.medias{background-image:repeating-linear-gradient(45deg,transparent 0 6px,rgba(240,160,0,.15) 6px 12px)}
+.cal-aus{position:absolute;inset:0;background:repeating-linear-gradient(45deg,#e9ecf1 0 8px,#f4f6f9 8px 16px);color:var(--gris);font-size:11px;text-align:center;padding-top:6px;cursor:pointer;writing-mode:horizontal-tb}
+.cal-sinfecha{width:240px;flex:none;border:1px solid var(--linea);border-radius:8px;padding:10px;background:#fff;max-height:calc(2*(30px + 9*44px) + 14px);overflow:auto}
+.sf-item{display:block;padding:7px 4px;border-bottom:1px solid var(--linea);text-decoration:none;color:inherit;font-size:13px}
+.sf-item span{display:block;color:var(--gris);font-size:12px}
+@media (max-width:900px){ .cal-cuerpo{flex-direction:column} .cal-sinfecha{width:auto;max-height:none} .cal-leyenda{margin-left:0} }
+.cal-quien{height:18px;display:flex;border-bottom:1px solid var(--linea);background:#fbfcfe}
+.cal-quien span{flex:1;min-width:0;font-size:10px;text-align:center;line-height:18px;color:var(--c);font-weight:700;border-top:3px solid var(--c);overflow:hidden}
+.cal-col.crea{cursor:crosshair;touch-action:pan-x pan-y}
+.cal-sel{position:absolute;left:2px;right:2px;background:rgba(31,58,95,.18);border:2px dashed var(--azul);border-radius:5px;font-size:11px;font-weight:700;color:var(--azul);padding:2px 4px;pointer-events:none;z-index:6}
+.aviso-cal{background:#e6eefb;border-radius:8px;padding:8px 10px;margin-top:8px}

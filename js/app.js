@@ -137,7 +137,7 @@
   // ---------- Vistas (se irán rellenando en las próximas sesiones) ----------
   const panel = (titulo, texto, extra="") => `<div class="panel"><h2>${titulo}</h2><p class="vacio">${texto}</p>${extra}</div>`;
   const VISTAS = {
-    calendario: el => el.innerHTML = panel("Calendario", "Aquí irá el calendario a 15 días vista (fase 4)."),
+    calendario: el => window.DHS_CAL.vista(el),
     intervenciones: el => window.DHS_TRAB.lista(el),
     mitrabajo: el => window.DHS_TRAB.miTrabajo(el),
     comunidades: el => window.DHS_COM.lista(el),
