@@ -109,3 +109,12 @@ main{padding:16px;max-width:1300px;margin:0 auto}
 .r-vacio{padding:10px 12px;color:var(--gris)}
 .usuario{margin-left:12px}
 @media (max-width:760px){ .barra{gap:10px;padding:0 10px} .marca{font-size:0;gap:0} .marca img{width:30px;height:30px} .buscador{max-width:none} }
+
+/* Administradores */
+.persona{padding:8px 0;border-bottom:1px solid #f0f2f6}
+.persona:last-child{border-bottom:0}
+.p-datos{font-size:13px;margin-top:2px}
+.persona-edit{border:1px solid var(--linea);border-radius:8px;padding:8px;margin-bottom:8px;display:flex;gap:8px;align-items:flex-start}
+.rejilla-p{flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px}
+.rejilla-p input{width:100%;padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit}
+@media (max-width:760px){ .bloque[style*="span 2"]{grid-column:auto!important} .persona-edit{flex-direction:column} }

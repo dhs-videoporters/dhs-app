@@ -53,7 +53,7 @@
       $("#btnOtraCuenta").classList.remove("oculto");
       return;
     }
-    Object.assign(S, {usuario:u, rol:q.rol, nombre:q.nombre});
+    Object.assign(S, {usuario:u, rol:q.rol, nombre:q.nombre, direccion: DIRECCION.includes(u.email.toLowerCase())});
     montarMenu();
     window.DHS_COM.buscadorGlobal(document.querySelector("#buscaGlobal"), document.querySelector("#resGlobal"));
     mostrar("app");
@@ -76,12 +76,13 @@
 
   function irA(ruta){
     const [id0, arg] = decodeURIComponent(ruta||"").split("/");
-    let id = id0 === "comunidad" ? "comunidades" : id0;
+    let id = id0 === "comunidad" ? "comunidades" : (id0 === "administrador" ? "administradores" : id0);
     if(!secciones().some(s => s.id === id)) id = "calendario";
     document.querySelectorAll("#menu a, #menuMovil a").forEach(a => a.classList.toggle("on", a.dataset.id === id));
     const sec = SECCIONES.find(s => s.id === id);
     document.title = sec.nombre + " · DHS App" + (C.entorno === "pruebas" ? " (pruebas)" : "");
     if(id0 === "comunidad" && arg) return window.DHS_COM.ficha($("#contenido"), arg);
+    if(id0 === "administrador" && arg) return window.DHS_ADM.ficha($("#contenido"), arg);
     (VISTAS[id] || (()=>{}))($("#contenido"));
   }
 
@@ -91,15 +92,7 @@
     calendario: el => el.innerHTML = panel("Calendario", "Aquí irá el calendario a 15 días vista (fase 4)."),
     trabajos:   el => el.innerHTML = panel("Trabajos", "Aquí irán los trabajos (fase 3)."),
     comunidades: el => window.DHS_COM.lista(el),
-    administradores: async el => {
-      el.innerHTML = panel("Administradores", "Cargando…");
-      try{
-        const s = await db.collection("dhs_admins").get();
-        const sinCorreo = s.docs.filter(d => !(d.data().emails||[]).length).length;
-        el.innerHTML = panel("Administradores", "Las fichas con personas de contacto se podrán editar en la sesión 11.",
-          `<div class="cifras"><div class="cifra"><b>${s.size}</b><span>administraciones</span></div><div class="cifra"><b>${sinCorreo}</b><span>sin correo todavía</span></div></div>`);
-      }catch(e){ el.innerHTML = panel("Administradores", "No se han podido leer los datos ("+e.code+")."); }
-    }
+    administradores: el => window.DHS_ADM.lista(el)
   };
 
   // ---------- Arranque ----------

@@ -24,7 +24,7 @@
   async function lista(el){
     el.innerHTML = `<div class="panel">Cargando…</div>`;
     try{ await cargar(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer los datos (${esc(e.code)}).</div>`; return; }
-    const admins = Object.entries(CACHE.admins).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre));
+    const admins = Object.entries(CACHE.admins).filter(([k,a]) => a.activo !== false).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre));
     el.innerHTML = `
       <div class="panel">
         <div class="cab-lista">
@@ -82,7 +82,7 @@
         <div class="ico-ficha">${c.tipo==="particular"?"🏠":(c.tipo==="empresa"?"🏭":"🏢")}</div>
         <div class="cab-txt">
           <h1>${esc(c.nombre)}</h1>
-          <div class="vacio">${c.adminId ? "Administración: <b>"+esc(nombreAdmin(c.adminId))+"</b>" : (c.tipo==="comunidad" ? '<span class="tag aviso">Sin administración</span>' : esc(TIPOS[c.tipo]))}${c.nif ? " · NIF "+esc(c.nif) : ""}</div>
+          <div class="vacio">${c.adminId ? "Administración: <b>"+(oficina ? '<a href="#administrador/'+encodeURIComponent(c.adminId)+'">'+esc(nombreAdmin(c.adminId))+'</a>' : esc(nombreAdmin(c.adminId)))+"</b>" : (c.tipo==="comunidad" ? '<span class="tag aviso">Sin administración</span>' : esc(TIPOS[c.tipo]))}${c.nif ? " · NIF "+esc(c.nif) : ""}</div>
         </div>
         <div class="cifras">
           <div class="cifra"><b>${c.vecinos ?? "—"}</b><span>vecinos</span></div>
@@ -135,7 +135,7 @@
   // ---------- EDICIÓN ----------
   function editar(el, id, c, oficina){
     const vp = c.videoportero || {}, tv = c.tv || {}, pr = c.presidente || {};
-    const ops = Object.entries(CACHE.admins).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,a])=>`<option value="${k}" ${c.adminId===k?"selected":""}>${esc(a.nombre)}</option>`).join("");
+    const ops = Object.entries(CACHE.admins).filter(([k,a]) => a.activo !== false || c.adminId === k).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,a])=>`<option value="${k}" ${c.adminId===k?"selected":""}>${esc(a.nombre)}</option>`).join("");
     const inp = (n, l, v, t="text") => `<label class="campo"><span>${l}</span><input name="${n}" type="${t}" value="${esc(v ?? "")}"></label>`;
     const sel3 = (n, l, v) => `<label class="campo"><span>${l}</span><select name="${n}"><option value="" ${v==null?"selected":""}>—</option><option value="si" ${v===true?"selected":""}>Sí</option><option value="no" ${v===false?"selected":""}>No</option></select></label>`;
     el.innerHTML = oficina ? `
@@ -211,5 +211,5 @@
     input.onblur = () => setTimeout(cerrar, 150);
   }
 
-  window.DHS_COM = { lista, ficha, buscadorGlobal, recargar: () => cargar(true) };
+  window.DHS_COM = { lista, ficha, buscadorGlobal, recargar: () => cargar(true), datos: async () => { await cargar(); return CACHE; } };
 })();
