@@ -78,22 +78,32 @@
           <div class="bloque"><h3>Cliente</h3>
             <div class="seg2">
               <label><input type="radio" name="origen" value="comunidad" checked> Comunidad / empresa</label>
+              ${S.puede("comunidades","editar") ? `<label><input type="radio" name="origen" value="nueva"> ✱ Comunidad nueva</label>` : ""}
               <label><input type="radio" name="origen" value="particular"> Particular nuevo</label>
             </div>
             <div id="bloqueCom">
-              <label class="campo"><span>1 · Administración</span>
-                <select id="selAdm">
-                  <option value="*">Todas</option>
-                  ${adminsOrd.map(([k,a]) => `<option value="${esc(k)}" ${com && com.adminId === k ? "selected" : ""}>${esc(a.nombre)}</option>`).join("")}
-                  <option value="-" ${com && !com.adminId ? "selected" : ""}>Sin administración (empresas y particulares)</option>
-                </select></label>
-              <label class="campo"><span>2 · Comunidad *</span>
-                <select id="selCom"></select></label>
-              <label class="campo"><span>o búscala por calle</span>
-                <input id="busComT" placeholder="Escribe calle o nombre…" autocomplete="off">
+              <label class="campo"><span>Comunidad *</span>
+                <input id="busComT" placeholder="Escribe la calle o el nombre…" autocomplete="off" value="${com ? esc(com.nombre) : ""}">
                 <div id="resComT" class="res-local oculto"></div></label>
+              <details class="por-admin"><summary>o elegir por administración</summary>
+                <label class="campo"><span>Administración</span>
+                  <select id="selAdm">
+                    <option value="*">Todas</option>
+                    ${adminsOrd.map(([k,a]) => `<option value="${esc(k)}" ${com && com.adminId === k ? "selected" : ""}>${esc(a.nombre)}</option>`).join("")}
+                    <option value="-" ${com && !com.adminId ? "selected" : ""}>Sin administración (empresas y particulares)</option>
+                  </select></label>
+                <label class="campo"><span>Comunidad</span><select id="selCom"></select></label>
+              </details>
               <input type="hidden" name="comunidadId" value="${esc(comId||"")}">
               <div id="infoCom"></div>
+            </div>
+            <div id="bloqueNueva" class="oculto">
+              <p class="aviso-cal">✱ Se creará la comunidad con lo mínimo y quedará marcada como <b>"faltan datos"</b> para completarla después (NIF, administración, pisos, instalación…).</p>
+              <label class="campo"><span>Dirección *</span><input name="nDireccion" placeholder="C/ Drapaires 1"></label>
+              <label class="campo"><span>Población</span><input name="nPoblacion" placeholder="Terrassa"></label>
+              <label class="campo"><span>Nombre (si no, la dirección)</span><input name="nNombre" placeholder="CP Drapaires 1"></label>
+              <label class="campo"><span>Tipo</span><select name="nTipo"><option value="comunidad">Comunidad de vecinos</option><option value="empresa">Empresa</option></select></label>
+              <label class="campo"><span>Administración (si se sabe)</span><select name="nAdmin"><option value="">— No se sabe todavía —</option>${adminsOrd.map(([k,a]) => `<option value="${esc(k)}">${esc(a.nombre)}</option>`).join("")}</select></label>
             </div>
             <div id="bloquePart" class="oculto">
               <label class="campo"><span>Nombre del cliente *</span><input name="pNombre"></label>
@@ -131,7 +141,12 @@
 
     const f = el.querySelector("#fT"), msg = t => el.querySelector("#msgT").textContent = t;
     const origen = () => f.origen.value;
-    const pintarOrigen = () => { el.querySelector("#bloqueCom").classList.toggle("oculto", origen() !== "comunidad"); el.querySelector("#bloquePart").classList.toggle("oculto", origen() !== "particular"); };
+    const pintarOrigen = () => {
+      el.querySelector("#bloqueCom").classList.toggle("oculto", origen() !== "comunidad");
+      el.querySelector("#bloqueNueva").classList.toggle("oculto", origen() !== "nueva");
+      el.querySelector("#bloquePart").classList.toggle("oculto", origen() !== "particular");
+      if(origen() !== "comunidad") cajaPisoLibre();
+    };
     f.querySelectorAll('input[name=origen]').forEach(r => r.onchange = pintarOrigen); pintarOrigen();
     el.querySelector("#sinFecha").onchange = e => el.querySelector("#bloqueCita").classList.toggle("oculto", e.target.checked);
     if(pre){
@@ -143,9 +158,11 @@
 
     // 1 · administración → 2 · comunidades de esa administración → ficha a la vista
     const selAdm = el.querySelector("#selAdm"), selCom = el.querySelector("#selCom"), info = el.querySelector("#infoCom");
+    const bus = el.querySelector("#busComT"), res = el.querySelector("#resComT");
     // Vecinos de la comunidad: al elegir el piso salen nombre y teléfono; si no estaba guardado, se guarda al dar de alta.
     let VEC = {}, PISOS = [];
     const cajaPiso = el.querySelector("#avisaPisoCaja"), avInfo = x => el.querySelector("#avisaInfo").textContent = x;
+    function cajaPisoLibre(){ cajaPiso.innerHTML = `<input name="avisaPisoTxt" placeholder="Piso (ej.: 3º 1ª)">`; avInfo(""); }
     async function cargarVecinos(id){
       VEC = {}; PISOS = [];
       const c = id ? C.coms[id] : null;
@@ -170,6 +187,7 @@
       f.comunidadId.value = id || "";
       const c = C.coms[id];
       info.innerHTML = c ? miniFicha(c, C.admins) : "";
+      if(c && document.activeElement !== bus) bus.value = c.nombre;
       cargarVecinos(c ? id : null);
       if(selCom.value !== (id || "")) selCom.value = id || "";
     };
@@ -186,16 +204,22 @@
     if(!S.puede("comunidades")){ selAdm.disabled = selCom.disabled = true; }
 
     // Búsqueda directa por calle (por si no sabes la administración)
-    const bus = el.querySelector("#busComT"), res = el.querySelector("#resComT");
     bus.oninput = () => {
+      if(f.comunidadId.value){ f.comunidadId.value = ""; info.innerHTML = ""; cajaPisoLibre(); }
       const q = sinAc(bus.value.trim()); if(q.length < 2){ res.classList.add("oculto"); return; }
       const lista = Object.entries(C.coms).filter(([k,c]) => c.activo !== false && sinAc([c.nombre,c.direccion,c.poblacion,c.nif].join(" ")).includes(q)).slice(0, 10);
       res.innerHTML = lista.map(([k,c]) => `<div class="r-item" data-id="${k}"><b>${esc(c.nombre)}</b><span>${esc([c.direccion,c.poblacion, C.admins[c.adminId] ? C.admins[c.adminId].nombre : ""].filter(Boolean).join(" · "))}</span></div>`).join("") || `<div class="r-vacio">Sin resultados</div>`;
+      if(S.puede("comunidades","editar")) res.innerHTML += `<div class="r-item r-nueva"><b>✱ No está: crear "${esc(bus.value.trim())}" como comunidad nueva</b></div>`;
       res.classList.remove("oculto");
-      res.querySelectorAll(".r-item").forEach(d => d.onmousedown = e => {
+      const rn = res.querySelector(".r-nueva");
+      if(rn) rn.onmousedown = e => {
+        e.preventDefault(); f.querySelector('input[name=origen][value=nueva]').checked = true;
+        f.nDireccion.value = bus.value.trim(); bus.value = ""; res.classList.add("oculto"); pintarOrigen(); f.nPoblacion.focus();
+      };
+      res.querySelectorAll(".r-item:not(.r-nueva)").forEach(d => d.onmousedown = e => {
         e.preventDefault(); const c = C.coms[d.dataset.id];
         selAdm.value = c.adminId && C.admins[c.adminId] ? c.adminId : "-"; f.comunidadId.value = d.dataset.id;
-        pintarComs(); bus.value = ""; res.classList.add("oculto");
+        pintarComs(); bus.value = c.nombre; res.classList.add("oculto");
       });
     };
     bus.onblur = () => setTimeout(() => res.classList.add("oculto"), 150);
@@ -210,6 +234,11 @@
         const id = v("comunidadId"); if(!id) return msg("Elige la comunidad.");
         const c = C.coms[id];
         cliente = {comunidadId:id, nombre:c.nombre, direccion:c.direccion||"", poblacion:c.poblacion||"", adminId:c.adminId||null, origen: c.adminId ? "administracion" : (c.tipo === "particular" ? "particular" : "empresa")};
+      } else if(origen() === "nueva"){
+        if(!v("nDireccion")) return msg("Pon la dirección de la comunidad nueva.");
+        const parecida = Object.values(C.coms).find(c => sinAc(c.direccion||"") === sinAc(v("nDireccion")) || sinAc(c.nombre||"") === sinAc(v("nDireccion")));
+        if(parecida && !confirm("Ya hay una comunidad que se llama o está en \"" + parecida.nombre + "\". ¿Crear otra igualmente?")) return;
+        cliente = {comunidadId:null, nueva:true, nombre:v("nNombre") || v("nDireccion"), direccion:v("nDireccion"), poblacion:v("nPoblacion"), adminId:v("nAdmin") || null, tipo:v("nTipo"), origen: v("nAdmin") ? "administracion" : "empresa"};
       } else {
         if(!v("pNombre") || !v("pDireccion")) return msg("Pon el nombre y la dirección del particular.");
         cliente = {comunidadId:null, nombre:v("pNombre"), direccion:v("pDireccion"), poblacion:v("pPoblacion"), telefono:v("pTelefono"), email:v("pEmail").toLowerCase(), adminId:null, origen:"particular"};
@@ -227,6 +256,17 @@
       msg("Guardando…");
       try{
         const numero = await siguienteNumero();
+        if(cliente.nueva){
+          // Crear la comunidad nueva (marcada "faltan datos") y unir la intervención a ella
+          const slug = sinAc(cliente.direccion).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50) || "sin-nombre";
+          let cid = "c_" + slug, n = 2; while(C.coms[cid]) cid = "c_" + slug + "-" + (n++);
+          const com = {nombre:cliente.nombre, direccion:cliente.direccion, poblacion:cliente.poblacion, tipo:cliente.tipo, adminId:cliente.adminId, nif:"", activo:true,
+                       nueva:true, creadaDesde:numero, modificado:firma};
+          await db.collection("dhs_comunidades").doc(cid).set(com);
+          await db.collection("dhs_registro").add({por:yo, en:firma.en, accion:"alta (comunidad nueva desde " + numero + ")", coleccion:"dhs_comunidades", docId:cid, nombre:com.nombre});
+          window.DHS_COM.anadir(cid, com);
+          cliente.comunidadId = cid; delete cliente.nueva; delete cliente.tipo;
+        }
         const datos = {
           numero, ...cliente, especialidad:v("especialidad"), tipo:v("tipo"), urgencia:v("urgencia") || "normal",
           estado: citas.length ? "agendado" : (v("tipo") === "presupuesto" ? "presupuesto" : "nuevo"),

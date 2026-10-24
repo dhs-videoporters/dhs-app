@@ -32,7 +32,7 @@
           <input id="buscaCom" class="busca" placeholder="Buscar por nombre, calle, población o NIF…" value="${esc(filtro.texto)}">
         </div>
         <div class="filtros">
-          ${["todas","comunidad","empresa","particular","sinadmin"].map(t => `<button class="chip ${filtro.tipo===t?"on":""}" data-tipo="${t}">${{todas:"Todas",comunidad:"Comunidades",empresa:"Empresas",particular:"Particulares",sinadmin:"Sin administración"}[t]}</button>`).join("")}
+          ${["todas","comunidad","empresa","particular","sinadmin","nuevas"].map(t => `<button class="chip ${filtro.tipo===t?"on":""}" data-tipo="${t}">${{todas:"Todas",comunidad:"Comunidades",empresa:"Empresas",particular:"Particulares",sinadmin:"Sin administración",nuevas:"✱ Faltan datos"}[t]}</button>`).join("")}
           <select id="filtroAdmin" class="sel"><option value="">Todas las administraciones</option>${admins.map(([id,a])=>`<option value="${id}" ${filtro.admin===id?"selected":""}>${esc(a.nombre)}</option>`).join("")}</select>
         </div>
         <div id="cuentaCom" class="vacio"></div>
@@ -42,7 +42,8 @@
       const q = sinAc(filtro.texto);
       const filas = Object.entries(CACHE.coms).filter(([id,c]) => {
         if(c.activo === false) return false;
-        if(filtro.tipo === "sinadmin" ? !!c.adminId : (filtro.tipo !== "todas" && c.tipo !== filtro.tipo)) return false;
+        if(filtro.tipo === "nuevas"){ if(!c.nueva) return false; }
+        else if(filtro.tipo === "sinadmin" ? !!c.adminId : (filtro.tipo !== "todas" && c.tipo !== filtro.tipo)) return false;
         if(filtro.admin && c.adminId !== filtro.admin) return false;
         if(q && !sinAc([c.nombre,c.direccion,c.poblacion,c.nif,nombreAdmin(c.adminId)].join(" ")).includes(q)) return false;
         return true;
@@ -50,7 +51,7 @@
       document.getElementById("cuentaCom").textContent = filas.length + (filas.length === 1 ? " resultado" : " resultados");
       document.getElementById("listaCom").innerHTML = filas.map(([id,c]) => `
         <a class="fila" href="#comunidad/${encodeURIComponent(id)}">
-          <div class="f-nombre">${esc(c.nombre)}</div>
+          <div class="f-nombre">${c.nueva ? '<span class="tag aviso">✱ Faltan datos</span> ' : ""}${esc(c.nombre)}</div>
           <div class="f-sub">${esc([c.direccion, c.poblacion].filter(Boolean).join(" · ") || TIPOS[c.tipo] || "")}</div>
           <div class="f-tags">
             ${c.adminId ? `<span class="tag">${esc(nombreAdmin(c.adminId))}</span>` : (c.tipo==="comunidad" ? `<span class="tag aviso">Sin administración</span>` : `<span class="tag gris">${TIPOS[c.tipo]||""}</span>`)}
@@ -91,10 +92,13 @@
         </div>
       </div>
       ${D().S.puede("trabajos","editar") ? `<p style="margin:10px 0 0"><a class="btn" href="#nueva-intervencion/${encodeURIComponent(id)}">📅 Agendar intervención</a></p>` : ""}
+      ${c.nueva ? `<div class="aviso-edicion" style="margin-top:12px">✱ <b>Comunidad nueva: faltan datos</b>${c.creadaDesde ? " (creada desde la intervención " + esc(c.creadaDesde) + ")" : ""}. Completa NIF, administración, pisos y vecinos, instalación… ${oficina ? `<button class="btn" id="btnCompletar" style="margin-left:6px">Completar datos</button>` : ""}</div>` : ""}
       <div class="pestanas">${PESTANAS.map(([k,n]) => `<button class="pest ${k===pestanaActual?"on":""}" data-k="${k}">${n}</button>`).join("")}</div>
       <div id="cuerpoFicha" class="panel cuerpo-ficha"></div>`;
     const pintar = () => (CONTENIDO[pestanaActual])(document.getElementById("cuerpoFicha"), id, c, oficina);
     el.querySelectorAll(".pest").forEach(b => b.onclick = () => { pestanaActual = b.dataset.k; el.querySelectorAll(".pest").forEach(x=>x.classList.toggle("on",x===b)); pintar(); });
+    const bC = el.querySelector("#btnCompletar");
+    if(bC) bC.onclick = () => { pestanaActual = "info"; el.querySelectorAll(".pest").forEach(x => x.classList.toggle("on", x.dataset.k === "info")); editar(document.getElementById("cuerpoFicha"), id, c, oficina); };
     pintar();
     if(pestanaActual !== "intervenciones") window.DHS_TRAB.contar(id).then(n => { const b = document.getElementById("cifraInt"); if(b) b.textContent = n ?? "—"; });
   }
@@ -283,7 +287,8 @@
       <form id="fEdit" class="form">
         <h3>Editar ficha</h3>
         <div class="rejilla">
-          <div class="bloque">${inp("nombre","Nombre",c.nombre)}${inp("direccion","Dirección",c.direccion)}${inp("poblacion","Población",c.poblacion)}
+          <div class="bloque">${inp("nombre","Nombre",c.nombre)}${inp("direccion","Dirección",c.direccion)}${inp("poblacion","Población",c.poblacion)}${inp("nif","NIF / CIF",c.nif)}
+            <label class="campo"><span>Tipo</span><select name="tipo">${Object.entries(TIPOS).map(([k,n]) => `<option value="${k}" ${c.tipo===k?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
             <label class="campo"><span>Administración</span><select name="adminId"><option value="">Sin administración</option>${ops}</select></label>
             ${inp("vecinos","Nº de vecinos",c.vecinos,"number")}${inp("acceso","Acceso (llaves, código…)",c.acceso)}</div>
           <div class="bloque">${inp("vpMarca","Videoportero: marca",vp.marca)}${inp("vpModelo","Videoportero: modelo",vp.modelo)}${inp("vpAno","Año",vp.año,"number")}${inp("vpMon","Monitores",vp.monitores)}
@@ -291,6 +296,7 @@
           <div class="bloque">${inp("prNombre","Presidente",pr.nombre)}${inp("prPiso","Piso del presidente",pr.piso)}${inp("prTel","Teléfono del presidente",pr.telefono,"tel")}
             <label class="campo"><span>Notas</span><textarea name="notas" rows="5">${esc(c.notas)}</textarea></label></div>
         </div>
+        ${c.nueva ? `<label class="chk" style="margin:6px 0 10px"><input type="checkbox" name="completa"> Ya están todos los datos (quitar ✱ "faltan datos")</label>` : ""}
         <p><button class="btn" type="submit">Guardar</button> <button class="btn sec" type="button" id="cancelar">Cancelar</button> <span id="msgEdit" class="vacio"></span></p>
       </form>` : `
       <form id="fEdit" class="form"><h3>Editar notas</h3>
@@ -307,6 +313,7 @@
       const num = v => v === "" || v == null ? null : Number(v);
       const cambios = oficina ? {
         nombre:(f.nombre||"").trim() || c.nombre, direccion:f.direccion.trim(), poblacion:f.poblacion.trim(), adminId:f.adminId || null,
+        nif:(f.nif||"").trim().toUpperCase(), tipo:f.tipo || c.tipo || "comunidad", ...(c.nueva ? {nueva: !f.completa} : {}),
         vecinos:num(f.vecinos), acceso:f.acceso.trim(),
         videoportero:{marca:f.vpMarca.trim(), modelo:f.vpModelo.trim(), año:num(f.vpAno), monitores:f.vpMon.trim()},
         tv:{antena:f.tvAntena.trim(), multibanda:b3(f.tvMulti), parabolica:b3(f.tvPara)},
@@ -352,5 +359,5 @@
     input.onblur = () => setTimeout(cerrar, 150);
   }
 
-  window.DHS_COM = { pisos, abrirPestana: k => { pestanaActual = k; }, lista, ficha, buscadorGlobal, recargar: () => cargar(true), datos: async () => { await cargar(); return CACHE; } };
+  window.DHS_COM = { anadir: (id, c) => { if(CACHE.coms) CACHE.coms[id] = c; }, pisos, abrirPestana: k => { pestanaActual = k; }, lista, ficha, buscadorGlobal, recargar: () => cargar(true), datos: async () => { await cargar(); return CACHE; } };
 })();
