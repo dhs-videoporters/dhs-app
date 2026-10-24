@@ -389,6 +389,7 @@
       <p style="margin-top:12px">${conFicha ? `<a class="btn sec" href="#comunidad/${encodeURIComponent(t.comunidadId)}">Ver ficha de ${esc(t.nombre)}</a> ` : ""}<a class="btn sec" href="#trabajo/${id}">📋 Ficha de trabajo (lo que ve el técnico)</a></p>
       </div>
 
+      <div class="panel" style="margin-top:14px" id="bFotosInt"></div>
       <div class="panel" style="margin-top:14px">
         <h3>Historial y notas</h3>
         <div class="historial">
@@ -399,6 +400,7 @@
           <p style="margin-top:6px"><button class="btn sec" id="btnNota">Añadir nota</button> <span id="msgNota" class="vacio"></span></p></div>` : ""}
       </div>`;
 
+    window.DHS_FOTOS.bloqueTrabajo(el.querySelector("#bFotosInt"), id, t, puedeTocar);
     const firma = () => ({por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
     const nota = datos => ref.collection("notas").add({...datos, por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
     const registro = accion => db.collection("dhs_registro").add({por:yo, en:firebase.firestore.FieldValue.serverTimestamp(), accion, coleccion:"dhs_trabajos", docId:id, nombre:t.numero + " · " + t.nombre});
@@ -565,6 +567,7 @@
         ${anteriores.length ? `<div class="ft-bloque"><h3>Últimas veces que fuimos</h3>
           ${anteriores.map(a => `<p>• <b>${esc(a.fechaHecho ? fmtFecha(a.fechaHecho) : a.numero)}</b> ${ESPEC[a.especialidad] ? ESPEC[a.especialidad][0] : ""} ${esc(a.resumenHecho || a.descripcion || "")}${(a.hechoPor||[]).length ? ` <span class="vacio">(${(a.hechoPor).map(k => P[k] ? esc(P[k].nombre) : "").join(", ")})</span>` : ""}</p>`).join("")}</div>` : ""}
 
+        <div class="ft-bloque" id="bFotos"></div>
         ${cerrado ? `<div class="ft-bloque ok"><h3>✅ ${esc(ESTADOS[t.estado])}${t.fechaHecho ? " · " + esc(fmtFecha(t.fechaHecho)) : ""}</h3>
           ${t.resumenHecho ? `<p>${esc(t.resumenHecho)}</p>` : ""}
           ${(t.material||[]).length ? `<p class="vacio">Material: ${(t.material).map(m => esc(m.cant + " × " + m.desc)).join(" · ")}</p>` : ""}
@@ -584,6 +587,7 @@
         ${S.puede("trabajos","ver") ? `<p style="margin-top:14px"><a href="#intervencion/${id}" class="vacio">Ver la intervención completa (historial) ›</a></p>` : ""}
       </div>`;
 
+    window.DHS_FOTOS.bloqueTrabajo(el.querySelector("#bFotos"), id, t, puede);
     const f = el.querySelector("#fFin"); if(!f) return;
     el.querySelector("#masMat").onclick = () => el.querySelector("#lineasMat").insertAdjacentHTML("beforeend", lineaMat());
     const m = x => el.querySelector("#msgFin").textContent = x;

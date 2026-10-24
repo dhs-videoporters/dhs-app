@@ -1,5 +1,5 @@
 rules_version = '2';
-// Reglas de seguridad — App DHS (intervenciones). Versión 5 (24/10/2026): el técnico rellena al terminar qué se ha hecho, qué falta y la fecha.
+// Reglas de seguridad — App DHS (intervenciones). Versión 6 (24/10/2026): v5 (el técnico rellena al terminar qué se ha hecho, qué falta y la fecha) + fotos de la finca.
 // Proyecto de PRUEBAS (dhs-pruebas).
 // Norma: sin cuenta de Google autorizada no se lee ni se escribe nada.
 // Cada usuario tiene un perfil (dhs_perfiles) con un nivel por apartado: no / propios / ver / editar / todo.
@@ -106,6 +106,12 @@ service cloud.firestore {
       match /contactos/{c} {
         allow read: if puede('vecinos', 1);
         allow create, update: if puede('vecinos', 2) && firmaBien();
+        allow delete: if puede('comunidades', 2);
+      }
+      // Fotos de la finca (placa, cuarto de antenas, grabador…): las suben técnicos y oficina.
+      match /fotos/{f} {
+        allow read: if puede('comunidades', 1);
+        allow create: if (puede('trabajos', 2) || puede('comunidades', 2)) && request.resource.data.por == correo();
         allow delete: if puede('comunidades', 2);
       }
     }

@@ -134,7 +134,7 @@
     intervenciones: (el, id) => D().S.puede("trabajos","ver") ? window.DHS_TRAB.deComunidad(el, id) : el.innerHTML = `<h3>Intervenciones</h3><p class="vacio">Tu perfil no puede ver las intervenciones.</p>`,
     documentos:     el => el.innerHTML = `<h3>Documentos</h3><p class="vacio">Aquí se guardarán los presupuestos en PDF, actas y contratos (fase 6).</p>`,
     economicos:     el => el.innerHTML = `<h3>Datos económicos</h3><p class="vacio">Aquí saldrán los presupuestos enviados, aceptados y rechazados, las facturas y lo pendiente de cobro (fases 6 y 7).</p>`,
-    galeria:        el => el.innerHTML = `<h3>Galería</h3><p class="vacio">Aquí se subirán las fotos de la comunidad: placa, cuarto de antenas, grabador… (fase 3).</p>`
+    galeria:        (el, id) => window.DHS_FOTOS.galeriaComunidad(el, id)
   };
 
 

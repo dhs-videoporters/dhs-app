@@ -225,3 +225,11 @@ a.fila-eq:hover{background:#f6f8fb}
 .ft-botones{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 .ft-botones .btn{flex:1;padding:13px;font-size:16px;min-width:140px}
 .btn-ok{background:#1d7a3e}
+/* ---------- Fotos ---------- */
+.minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin-top:8px}
+.mini{position:relative;display:block;aspect-ratio:1;border-radius:8px;background:#e8eef7 center/cover no-repeat;overflow:hidden}
+.mini em{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-style:normal;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-cargando{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--gris)}
+.btn-foto{display:inline-block;cursor:pointer;margin:4px 0}
+.sube-finca{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.sube-finca select{padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit}

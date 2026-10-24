@@ -1,0 +1,36 @@
+rules_version = '2';
+// Reglas de seguridad del almacenamiento de fotos — App DHS. Versión 1 (24/10/2026). Proyecto de PRUEBAS (dhs-pruebas).
+// Norma: sin cuenta de Google autorizada (dada de alta en la app) no se ve ni se sube nada.
+// Solo imágenes de menos de 5 MB. Las fotos no se pueden modificar; borrar, solo Dirección.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function correo() {
+      return request.auth.token.email.lower();
+    }
+    function conSesion() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function ficha() {
+      return firestore.get(/databases/(default)/documents/dhs_usuarios/$(correo())).data;
+    }
+    function esDireccion() {
+      return conSesion() && (correo() in ['herrerazarzoso@gmail.com', 'dhsvideoporters@gmail.com']
+        || (firestore.exists(/databases/(default)/documents/dhs_usuarios/$(correo())) && ficha().get('activo', true) == true && ficha().get('perfil', '') == 'direccion'));
+    }
+    function esUsuario() {
+      return esDireccion() || (conSesion()
+        && firestore.exists(/databases/(default)/documents/dhs_usuarios/$(correo()))
+        && ficha().get('activo', true) == true && ficha().get('perfil', '') != '');
+    }
+
+    match /fotos/{ruta=**} {
+      allow read: if esUsuario();
+      allow create: if esUsuario()
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update: if false;
+      allow delete: if esDireccion();
+    }
+    // Todo lo demás: cerrado.
+  }
+}
