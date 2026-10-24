@@ -304,3 +304,5 @@ a.fila-eq:hover{background:#f6f8fb}
 @media (max-width:760px){ .cal-ayuda{display:none} .cal-semanas{overflow-x:hidden} .cal-tira{max-width:100%} }
 .cal-ayuda-movil{display:none}
 @media (max-width:760px){ .cal-ayuda-movil{display:block} }
+.aviso-admin{margin:8px 0;padding:8px 10px;background:#eef4ff;border-radius:8px}
+.aviso-estado{margin-top:12px;background:#f3f7fd;border-radius:8px;padding:8px 10px;font-size:14px}

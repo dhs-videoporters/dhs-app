@@ -16,6 +16,19 @@
   const durTxt = m => m < 60 ? m + " min" : (m % 60 ? Math.floor(m/60) + " h " + (m%60) + " min" : (m/60) + (m === 60 ? " hora" : " horas"));
   const HORAS = []; for(let h = 9; h < 18; h++){ HORAS.push(String(h).padStart(2,"0")+":00"); HORAS.push(String(h).padStart(2,"0")+":30"); }
   const fmtFecha = f => f ? new Date(f + "T12:00").toLocaleDateString("es-ES", {weekday:"short", day:"numeric", month:"short"}) : "";
+  // Aviso corto a la administración al quedar hecha (lo envía el Apps Script desde el Gmail de DHS)
+  const casillaAviso = t => t.adminId && t.comunidadId ? `<label class="chk aviso-admin"><input type="checkbox" name="avisarAdmin" checked> 📧 Avisar a la administración de que está solucionado</label>` : "";
+  const pedirAviso = yo => ({estado:"pendiente", pedidoPor:yo, pedidoEn:Date.now()});
+  function estadoAviso(t){
+    const a = t.avisoAdmin; if(!a) return "";
+    const cuando = a.en && a.en.toDate ? a.en.toDate().toLocaleString("es-ES", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "";
+    return {pendiente:"📧 Aviso a la administración: se enviará en unos minutos.",
+      enviado:"📧 Aviso enviado a " + (a.administracion || "la administración") + " (" + (a.a||[]).join(", ") + ") el " + cuando + ".",
+      enviadoPruebas:"📧 [Pruebas] El aviso para " + (a.administracion || "la administración") + " se ha enviado al correo de DHS el " + cuando + ".",
+      sinCorreo:"⚠️ La administración no tiene correo: no se ha podido avisar. Avisa por teléfono o añade su correo.",
+      sinAdministracion:"⚠️ Esta comunidad no tiene administración: no se ha enviado aviso.",
+      error:"⚠️ No se ha podido enviar el aviso: " + (a.error || "")}[a.estado] || "";
+  }
   const avisaTxt = t => t.avisa ? [t.avisa.nombre, t.avisa.piso].filter(Boolean).join(" · ") : "";
   const especTxt = t => ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " + ESPEC[t.especialidad][1] : "";
 
@@ -480,7 +493,7 @@
         <div class="estados">${estadosPosibles.map(k => `<button class="est-btn est-${k} ${t.estado===k?"on":""}" data-k="${k}" ${t.estado===k?"disabled":""}>${ICO_EST[k]} ${ESTADOS[k]}</button>`).join("")}</div>
         <div id="cajaEstado" class="oculto" style="margin-top:10px">
           <div id="cajaHecho" class="oculto"><div class="campo"><span>¿Quién lo ha hecho?</span>
-            <div class="personas-sel">${activos.map(([k,p]) => `<label><input type="checkbox" name="hechoPor" value="${k}" ${(t.hechoPor||[]).concat(t.asignados||[]).includes(k)?"checked":""}><i style="background:${esc(p.color)}"></i>${esc(p.nombre)}</label>`).join("")}</div></div></div>
+            <div class="personas-sel">${activos.map(([k,p]) => `<label><input type="checkbox" name="hechoPor" value="${k}" ${(t.hechoPor||[]).concat(t.asignados||[]).includes(k)?"checked":""}><i style="background:${esc(p.color)}"></i>${esc(p.nombre)}</label>`).join("")}</div></div>${casillaAviso(t)}</div>
           <label class="campo"><span id="txtNotaEst">Nota (opcional)</span><textarea id="notaEst" rows="2"></textarea></label>
           <button class="btn" id="okEst">Guardar</button> <button class="btn sec" id="noEst">Cancelar</button> <span id="msgEst" class="vacio"></span>
         </div>
@@ -509,6 +522,8 @@
           </form>` : ""}
         </div>
       </div>
+      ${estadoAviso(t) ? `<p class="aviso-estado">${esc(estadoAviso(t))}${todo && t.avisoAdmin.estado !== "pendiente" ? ` <button class="btn sec" id="btnReaviso">Volver a avisar</button>` : ""}</p>` : ""}
+      ${todo && !t.avisoAdmin && t.adminId && ["hecho","facturado","cobrado"].includes(t.estado) ? `<p class="aviso-estado"><button class="btn sec" id="btnReaviso">📧 Avisar a la administración de que está solucionado</button></p>` : ""}
       ${t.resumenHecho || (t.material||[]).length || t.tiempoReal ? `<div class="bloque" style="margin-top:14px"><h3>Lo que se ha hecho${t.fechaHecho ? " · " + esc(fmtFecha(t.fechaHecho)) : ""}</h3>
         ${t.resumenHecho ? `<p style="white-space:pre-wrap">${esc(t.resumenHecho)}</p>` : ""}
         ${t.falta ? `<p class="ft-nota">🔧 Falta: ${esc(t.falta)}</p>` : ""}
@@ -538,6 +553,12 @@
     window.DHS_FOTOS.bloqueTrabajo(el.querySelector("#bFotosInt"), id, t, puedeTocar);
     const firma = () => ({por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
     const empiezo = marcarEdicion(ref);
+    const bRe = el.querySelector("#btnReaviso");
+    if(bRe) bRe.onclick = async () => {
+      if(!confirm("¿Mandar a la administración el aviso de que la incidencia está solucionada?")) return;
+      try{ await ref.update({avisoAdmin:pedirAviso(yo), modificado:firma()}); await registro("pedido aviso a la administración"); ficha(el, id); }
+      catch(e){ alert("No se ha podido (" + (e.code||e) + ")."); }
+    };
     const bWA = el.querySelector("#btnWA");
     if(bWA){
       const caja = el.querySelector("#cajaWA"), tx = el.querySelector("#waTexto"), abrir = el.querySelector("#waAbrir");
@@ -574,6 +595,8 @@
           const hp = [...el.querySelectorAll('input[name=hechoPor]:checked')].map(x => x.value);
           if(!hp.length) return m("Marca quién lo ha hecho.");
           cambio.hechoPor = hp;
+          const av = el.querySelector('#cajaHecho input[name=avisarAdmin]');
+          if(av && av.checked && !(t.avisoAdmin && ["enviado","enviadoPruebas","pendiente"].includes(t.avisoAdmin.estado))) cambio.avisoAdmin = pedirAviso(yo);
         }
         m("Guardando…");
         try{
@@ -733,6 +756,7 @@
             <button type="button" class="btn sec" id="masMat">+ Otro material</button></div>
           <label class="campo"><span>Tiempo que ha llevado</span><select name="tiempo">${TIEMPOS.map(m => `<option value="${m}" ${m === tiempoDefecto ? "selected" : ""}>${durTxt(m)}</option>`).join("")}</select></label>
           <div class="campo"><span>¿Quién lo ha hecho?</span><div class="personas-sel">${Object.entries(P).filter(([k,p]) => p.activo !== false).map(([k,p]) => `<label><input type="checkbox" name="hechoPor" value="${k}" ${(t.asignados||[]).includes(k) ? "checked" : ""}><i style="background:${esc(p.color)}"></i>${esc(p.nombre)}</label>`).join("")}</div></div>
+          ${casillaAviso(t)}
           <div id="cajaFalta" class="oculto"><label class="campo"><span>¿Qué falta? *</span><textarea name="falta" rows="2" placeholder="Ej.: Pedir monitor Fermax, volver el martes.">${esc(t.falta||"")}</textarea></label></div>
           <div class="ft-botones"><button type="button" class="btn btn-ok" id="btnHecho">✅ Hecho</button><button type="button" class="btn sec" id="btnMedias">🔧 Queda a medias</button></div>
           <p id="msgFin" class="vacio" style="margin-top:6px"></p>
@@ -766,6 +790,7 @@
       if(estado === "amedias" && !falta) return m("Escribe qué falta.");
       const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
       const cambio = {estado, resumenHecho:resumen, material, tiempoReal:Number(fd.get("tiempo")), hechoPor:hp, falta: estado === "amedias" ? falta : "", fechaHecho:hoyISO(), editando:null, modificado:{por:yo, en}};
+      if(estado === "hecho" && fd.get("avisarAdmin") && !(t.avisoAdmin && ["enviado","enviadoPruebas","pendiente"].includes(t.avisoAdmin.estado))) cambio.avisoAdmin = pedirAviso(yo);
       m("Guardando…");
       try{
         await ref.update(cambio);
