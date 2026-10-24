@@ -86,15 +86,17 @@
         </div>
         <div class="cifras">
           <div class="cifra"><b>${c.vecinos ?? "—"}</b><span>vecinos</span></div>
-          <div class="cifra"><b>0</b><span>intervenciones</span></div>
+          <div class="cifra"><b id="cifraInt">…</b><span>intervenciones</span></div>
           <div class="cifra"><b>${c.camaras && c.camaras.tiene ? (c.camaras.numero ?? "Sí") : "No"}</b><span>cámaras</span></div>
         </div>
       </div>
+      ${D().S.puede("trabajos","editar") ? `<p style="margin:10px 0 0"><a class="btn" href="#nueva-intervencion/${encodeURIComponent(id)}">📅 Agendar intervención</a></p>` : ""}
       <div class="pestanas">${PESTANAS.map(([k,n]) => `<button class="pest ${k===pestanaActual?"on":""}" data-k="${k}">${n}</button>`).join("")}</div>
       <div id="cuerpoFicha" class="panel cuerpo-ficha"></div>`;
     const pintar = () => (CONTENIDO[pestanaActual])(document.getElementById("cuerpoFicha"), id, c, oficina);
     el.querySelectorAll(".pest").forEach(b => b.onclick = () => { pestanaActual = b.dataset.k; el.querySelectorAll(".pest").forEach(x=>x.classList.toggle("on",x===b)); pintar(); });
     pintar();
+    if(pestanaActual !== "intervenciones") window.DHS_TRAB.contar(id).then(n => { const b = document.getElementById("cifraInt"); if(b) b.textContent = n ?? "—"; });
   }
 
   const fila = (k, v) => `<div class="dato"><span>${k}</span><b>${v === "" || v == null ? "—" : v}</b></div>`;
@@ -129,7 +131,7 @@
       const bE = el.querySelector("#btnEditar"); if(bE) bE.onclick = () => editar(el, id, c, oficina);
       if(D().S.puede("vecinos")) vecinos(el.querySelector("#bloqueVecinos"), id, c, oficina, () => CONTENIDO.info(el, id, c, oficina));
     },
-    intervenciones: el => el.innerHTML = `<h3>Intervenciones</h3><p class="vacio">Aquí saldrán las reparaciones e instalaciones hechas en esta comunidad, con fecha y técnico (fase 3).</p>`,
+    intervenciones: (el, id) => D().S.puede("trabajos","ver") ? window.DHS_TRAB.deComunidad(el, id) : el.innerHTML = `<h3>Intervenciones</h3><p class="vacio">Tu perfil no puede ver las intervenciones.</p>`,
     documentos:     el => el.innerHTML = `<h3>Documentos</h3><p class="vacio">Aquí se guardarán los presupuestos en PDF, actas y contratos (fase 6).</p>`,
     economicos:     el => el.innerHTML = `<h3>Datos económicos</h3><p class="vacio">Aquí saldrán los presupuestos enviados, aceptados y rechazados, las facturas y lo pendiente de cobro (fases 6 y 7).</p>`,
     galeria:        el => el.innerHTML = `<h3>Galería</h3><p class="vacio">Aquí se subirán las fotos de la comunidad: placa, cuarto de antenas, grabador… (fase 3).</p>`
@@ -350,5 +352,5 @@
     input.onblur = () => setTimeout(cerrar, 150);
   }
 
-  window.DHS_COM = { lista, ficha, buscadorGlobal, recargar: () => cargar(true), datos: async () => { await cargar(); return CACHE; } };
+  window.DHS_COM = { abrirPestana: k => { pestanaActual = k; }, lista, ficha, buscadorGlobal, recargar: () => cargar(true), datos: async () => { await cargar(); return CACHE; } };
 })();

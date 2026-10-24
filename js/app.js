@@ -10,7 +10,7 @@
   // Apartados con permisos (los mismos que en las reglas y en Ajustes › Perfiles).
   const APARTADOS = [
     ["calendario",     "Calendario y ausencias",        ["no","ver","editar"]],
-    ["trabajos",       "Trabajos",                      ["no","propios","ver","editar","todo"]],
+    ["trabajos",       "Intervenciones",                ["no","propios","ver","editar","todo"]],
     ["comunidades",    "Fichas de comunidad",           ["no","ver","editar"]],
     ["vecinos",        "Vecinos y teléfonos",           ["no","ver","editar"]],
     ["precios",        "Precios e importes",            ["no","ver","editar"]],
@@ -29,7 +29,7 @@
   const SECCIONES = [
     {id:"calendario",     nombre:"Calendario",      ico:"📅", ap:"calendario"},
     {id:"comunidades",    nombre:"Comunidades",     ico:"🏢", ap:"comunidades"},
-    {id:"trabajos",       nombre:"Trabajos",        ico:"🛠️", ap:"trabajos", minimo:"propios"},
+    {id:"intervenciones", nombre:"Intervenciones",  ico:"🛠️", ap:"trabajos", minimo:"propios"},
     {id:"administradores",nombre:"Administradores", ico:"👥", ap:"administradores"},
     {id:"ajustes",        nombre:"Ajustes",         ico:"⚙️", ap:"ajustes"}
   ];
@@ -60,11 +60,11 @@
       const f = d.data();
       if(f.activo === false) return null;
       const perfil = f.perfil || ({admin:"oficina", tecnico:"tecnico", direccion:"direccion"}[f.rol] || "");
-      if(perfil === "direccion") return {nombre:f.nombre || email, direccion:true, perfil, permisos:{}};
+      if(perfil === "direccion") return {nombre:f.nombre || email, direccion:true, perfil, permisos:{}, personalId:f.personalId || ""};
       if(!perfil) return null;
       const p = await db.collection("dhs_perfiles").doc(perfil).get();
       if(!p.exists) return null;
-      return {nombre:f.nombre || email, direccion:false, perfil, nombrePerfil:p.data().nombre, permisos:p.data().permisos || {}};
+      return {nombre:f.nombre || email, direccion:false, perfil, nombrePerfil:p.data().nombre, permisos:p.data().permisos || {}, personalId:f.personalId || ""};
     }catch(e){ return null; }
   }
 
@@ -87,7 +87,7 @@
       $("#btnOtraCuenta").classList.remove("oculto");
       return;
     }
-    Object.assign(S, {usuario:u, nombre:q.nombre, direccion:q.direccion, perfil:q.perfil, nombrePerfil:q.nombrePerfil || "", permisos:q.permisos});
+    Object.assign(S, {usuario:u, nombre:q.nombre, direccion:q.direccion, perfil:q.perfil, nombrePerfil:q.nombrePerfil || "", permisos:q.permisos, personalId:q.personalId || ""});
     if(S.direccion) await asegurarPerfiles();
     montarMenu();
     document.querySelector(".buscador").classList.toggle("oculto", !S.puede("comunidades"));
@@ -113,7 +113,8 @@
 
   function irA(ruta){
     const [id0, arg] = decodeURIComponent(ruta||"").split("/");
-    let id = id0 === "comunidad" ? "comunidades" : (id0 === "administrador" ? "administradores" : id0);
+    const ALIAS = {comunidad:"comunidades", administrador:"administradores", intervencion:"intervenciones", "nueva-intervencion":"intervenciones", trabajos:"intervenciones"};
+    let id = ALIAS[id0] || id0;
     if(!secciones().some(s => s.id === id)) id = (secciones()[0] || {}).id;
     if(!id){ $("#contenido").innerHTML = panel("Sin permisos", "Tu perfil no tiene ningún apartado visible. Habla con la oficina."); return; }
     document.querySelectorAll("#menu a, #menuMovil a").forEach(a => a.classList.toggle("on", a.dataset.id === id));
@@ -121,6 +122,8 @@
     document.title = sec.nombre + " · DHS App" + (C.entorno === "pruebas" ? " (pruebas)" : "");
     if(id0 === "comunidad" && arg && S.puede("comunidades")) return window.DHS_COM.ficha($("#contenido"), arg);
     if(id0 === "administrador" && arg && S.puede("administradores")) return window.DHS_ADM.ficha($("#contenido"), arg);
+    if(id0 === "intervencion" && arg) return window.DHS_TRAB.ficha($("#contenido"), arg);
+    if(id0 === "nueva-intervencion" && S.puede("trabajos","editar")) return window.DHS_TRAB.nueva($("#contenido"), arg);
     if(id0 === "ajustes" && arg) return window.DHS_AJ.vista($("#contenido"), arg);
     (VISTAS[id] || (()=>{}))($("#contenido"));
   }
@@ -129,7 +132,7 @@
   const panel = (titulo, texto, extra="") => `<div class="panel"><h2>${titulo}</h2><p class="vacio">${texto}</p>${extra}</div>`;
   const VISTAS = {
     calendario: el => el.innerHTML = panel("Calendario", "Aquí irá el calendario a 15 días vista (fase 4)."),
-    trabajos:   el => el.innerHTML = panel("Trabajos", "Aquí irán los trabajos (fase 3)."),
+    intervenciones: el => window.DHS_TRAB.lista(el),
     comunidades: el => window.DHS_COM.lista(el),
     administradores: el => window.DHS_ADM.lista(el),
     ajustes: el => window.DHS_AJ.vista(el)

@@ -165,3 +165,28 @@ a.fila-eq:hover{background:#f6f8fb}
 .aviso-flotante a{color:var(--azul);font-weight:700;margin-left:6px}
 .aviso-flotante button{border:0;background:none;margin-left:8px;color:#7a5200}
 @media (max-width:760px){ .aviso-flotante{left:12px;right:12px;bottom:76px} }
+
+/* ---------- Intervenciones ---------- */
+.seg2{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.seg2 label{display:flex;align-items:center;gap:5px;border:1px solid #cfd7e3;border-radius:999px;padding:5px 11px;font-size:13px;cursor:pointer;background:#fff}
+.seg2 label:has(input:checked){background:#e6eefb;border-color:var(--azul);font-weight:600}
+.seg2.grande label{font-size:14px;padding:7px 12px}
+.campo .seg2 input{width:auto}
+.res-local{position:relative;background:#fff;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.15);max-height:260px;overflow:auto;z-index:20;margin-top:4px}
+.res-local .r-item b{display:block}.res-local .r-item span{font-size:12px;color:var(--gris)}
+.r-vacio{padding:9px 12px;color:var(--gris)}
+.mini-ficha{background:#f6f9fd;border:1px solid var(--linea);border-radius:8px;padding:8px 10px;margin-top:6px}
+.personas-sel{display:flex;flex-wrap:wrap;gap:6px}
+.personas-sel label{display:flex;align-items:center;gap:6px;border:1px solid #cfd7e3;border-radius:999px;padding:5px 11px;font-size:13px;cursor:pointer}
+.personas-sel label:has(input:checked){background:#e6eefb;border-color:var(--azul);font-weight:600}
+.personas-sel i{width:11px;height:11px;border-radius:50%;display:inline-block;flex:none}
+.campo .personas-sel input{width:auto}
+.fila-int{display:flex;gap:10px;align-items:flex-start}
+.fila-int .f-cuerpo{flex:1;text-decoration:none;color:inherit;display:block;min-width:0}
+.fila-int .f-tags{justify-content:flex-start;margin-top:4px}
+.prio{border:0;background:none;font-size:22px;line-height:1;padding:2px;cursor:default}
+.prio.cambia{cursor:pointer;border-radius:50%}.prio.cambia:hover{background:#eef4ff}
+.quien{font-size:12px;color:var(--gris);margin-right:4px;white-space:nowrap}.quien .punto{width:9px;height:9px;margin-right:3px}
+.tag.est-nuevo{background:#e8eef7}.tag.est-agendado{background:#dbe8ff;color:#2f6fd6}.tag.est-amedias{background:#fff1dc;color:#9a5b00}
+.tag.est-hecho,.tag.est-cobrado{background:#dcf3e3;color:#1d7a3e}.tag.est-presupuesto,.tag.est-esperando{background:#f3e6ff;color:#6b2fa3}
+.tag.est-cancelado{background:#eef0f3;color:var(--gris);text-decoration:line-through}
