@@ -58,6 +58,7 @@ Subcolección `contactos` (vecinos por piso): {piso, nombre, telefono, nota}.
 | avisa | {nombre, piso, telefono} | quien da el aviso |
 | citas | [{fecha, hora, duracion, personalId}] | una por día si dura varios días |
 | duracionEstimada | 90 (min) | |
+| asignados | [personalId] | quién lo tiene asignado (de las citas). Las subcontratas solo ven los trabajos donde aparecen |
 | hechoPor | [personalId] | |
 | material | [{texto o productoId, cantidad}] | |
 | tiempoReal | 120 (min) | |

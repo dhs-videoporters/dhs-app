@@ -1,8 +1,8 @@
 rules_version = '2';
-// Reglas de seguridad — App DHS (trabajos). Versión 3 (24/10/2026): perfiles de permisos editables.
+// Reglas de seguridad — App DHS (trabajos). Versión 4 (24/10/2026): perfiles editables + nivel "solo los suyos" (subcontratas).
 // Proyecto de PRUEBAS (dhs-pruebas).
 // Norma: sin cuenta de Google autorizada no se lee ni se escribe nada.
-// Cada usuario tiene un perfil (dhs_perfiles) con un nivel por apartado: no / ver / editar / todo.
+// Cada usuario tiene un perfil (dhs_perfiles) con un nivel por apartado: no / propios / ver / editar / todo.
 // Dirección (Ángel y Joel fijos + perfil 'direccion') lo puede todo y es la única que edita perfiles.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -33,10 +33,22 @@ service cloud.firestore {
     function esUsuario() {
       return esDireccion() || (tieneFicha() && activa() && perfilId() != '');
     }
-    // Nivel del usuario en un apartado según su perfil: 0 no · 1 ver · 2 editar · 3 todo
+    function permiso(apartado) {
+      return get(/databases/$(database)/documents/dhs_perfiles/$(perfilId())).data.permisos.get(apartado, 'no');
+    }
+    // Nivel del usuario en un apartado según su perfil: 0 no/propios · 1 ver · 2 editar · 3 todo
     function nivel(apartado) {
-      return {'no': 0, 'ver': 1, 'editar': 2, 'todo': 3}.get(
-        get(/databases/$(database)/documents/dhs_perfiles/$(perfilId())).data.permisos.get(apartado, 'no'), 0);
+      return {'no': 0, 'propios': 0, 'ver': 1, 'editar': 2, 'todo': 3}.get(permiso(apartado), 0);
+    }
+    // "Solo los suyos": ve y rellena únicamente los trabajos en los que está asignado (subcontratas).
+    function soloPropios(apartado) {
+      return tieneFicha() && activa() && perfilId() != '' && permiso(apartado) == 'propios';
+    }
+    function miPersonal() {
+      return ficha().get('personalId', '');
+    }
+    function asignadoA(datos) {
+      return datos.get('asignados', []).hasAny([miPersonal()]);
     }
     function puede(apartado, minimo) {
       return esDireccion() || (tieneFicha() && activa() && perfilId() != '' && nivel(apartado) >= minimo);
@@ -101,17 +113,20 @@ service cloud.firestore {
     // ---------- Trabajos ----------
     // editar = crear trabajos y rellenar su parte (estado, material, tiempo, fotos…); todo = además cambiar todo y borrar.
     match /dhs_trabajos/{id} {
-      allow read: if puede('trabajos', 1);
+      allow read: if puede('trabajos', 1) || (soloPropios('trabajos') && asignadoA(resource.data));
       allow create: if puede('trabajos', 2) && firmaBien() && request.resource.data.creado.por == correo();
       allow update: if puede('trabajos', 3) && firmaBien()
-                    || puede('trabajos', 2) && firmaBien()
+                    || (puede('trabajos', 2) || (soloPropios('trabajos') && asignadoA(resource.data))) && firmaBien()
                        && soloCambia(['estado', 'material', 'tiempoReal', 'hechoPor', 'cobro', 'fotos', 'editando', 'modificado'])
                        && request.resource.data.estado in ['nuevo', 'agendado', 'amedias', 'hecho'];
       allow delete: if puede('trabajos', 3);
 
       match /notas/{n} {
-        allow read: if puede('trabajos', 1);
-        allow create: if puede('trabajos', 2) && request.resource.data.por == correo();
+        allow read: if puede('trabajos', 1)
+                    || (soloPropios('trabajos') && asignadoA(get(/databases/$(database)/documents/dhs_trabajos/$(id)).data));
+        allow create: if (puede('trabajos', 2)
+                          || (soloPropios('trabajos') && asignadoA(get(/databases/$(database)/documents/dhs_trabajos/$(id)).data)))
+                      && request.resource.data.por == correo();
         allow update, delete: if puede('trabajos', 3);
       }
     }

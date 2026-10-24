@@ -10,7 +10,7 @@
   // Apartados con permisos (los mismos que en las reglas y en Ajustes › Perfiles).
   const APARTADOS = [
     ["calendario",     "Calendario y ausencias",        ["no","ver","editar"]],
-    ["trabajos",       "Trabajos",                      ["no","ver","editar","todo"]],
+    ["trabajos",       "Trabajos",                      ["no","propios","ver","editar","todo"]],
     ["comunidades",    "Fichas de comunidad",           ["no","ver","editar"]],
     ["vecinos",        "Vecinos y teléfonos",           ["no","ver","editar"]],
     ["precios",        "Precios e importes",            ["no","ver","editar"]],
@@ -18,9 +18,10 @@
     ["administradores","Administradores de fincas",     ["no","ver","editar"]],
     ["ajustes",        "Equipo, accesos y registro",    ["no","ver","editar"]]
   ];
-  const NIVEL = {no:0, ver:1, editar:2, todo:3};
+  const NIVEL = {no:0, propios:0.5, ver:1, editar:2, todo:3};
   const PERFILES_BASE = {
     tecnico: {nombre:"Técnico", permisos:{calendario:"ver", trabajos:"editar", comunidades:"ver", vecinos:"editar", precios:"ver", cobros:"no", administradores:"no", ajustes:"no"}},
+    subcontrata: {nombre:"Subcontrata", permisos:{calendario:"no", trabajos:"propios", comunidades:"no", vecinos:"no", precios:"no", cobros:"no", administradores:"no", ajustes:"no"}},
     oficina: {nombre:"Oficina", permisos:{calendario:"editar", trabajos:"todo", comunidades:"editar", vecinos:"editar", precios:"editar", cobros:"editar", administradores:"ver", ajustes:"editar"}}
   };
 
@@ -28,7 +29,7 @@
   const SECCIONES = [
     {id:"calendario",     nombre:"Calendario",      ico:"📅", ap:"calendario"},
     {id:"comunidades",    nombre:"Comunidades",     ico:"🏢", ap:"comunidades"},
-    {id:"trabajos",       nombre:"Trabajos",        ico:"🛠️", ap:"trabajos"},
+    {id:"trabajos",       nombre:"Trabajos",        ico:"🛠️", ap:"trabajos", minimo:"propios"},
     {id:"administradores",nombre:"Administradores", ico:"👥", ap:"administradores"},
     {id:"ajustes",        nombre:"Ajustes",         ico:"⚙️", ap:"ajustes"}
   ];
@@ -101,7 +102,7 @@
   }
 
   // ---------- Menú ----------
-  function secciones(){ return SECCIONES.filter(s => S.puede(s.ap, "ver")); }
+  function secciones(){ return SECCIONES.filter(s => S.puede(s.ap, s.minimo || "ver")); }
   function montarMenu(){
     $("#menu").innerHTML = secciones().map(s => `<a href="#${s.id}" data-id="${s.id}">${s.nombre}</a>`).join("");
     $("#menuMovil").innerHTML = secciones().map(s => `<a href="#${s.id}" data-id="${s.id}"><span class="ico">${s.ico}</span>${s.nombre}</a>`).join("");

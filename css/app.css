@@ -156,5 +156,5 @@ a.fila-eq:hover{background:#f6f8fb}
 .tabla-perm th,.tabla-perm td{border-bottom:1px solid var(--linea);padding:8px;text-align:left;vertical-align:middle}
 .tabla-perm th{font-size:13px;color:var(--azul);white-space:nowrap}
 .nivel{padding:6px 8px;border:1px solid #cfd7e3;border-radius:6px;font:inherit;font-size:13px;min-width:120px}
-.nivel.n-no{background:#fdecec;color:#9b1c1c}.nivel.n-ver{background:#eef4ff;color:#1e4fa3}.nivel.n-editar{background:#e7f6ec;color:#166534}.nivel.n-todo{background:#dcfce7;color:#14532d;font-weight:700}
+.nivel.n-no{background:#fdecec;color:#9b1c1c}.nivel.n-propios{background:#fff4d6;color:#8a6200}.nivel.n-ver{background:#eef4ff;color:#1e4fa3}.nivel.n-editar{background:#e7f6ec;color:#166534}.nivel.n-todo{background:#dcfce7;color:#14532d;font-weight:700}
 .mini{border:0;background:none;color:var(--ko);font-size:13px;margin-left:4px}

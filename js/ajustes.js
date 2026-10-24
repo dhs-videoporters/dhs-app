@@ -5,8 +5,8 @@
   const D = () => window.DHS;
   const COLORES = [["#2f6fd6","Azul"],["#e8891c","Naranja"],["#2f9e5b","Verde"],["#8a5cc7","Morado"],["#d63384","Rosa"],["#0d9488","Turquesa"],["#a16207","Marrón"],["#64748b","Gris"]];
   const TIPOS = {direccion:"Dirección", plantilla:"Plantilla", subcontrata:"Subcontrata (electricista…)", otros:"Otros"};
-  const NOMBRE_NIVEL = {no:"No ve", ver:"Ve", editar:"Ve y edita", todo:"Todo"};
-  const AYUDA_NIVEL = {trabajos:{editar:"crea trabajos y rellena su parte", todo:"cambia cualquier dato y borra"}, vecinos:{editar:"también las notas de la ficha"}, precios:{ver:"se aplicará en presupuestos y facturas"}, cobros:{ver:"llegará en la fase de cobros"}};
+  const NOMBRE_NIVEL = {no:"No ve", propios:"Solo los suyos", ver:"Ve", editar:"Ve y edita", todo:"Todo"};
+  const AYUDA_NIVEL = {trabajos:{propios:"solo los que tenga asignados, y los rellena", editar:"crea trabajos y rellena su parte", todo:"cambia cualquier dato y borra"}, vecinos:{editar:"también las notas de la ficha"}, precios:{ver:"se aplicará en presupuestos y facturas"}, cobros:{ver:"llegará en la fase de cobros"}};
   let pest = "equipo";
   const FIJOS = ["herrerazarzoso@gmail.com","dhsvideoporters@gmail.com"];
 
