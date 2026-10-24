@@ -75,14 +75,14 @@
     try{ await cargar(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer los datos (${esc(e.code)}).</div>`; return; }
     const c = CACHE.coms[id];
     if(!c){ el.innerHTML = `<div class="panel">No existe esta comunidad. <a href="#comunidades">Volver</a></div>`; return; }
-    const oficina = D().S.rol === "oficina";
+    const oficina = D().S.puede("comunidades","editar");
     el.innerHTML = `
       <a href="#comunidades" class="volver">‹ Comunidades</a>
       <div class="panel cab-ficha">
         <div class="ico-ficha">${c.tipo==="particular"?"🏠":(c.tipo==="empresa"?"🏭":"🏢")}</div>
         <div class="cab-txt">
           <h1>${esc(c.nombre)}</h1>
-          <div class="vacio">${c.adminId ? "Administración: <b>"+(oficina ? '<a href="#administrador/'+encodeURIComponent(c.adminId)+'">'+esc(nombreAdmin(c.adminId))+'</a>' : esc(nombreAdmin(c.adminId)))+"</b>" : (c.tipo==="comunidad" ? '<span class="tag aviso">Sin administración</span>' : esc(TIPOS[c.tipo]))}${c.nif ? " · NIF "+esc(c.nif) : ""}</div>
+          <div class="vacio">${c.adminId ? "Administración: <b>"+(D().S.puede("administradores") ? '<a href="#administrador/'+encodeURIComponent(c.adminId)+'">'+esc(nombreAdmin(c.adminId))+'</a>' : esc(nombreAdmin(c.adminId)))+"</b>" : (c.tipo==="comunidad" ? '<span class="tag aviso">Sin administración</span>' : esc(TIPOS[c.tipo]))}${c.nif ? " · NIF "+esc(c.nif) : ""}</div>
         </div>
         <div class="cifras">
           <div class="cifra"><b>${c.vecinos ?? "—"}</b><span>vecinos</span></div>
@@ -124,10 +124,10 @@
           </div>
           <div class="bloque"><h3>Notas</h3><p style="white-space:pre-wrap">${esc(c.notas) || '<span class="vacio">Sin notas.</span>'}</p></div>
         </div>
-        <p style="margin-top:14px"><button class="btn" id="btnEditar">${oficina ? "Editar ficha" : "Editar notas"}</button></p>
-        <div class="bloque" id="bloqueVecinos" style="margin-top:14px"></div>`;
-      el.querySelector("#btnEditar").onclick = () => editar(el, id, c, oficina);
-      vecinos(el.querySelector("#bloqueVecinos"), id, c, oficina, () => CONTENIDO.info(el, id, c, oficina));
+        ${oficina || D().S.puede("vecinos","editar") ? `<p style="margin-top:14px"><button class="btn" id="btnEditar">${oficina ? "Editar ficha" : "Editar notas"}</button></p>` : ""}
+        ${D().S.puede("vecinos") ? `<div class="bloque" id="bloqueVecinos" style="margin-top:14px"></div>` : ""}`;
+      const bE = el.querySelector("#btnEditar"); if(bE) bE.onclick = () => editar(el, id, c, oficina);
+      if(D().S.puede("vecinos")) vecinos(el.querySelector("#bloqueVecinos"), id, c, oficina, () => CONTENIDO.info(el, id, c, oficina));
     },
     intervenciones: el => el.innerHTML = `<h3>Intervenciones</h3><p class="vacio">Aquí saldrán las reparaciones e instalaciones hechas en esta comunidad, con fecha y técnico (fase 3).</p>`,
     documentos:     el => el.innerHTML = `<h3>Documentos</h3><p class="vacio">Aquí se guardarán los presupuestos en PDF, actas y contratos (fase 6).</p>`,
@@ -168,6 +168,7 @@
     try{ const q = await db.collection("dhs_comunidades").doc(id).collection("contactos").get(); q.forEach(d => guardados[d.id] = d.data()); }
     catch(err){ el.innerHTML = `<h3>Vecinos</h3><p class="vacio">No se han podido leer (${esc(err.code)}).</p>`; return; }
     const L = pisos(e), pr = c.presidente || {}, hist = c.historialPresidentes || [];
+    const editaVec = S.puede("vecinos","editar");
     const etiquetaPresi = clave => {
       if(pr.clave === clave) return `<span class="tag presi">Presidente${pr.desde ? " desde "+esc(pr.desde) : ""}</span>`;
       const h = hist.filter(x => x.clave === clave).map(x => `<span class="tag gris">Presidente ${esc(x.desde||"?")}–${esc(x.hasta||"?")}</span>`);
@@ -176,19 +177,19 @@
     el.innerHTML = `
       <div class="cab-vecinos"><h3>Vecinos · ${L.length} pisos</h3>
         ${oficina ? `<button class="btn sec" id="btnEstr">Cambiar distribución</button>` : ""}</div>
-      <p class="vacio" style="margin-bottom:6px">${oficina ? "Pulsa la ★ para marcar al presidente." : "Puedes apuntar y corregir nombres y teléfonos. El presidente lo marca la oficina."}</p>
+      <p class="vacio" style="margin-bottom:6px">${oficina ? "Pulsa la ★ para marcar al presidente." : (editaVec ? "Puedes apuntar y corregir nombres y teléfonos. El presidente lo marca la oficina." : "Solo lectura.")}</p>
       <div class="tabla-vecinos">
         ${L.map(p => { const g = guardados[p.clave] || {}; const esP = pr.clave === p.clave; return `
           <div class="veci" data-clave="${p.clave}" data-piso="${esc(p.piso)}">
             <button type="button" class="estrella ${esP?"on":""}" title="Marcar como presidente" ${oficina?"":"disabled"}>★</button>
             <span class="v-piso">${esc(p.piso)}</span>
-            <input class="v-nombre" placeholder="Nombre" value="${esc(g.nombre||"")}">
-            <input class="v-tel" type="tel" placeholder="Teléfono" value="${esc(g.telefono||"")}">
+            <input class="v-nombre" placeholder="Nombre" value="${esc(g.nombre||"")}" ${editaVec?"":"readonly"}>
+            <input class="v-tel" type="tel" placeholder="Teléfono" value="${esc(g.telefono||"")}" ${editaVec?"":"readonly"}>
             ${g.telefono ? `<a class="v-llamar" href="tel:${esc(g.telefono.replace(/\s/g,""))}" title="Llamar">📞</a>` : `<span class="v-llamar"></span>`}
             <span class="v-presi">${etiquetaPresi(p.clave)}</span>
           </div>`; }).join("")}
       </div>
-      <p style="margin-top:10px"><button class="btn" id="btnGuardarVec">Guardar vecinos</button> <span id="msgVec" class="vacio"></span></p>`;
+      <p style="margin-top:10px">${editaVec ? `<button class="btn" id="btnGuardarVec">Guardar vecinos</button>` : ""} <span id="msgVec" class="vacio"></span></p>`;
     const msg = t => el.querySelector("#msgVec").textContent = t;
     if(oficina) el.querySelector("#btnEstr").onclick = () => configurar(el, id, c, oficina, repintarInfo);
     const firma = () => ({por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp()});
@@ -208,7 +209,7 @@
       return lista.length;
     };
 
-    el.querySelector("#btnGuardarVec").onclick = async () => {
+    if(editaVec) el.querySelector("#btnGuardarVec").onclick = async () => {
       msg("Guardando…");
       try{ const n = await guardarCambios(); msg(n ? "Guardado (" + n + (n===1?" piso)":" pisos)") : "No hay cambios."); vecinos(el, id, c, oficina, repintarInfo); }
       catch(err){ msg("No se ha podido guardar (" + (err.code||err) + ")."); }

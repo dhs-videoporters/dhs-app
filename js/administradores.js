@@ -1,11 +1,11 @@
 // DHS App — Administradores de fincas: lista, ficha con personas de contacto y edición.
-// Solo Ángel y Joel pueden crear o modificar (las reglas de Firestore lo imponen igual).
+// Quién puede crear o modificar lo decide el perfil (apartado "administradores"); las reglas lo imponen igual.
 (function(){
   const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const sinAc = s => (s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
   const slug = s => sinAc(s).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50);
   const D = () => window.DHS;
-  const puedeEditar = () => D().S.direccion === true;
+  const puedeEditar = () => D().S.puede("administradores","editar");
   let texto = "";
 
   const tel = t => t ? `<a href="tel:${esc(t.replace(/\s/g,""))}">${esc(t)}</a>` : "";
@@ -82,7 +82,7 @@
             ${coms.length ? coms.map(([k,c]) => `<div class="dato"><a href="#comunidad/${encodeURIComponent(k)}">${esc(c.nombre)}</a><span>${esc(c.poblacion||"")}</span></div>`).join("") : `<p class="vacio">Ninguna asignada todavía. Se asignan desde la ficha de cada comunidad.</p>`}
           </div>
         </div>
-        ${puedeEditar() ? `<p style="margin-top:14px"><button class="btn" id="btnEditar">Editar administración</button></p>` : `<p class="vacio" style="margin-top:14px">Solo Ángel y Joel pueden modificar esta ficha.</p>`}
+        ${puedeEditar() ? `<p style="margin-top:14px"><button class="btn" id="btnEditar">Editar administración</button></p>` : `<p class="vacio" style="margin-top:14px">Tu perfil solo permite ver esta ficha.</p>`}
       </div>`;
     if(puedeEditar()) el.querySelector("#btnEditar").onclick = () => editar(el, id, a);
   }

@@ -149,3 +149,12 @@ a.fila-eq:hover{background:#f6f8fb}
 .colores i{display:block;width:28px;height:28px;border-radius:50%;border:3px solid transparent;cursor:pointer}
 .colores input:checked+i{border-color:var(--negro)}
 @media (max-width:760px){ .fila-eq{grid-template-columns:1fr auto} .fila-eq .vacio{grid-column:1/-1;grid-row:2} .fila-reg{grid-template-columns:1fr auto} .fila-reg span:last-child{grid-column:1/-1} }
+
+/* Perfiles y permisos */
+.tabla-perm{overflow-x:auto}
+.tabla-perm table{border-collapse:collapse;width:100%;min-width:520px}
+.tabla-perm th,.tabla-perm td{border-bottom:1px solid var(--linea);padding:8px;text-align:left;vertical-align:middle}
+.tabla-perm th{font-size:13px;color:var(--azul);white-space:nowrap}
+.nivel{padding:6px 8px;border:1px solid #cfd7e3;border-radius:6px;font:inherit;font-size:13px;min-width:120px}
+.nivel.n-no{background:#fdecec;color:#9b1c1c}.nivel.n-ver{background:#eef4ff;color:#1e4fa3}.nivel.n-editar{background:#e7f6ec;color:#166534}.nivel.n-todo{background:#dcfce7;color:#14532d;font-weight:700}
+.mini{border:0;background:none;color:var(--ko);font-size:13px;margin-left:4px}

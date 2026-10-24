@@ -7,17 +7,36 @@
   const DIRECCION = ["herrerazarzoso@gmail.com", "dhsvideoporters@gmail.com"]; // Ángel y Joel
   const $ = s => document.querySelector(s);
 
-  // Secciones del menú. "soloOficina": no aparece a los técnicos.
+  // Apartados con permisos (los mismos que en las reglas y en Ajustes › Perfiles).
+  const APARTADOS = [
+    ["calendario",     "Calendario y ausencias",        ["no","ver","editar"]],
+    ["trabajos",       "Trabajos",                      ["no","ver","editar","todo"]],
+    ["comunidades",    "Fichas de comunidad",           ["no","ver","editar"]],
+    ["vecinos",        "Vecinos y teléfonos",           ["no","ver","editar"]],
+    ["precios",        "Precios e importes",            ["no","ver","editar"]],
+    ["cobros",         "Cobros",                        ["no","ver","editar"]],
+    ["administradores","Administradores de fincas",     ["no","ver","editar"]],
+    ["ajustes",        "Equipo, accesos y registro",    ["no","ver","editar"]]
+  ];
+  const NIVEL = {no:0, ver:1, editar:2, todo:3};
+  const PERFILES_BASE = {
+    tecnico: {nombre:"Técnico", permisos:{calendario:"ver", trabajos:"editar", comunidades:"ver", vecinos:"editar", precios:"ver", cobros:"no", administradores:"no", ajustes:"no"}},
+    oficina: {nombre:"Oficina", permisos:{calendario:"editar", trabajos:"todo", comunidades:"editar", vecinos:"editar", precios:"editar", cobros:"editar", administradores:"ver", ajustes:"editar"}}
+  };
+
+  // Secciones del menú y apartado que hay que poder "ver" para que salgan.
   const SECCIONES = [
-    {id:"calendario",     nombre:"Calendario",      ico:"📅"},
-    {id:"comunidades",    nombre:"Comunidades",     ico:"🏢"},
-    {id:"trabajos",       nombre:"Trabajos",        ico:"🛠️"},
-    {id:"administradores",nombre:"Administradores", ico:"👥", soloOficina:true},
-    {id:"ajustes",        nombre:"Ajustes",         ico:"⚙️", soloOficina:true}
+    {id:"calendario",     nombre:"Calendario",      ico:"📅", ap:"calendario"},
+    {id:"comunidades",    nombre:"Comunidades",     ico:"🏢", ap:"comunidades"},
+    {id:"trabajos",       nombre:"Trabajos",        ico:"🛠️", ap:"trabajos"},
+    {id:"administradores",nombre:"Administradores", ico:"👥", ap:"administradores"},
+    {id:"ajustes",        nombre:"Ajustes",         ico:"⚙️", ap:"ajustes"}
   ];
 
-  const S = { usuario:null, rol:null, nombre:"" };
-  window.DHS = { db, auth, S };
+  const S = { usuario:null, nombre:"", direccion:false, perfil:"", permisos:{} };
+  // S.puede("vecinos","editar") → true/false. Dirección siempre puede.
+  S.puede = (ap, minimo="ver") => S.direccion || (NIVEL[S.permisos[ap]] || 0) >= NIVEL[minimo];
+  window.DHS = { db, auth, S, APARTADOS, PERFILES_BASE };
 
   // ---------- Entrada ----------
   function alEntrar(resp){
@@ -33,17 +52,29 @@
 
   async function quienEs(u){
     const email = u.email.toLowerCase();
-    if(DIRECCION.includes(email)) return {rol:"oficina", nombre: email.startsWith("herrera") ? "Ángel" : "Joel"};
+    if(DIRECCION.includes(email)) return {nombre: email.startsWith("herrera") ? "Ángel" : "Joel", direccion:true, perfil:"direccion", permisos:{}};
     try{
       const d = await db.collection("dhs_usuarios").doc(email).get();
       if(!d.exists) return null;
       const f = d.data();
       if(f.activo === false) return null;
-      if(f.rol === "direccion") return {rol:"oficina", nombre:f.nombre || email, direccion:true};
-      if(f.rol === "admin") return {rol:"oficina", nombre:f.nombre || email};
-      if(f.rol === "tecnico") return {rol:"tecnico", nombre:f.nombre || email};
-      return null;
+      const perfil = f.perfil || ({admin:"oficina", tecnico:"tecnico", direccion:"direccion"}[f.rol] || "");
+      if(perfil === "direccion") return {nombre:f.nombre || email, direccion:true, perfil, permisos:{}};
+      if(!perfil) return null;
+      const p = await db.collection("dhs_perfiles").doc(perfil).get();
+      if(!p.exists) return null;
+      return {nombre:f.nombre || email, direccion:false, perfil, nombrePerfil:p.data().nombre, permisos:p.data().permisos || {}};
     }catch(e){ return null; }
+  }
+
+  // Dirección: crea los perfiles básicos si todavía no existen.
+  async function asegurarPerfiles(){
+    try{
+      for(const [id, p] of Object.entries(PERFILES_BASE)){
+        const ref = db.collection("dhs_perfiles").doc(id);
+        if(!(await ref.get()).exists) await ref.set({...p, base:true, modificado:{por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp()}});
+      }
+    }catch(e){ console.warn("Perfiles", e.code); }
   }
 
   auth.onAuthStateChanged(async u => {
@@ -55,9 +86,11 @@
       $("#btnOtraCuenta").classList.remove("oculto");
       return;
     }
-    Object.assign(S, {usuario:u, rol:q.rol, nombre:q.nombre, direccion: DIRECCION.includes(u.email.toLowerCase()) || q.direccion === true});
+    Object.assign(S, {usuario:u, nombre:q.nombre, direccion:q.direccion, perfil:q.perfil, nombrePerfil:q.nombrePerfil || "", permisos:q.permisos});
+    if(S.direccion) await asegurarPerfiles();
     montarMenu();
-    window.DHS_COM.buscadorGlobal(document.querySelector("#buscaGlobal"), document.querySelector("#resGlobal"));
+    document.querySelector(".buscador").classList.toggle("oculto", !S.puede("comunidades"));
+    if(S.puede("comunidades")) window.DHS_COM.buscadorGlobal(document.querySelector("#buscaGlobal"), document.querySelector("#resGlobal"));
     mostrar("app");
     irA(location.hash.slice(1) || "calendario");
   });
@@ -68,23 +101,24 @@
   }
 
   // ---------- Menú ----------
-  function secciones(){ return SECCIONES.filter(s => !s.soloOficina || S.rol === "oficina"); }
+  function secciones(){ return SECCIONES.filter(s => S.puede(s.ap, "ver")); }
   function montarMenu(){
     $("#menu").innerHTML = secciones().map(s => `<a href="#${s.id}" data-id="${s.id}">${s.nombre}</a>`).join("");
     $("#menuMovil").innerHTML = secciones().map(s => `<a href="#${s.id}" data-id="${s.id}"><span class="ico">${s.ico}</span>${s.nombre}</a>`).join("");
-    $("#nombreUsuario").textContent = S.nombre + (S.direccion ? " · Dirección" : (S.rol === "oficina" ? " · Oficina" : " · Técnico"));
+    $("#nombreUsuario").textContent = S.nombre + " · " + (S.direccion ? "Dirección" : (S.nombrePerfil || S.perfil));
   }
   window.addEventListener("hashchange", () => S.usuario && irA(location.hash.slice(1)));
 
   function irA(ruta){
     const [id0, arg] = decodeURIComponent(ruta||"").split("/");
     let id = id0 === "comunidad" ? "comunidades" : (id0 === "administrador" ? "administradores" : id0);
-    if(!secciones().some(s => s.id === id)) id = "calendario";
+    if(!secciones().some(s => s.id === id)) id = (secciones()[0] || {}).id;
+    if(!id){ $("#contenido").innerHTML = panel("Sin permisos", "Tu perfil no tiene ningún apartado visible. Habla con la oficina."); return; }
     document.querySelectorAll("#menu a, #menuMovil a").forEach(a => a.classList.toggle("on", a.dataset.id === id));
     const sec = SECCIONES.find(s => s.id === id);
     document.title = sec.nombre + " · DHS App" + (C.entorno === "pruebas" ? " (pruebas)" : "");
-    if(id0 === "comunidad" && arg) return window.DHS_COM.ficha($("#contenido"), arg);
-    if(id0 === "administrador" && arg) return window.DHS_ADM.ficha($("#contenido"), arg);
+    if(id0 === "comunidad" && arg && S.puede("comunidades")) return window.DHS_COM.ficha($("#contenido"), arg);
+    if(id0 === "administrador" && arg && S.puede("administradores")) return window.DHS_ADM.ficha($("#contenido"), arg);
     (VISTAS[id] || (()=>{}))($("#contenido"));
   }
 

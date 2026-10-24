@@ -1,6 +1,9 @@
 rules_version = '2';
-// Reglas de seguridad — App DHS (trabajos). Versión 2 (24/10/2026: rol Dirección), para el proyecto de PRUEBAS (dhs-pruebas).
-// Norma: sin cuenta de Google autorizada no se lee ni se escribe nada. Solo la oficina borra.
+// Reglas de seguridad — App DHS (trabajos). Versión 3 (24/10/2026): perfiles de permisos editables.
+// Proyecto de PRUEBAS (dhs-pruebas).
+// Norma: sin cuenta de Google autorizada no se lee ni se escribe nada.
+// Cada usuario tiene un perfil (dhs_perfiles) con un nivel por apartado: no / ver / editar / todo.
+// Dirección (Ángel y Joel fijos + perfil 'direccion') lo puede todo y es la única que edita perfiles.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -11,30 +14,34 @@ service cloud.firestore {
     function correo() {
       return request.auth.token.email.lower();
     }
-    function ficha() {
-      return get(/databases/$(database)/documents/dhs_usuarios/$(correo())).data;
-    }
     function tieneFicha() {
       return conSesion() && exists(/databases/$(database)/documents/dhs_usuarios/$(correo()));
+    }
+    function ficha() {
+      return get(/databases/$(database)/documents/dhs_usuarios/$(correo())).data;
     }
     function activa() {
       return ficha().get('activo', true) == true;
     }
-    // Dirección: Ángel y Joel siempre (fijos, nunca se quedan fuera) + quien tenga rol 'direccion'.
+    function perfilId() {
+      return ficha().get('perfil', '');
+    }
     function esDireccion() {
       return conSesion() && (correo() in ['herrerazarzoso@gmail.com', 'dhsvideoporters@gmail.com']
-        || (tieneFicha() && ficha().rol == 'direccion' && activa()));
-    }
-    function esOficina() {
-      return esDireccion() || (tieneFicha() && ficha().rol == 'admin' && activa());
-    }
-    function esTecnico() {
-      return tieneFicha() && ficha().rol == 'tecnico' && activa();
+        || (tieneFicha() && activa() && perfilId() == 'direccion'));
     }
     function esUsuario() {
-      return esOficina() || esTecnico();
+      return esDireccion() || (tieneFicha() && activa() && perfilId() != '');
     }
-    // El documento nuevo lleva la marca de quién lo ha cambiado, y es quien dice ser.
+    // Nivel del usuario en un apartado según su perfil: 0 no · 1 ver · 2 editar · 3 todo
+    function nivel(apartado) {
+      return {'no': 0, 'ver': 1, 'editar': 2, 'todo': 3}.get(
+        get(/databases/$(database)/documents/dhs_perfiles/$(perfilId())).data.permisos.get(apartado, 'no'), 0);
+    }
+    function puede(apartado, minimo) {
+      return esDireccion() || (tieneFicha() && activa() && perfilId() != '' && nivel(apartado) >= minimo);
+    }
+    // El documento lleva la marca de quién lo cambia, y es quien dice ser.
     function firmaBien() {
       return request.resource.data.modificado.por == correo();
     }
@@ -42,68 +49,70 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
     }
 
-    // ---------- Usuarios ----------
-    // Solo Dirección puede dar o quitar el rol de Dirección; Oficina gestiona técnicos y oficina.
+    // ---------- Perfiles de permisos: solo Dirección ----------
+    match /dhs_perfiles/{id} {
+      allow read: if esUsuario();
+      allow write: if esDireccion();
+    }
+
+    // ---------- Usuarios (accesos) ----------
+    // Solo Dirección puede dar o quitar el perfil de Dirección.
     match /dhs_usuarios/{email} {
-      allow read: if esOficina() || (conSesion() && email == correo());
-      allow create: if esOficina() && (request.resource.data.rol != 'direccion' || esDireccion());
-      allow update: if esOficina() && ((request.resource.data.rol != 'direccion' && resource.data.rol != 'direccion') || esDireccion());
+      allow read: if (conSesion() && email == correo()) || puede('ajustes', 1);
+      allow create: if puede('ajustes', 2) && (request.resource.data.get('perfil', '') != 'direccion' || esDireccion());
+      allow update: if puede('ajustes', 2)
+                    && ((request.resource.data.get('perfil', '') != 'direccion' && resource.data.get('perfil', '') != 'direccion') || esDireccion());
       allow delete: if esDireccion();
     }
 
-    // ---------- Administraciones: solo Ángel y Joel las cambian ----------
-    match /dhs_admins/{id} {
+    // ---------- Equipo y ausencias ----------
+    match /dhs_personal/{id} {
       allow read: if esUsuario();
-      allow create, update: if esDireccion() && firmaBien();
+      allow write: if puede('ajustes', 2);
+    }
+    match /dhs_ausencias/{id} {
+      allow read: if puede('calendario', 1);
+      allow write: if puede('calendario', 2);
+    }
+
+    // ---------- Administradores de fincas ----------
+    match /dhs_admins/{id} {
+      allow read: if puede('administradores', 1);
+      allow create, update: if puede('administradores', 2) && firmaBien();
       allow delete: if esDireccion();
     }
 
     // ---------- Comunidades / clientes ----------
     match /dhs_comunidades/{id} {
-      allow read: if esUsuario();
-      allow create: if esOficina() && firmaBien();
-      // El técnico solo puede tocar las notas de la ficha.
-      allow update: if esOficina() && firmaBien()
-                    || esTecnico() && firmaBien() && soloCambia(['notas', 'modificado']);
-      allow delete: if esOficina();
+      allow read: if puede('comunidades', 1);
+      allow create: if puede('comunidades', 2) && firmaBien();
+      // Con "vecinos: editar" se pueden tocar también las notas de la ficha.
+      allow update: if puede('comunidades', 2) && firmaBien()
+                    || puede('vecinos', 2) && firmaBien() && soloCambia(['notas', 'modificado']);
+      allow delete: if esDireccion();
 
-      // Contactos de vecinos: los técnicos pueden añadir y corregir; borrar solo la oficina.
       match /contactos/{c} {
-        allow read: if esUsuario();
-        allow create, update: if esUsuario() && firmaBien();
-        allow delete: if esOficina();
+        allow read: if puede('vecinos', 1);
+        allow create, update: if puede('vecinos', 2) && firmaBien();
+        allow delete: if puede('comunidades', 2);
       }
     }
 
-    // ---------- Personal y ausencias ----------
-    match /dhs_personal/{id} {
-      allow read: if esUsuario();
-      allow write: if esOficina();
-    }
-    match /dhs_ausencias/{id} {
-      allow read: if esUsuario();
-      allow write: if esOficina();
-    }
-
     // ---------- Trabajos ----------
+    // editar = crear trabajos y rellenar su parte (estado, material, tiempo, fotos…); todo = además cambiar todo y borrar.
     match /dhs_trabajos/{id} {
-      allow read: if esUsuario();
-      // Los técnicos pueden crear trabajos (avisos en la calle).
-      allow create: if esUsuario() && firmaBien()
-                    && request.resource.data.creado.por == correo();
-      // Oficina: todo. Técnico: solo su parte del trabajo.
-      allow update: if esOficina() && firmaBien()
-                    || esTecnico() && firmaBien()
-                       && soloCambia(['estado', 'material', 'tiempoReal', 'hechoPor', 'cobro',
-                                      'fotos', 'editando', 'modificado'])
+      allow read: if puede('trabajos', 1);
+      allow create: if puede('trabajos', 2) && firmaBien() && request.resource.data.creado.por == correo();
+      allow update: if puede('trabajos', 3) && firmaBien()
+                    || puede('trabajos', 2) && firmaBien()
+                       && soloCambia(['estado', 'material', 'tiempoReal', 'hechoPor', 'cobro', 'fotos', 'editando', 'modificado'])
                        && request.resource.data.estado in ['nuevo', 'agendado', 'amedias', 'hecho'];
-      allow delete: if esOficina();
+      allow delete: if puede('trabajos', 3);
 
-      // Observaciones: cada uno firma las suyas; no se cambian ni se borran (salvo oficina).
       match /notas/{n} {
-        allow read: if esUsuario();
-        allow create: if esUsuario() && request.resource.data.por == correo();
-        allow update, delete: if esOficina();
+        allow read: if puede('trabajos', 1);
+        allow create: if puede('trabajos', 2) && request.resource.data.por == correo();
+        allow update, delete: if puede('trabajos', 3);
       }
     }
 
@@ -116,7 +125,7 @@ service cloud.firestore {
 
     // ---------- Registro de cambios: se escribe, no se toca ----------
     match /dhs_registro/{id} {
-      allow read: if esOficina();
+      allow read: if puede('ajustes', 1);
       allow create: if esUsuario() && request.resource.data.por == correo();
     }
 
