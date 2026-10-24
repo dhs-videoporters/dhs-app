@@ -99,7 +99,8 @@
         if(p.email && p.email !== email) b.set(db.collection("dhs_usuarios").doc(p.email), {activo:false, modificado:firma}, {merge:true});
         if(email){
           // "rol" se mantiene por compatibilidad con la app de cámaras: admin = oficina/dirección, tecnico = resto.
-          const rol = perfil === "direccion" ? "direccion" : (P[perfil] && (P[perfil].permisos||{}).ajustes === "editar" ? "admin" : "tecnico");
+          const pm = (P[perfil] && P[perfil].permisos) || {};
+          const rol = perfil === "direccion" ? "direccion" : (pm.ajustes === "editar" ? "admin" : (["ver","editar"].includes(pm.comunidades) ? "tecnico" : "ninguno"));
           b.set(db.collection("dhs_usuarios").doc(email), {nombre:datos.nombre, perfil:perfil || "", rol, personalId:ref.id, activo: !!perfil && datos.activo !== false, modificado:firma}, {merge:true});
         }
         await b.commit();
