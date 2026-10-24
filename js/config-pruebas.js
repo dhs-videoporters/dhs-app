@@ -10,5 +10,6 @@ window.DHS_CONFIG = {
     messagingSenderId: "564284457863",
     appId: "1:564284457863:web:a22f9ca96bb889c4c54922"
   },
+  puenteUrl:"https://script.google.com/macros/s/AKfycbxt95UOhBi3SGu8lnjC0OZkkgWUpnnKUKVt1em6bymdprECRnznCWJGG7eIlL6Z9qjk/exec",
   googleClientId: "564284457863-brbfrs1kq8limfe0cdpa2m8jtvu0me1h.apps.googleusercontent.com"
 };
