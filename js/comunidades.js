@@ -116,21 +116,159 @@
             ${fila("Antena", esc(tv.antena))}${fila("Multibanda", siNo(tv.multibanda))}${fila("Parabólica", siNo(tv.parabolica))}
             ${fila("Cámaras", cam.tiene ? "Sí"+(cam.numero ? " · "+esc(cam.numero) : "") : "No")}
           </div>
-          <div class="bloque"><h3>Contacto</h3>
-            ${fila("Presidente", esc([pr.nombre, pr.piso].filter(Boolean).join(" · ")))}
+          <div class="bloque"><h3>Presidente</h3>
+            ${fila("Presidente", pr.nombre ? "★ "+esc([pr.nombre, pr.piso].filter(Boolean).join(" · ")) : "")}
             ${fila("Teléfono", pr.telefono ? `<a href="tel:${esc(pr.telefono)}">${esc(pr.telefono)}</a>` : "")}
-            <p class="vacio" style="margin-top:8px">Los contactos de vecinos por piso llegan en la sesión 14.</p>
+            ${fila("Desde", esc(pr.desde))}
+            ${(c.historialPresidentes||[]).length ? `<p class="vacio" style="margin-top:6px">Anteriores: ${(c.historialPresidentes).slice().reverse().map(h => esc(h.nombre)+" ("+esc(h.piso||"")+", "+esc(h.desde||"?")+"–"+esc(h.hasta||"?")+")").join(" · ")}</p>` : ""}
           </div>
           <div class="bloque"><h3>Notas</h3><p style="white-space:pre-wrap">${esc(c.notas) || '<span class="vacio">Sin notas.</span>'}</p></div>
         </div>
-        <p style="margin-top:14px"><button class="btn" id="btnEditar">${oficina ? "Editar ficha" : "Editar notas"}</button></p>`;
+        <p style="margin-top:14px"><button class="btn" id="btnEditar">${oficina ? "Editar ficha" : "Editar notas"}</button></p>
+        <div class="bloque" id="bloqueVecinos" style="margin-top:14px"></div>`;
       el.querySelector("#btnEditar").onclick = () => editar(el, id, c, oficina);
+      vecinos(el.querySelector("#bloqueVecinos"), id, c, oficina, () => CONTENIDO.info(el, id, c, oficina));
     },
     intervenciones: el => el.innerHTML = `<h3>Intervenciones</h3><p class="vacio">Aquí saldrán las reparaciones e instalaciones hechas en esta comunidad, con fecha y técnico (fase 3).</p>`,
     documentos:     el => el.innerHTML = `<h3>Documentos</h3><p class="vacio">Aquí se guardarán los presupuestos en PDF, actas y contratos (fase 6).</p>`,
     economicos:     el => el.innerHTML = `<h3>Datos económicos</h3><p class="vacio">Aquí saldrán los presupuestos enviados, aceptados y rechazados, las facturas y lo pendiente de cobro (fases 6 y 7).</p>`,
     galeria:        el => el.innerHTML = `<h3>Galería</h3><p class="vacio">Aquí se subirán las fotos de la comunidad: placa, cuarto de antenas, grabador… (fase 3).</p>`
   };
+
+
+  // ---------- VECINOS POR PISO ----------
+  function pisos(e){
+    const L = [];
+    const nEsc = e.escaleras || 1, letras = "ABCDEFGH";
+    const pta = i => e.puertas_letra ? letras[i] : (i+1) + "ª";
+    const plantas = [];
+    if(e.bajos) plantas.push(["B","Bajos"]);
+    if(e.entresuelo) plantas.push(["E","Entlo."]);
+    for(let p = 1; p <= (e.plantas||0); p++) plantas.push([String(p), p + "º"]);
+    if(e.atico) plantas.push(["A","Ático"]);
+    for(let s = 0; s < nEsc; s++){
+      const es = nEsc > 1 ? "Esc. " + letras[s] + " · " : "";
+      plantas.forEach(([k,n]) => { for(let i = 0; i < (e.puertas||1); i++) L.push({clave:`e${s+1}_${k}_${i+1}`, piso: es + n + " " + pta(i), escalera: nEsc > 1 ? letras[s] : ""}); });
+    }
+    return L;
+  }
+
+  async function vecinos(el, id, c, oficina, repintarInfo){
+    const e = c.estructura;
+    if(!e){
+      el.innerHTML = `<h3>Vecinos</h3>` + (oficina
+        ? `<p class="vacio">Indica cómo es el edificio y saldrán todos los pisos para apuntar nombre y teléfono.</p><p style="margin-top:8px"><button class="btn" id="btnEstr">Configurar pisos</button></p>`
+        : `<p class="vacio">La oficina todavía no ha configurado los pisos de esta comunidad.</p>`);
+      if(oficina) el.querySelector("#btnEstr").onclick = () => configurar(el, id, c, oficina, repintarInfo);
+      return;
+    }
+    el.innerHTML = `<h3>Vecinos</h3><p class="vacio">Cargando…</p>`;
+    const {db, S} = D();
+    let guardados = {};
+    try{ const q = await db.collection("dhs_comunidades").doc(id).collection("contactos").get(); q.forEach(d => guardados[d.id] = d.data()); }
+    catch(err){ el.innerHTML = `<h3>Vecinos</h3><p class="vacio">No se han podido leer (${esc(err.code)}).</p>`; return; }
+    const L = pisos(e), pr = c.presidente || {}, hist = c.historialPresidentes || [];
+    const etiquetaPresi = clave => {
+      if(pr.clave === clave) return `<span class="tag presi">Presidente${pr.desde ? " desde "+esc(pr.desde) : ""}</span>`;
+      const h = hist.filter(x => x.clave === clave).map(x => `<span class="tag gris">Presidente ${esc(x.desde||"?")}–${esc(x.hasta||"?")}</span>`);
+      return h.join(" ");
+    };
+    el.innerHTML = `
+      <div class="cab-vecinos"><h3>Vecinos · ${L.length} pisos</h3>
+        ${oficina ? `<button class="btn sec" id="btnEstr">Cambiar distribución</button>` : ""}</div>
+      <p class="vacio" style="margin-bottom:6px">${oficina ? "Pulsa la ★ para marcar al presidente." : "Puedes apuntar y corregir nombres y teléfonos. El presidente lo marca la oficina."}</p>
+      <div class="tabla-vecinos">
+        ${L.map(p => { const g = guardados[p.clave] || {}; const esP = pr.clave === p.clave; return `
+          <div class="veci" data-clave="${p.clave}" data-piso="${esc(p.piso)}">
+            <button type="button" class="estrella ${esP?"on":""}" title="Marcar como presidente" ${oficina?"":"disabled"}>★</button>
+            <span class="v-piso">${esc(p.piso)}</span>
+            <input class="v-nombre" placeholder="Nombre" value="${esc(g.nombre||"")}">
+            <input class="v-tel" type="tel" placeholder="Teléfono" value="${esc(g.telefono||"")}">
+            ${g.telefono ? `<a class="v-llamar" href="tel:${esc(g.telefono.replace(/\s/g,""))}" title="Llamar">📞</a>` : `<span class="v-llamar"></span>`}
+            <span class="v-presi">${etiquetaPresi(p.clave)}</span>
+          </div>`; }).join("")}
+      </div>
+      <p style="margin-top:10px"><button class="btn" id="btnGuardarVec">Guardar vecinos</button> <span id="msgVec" class="vacio"></span></p>`;
+    const msg = t => el.querySelector("#msgVec").textContent = t;
+    if(oficina) el.querySelector("#btnEstr").onclick = () => configurar(el, id, c, oficina, repintarInfo);
+    const firma = () => ({por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp()});
+
+    const cambiados = () => [...el.querySelectorAll(".veci")].map(r => ({
+      clave:r.dataset.clave, piso:r.dataset.piso, nombre:r.querySelector(".v-nombre").value.trim(), telefono:r.querySelector(".v-tel").value.trim()
+    })).filter(v => { const g = guardados[v.clave] || {}; return (g.nombre||"") !== v.nombre || (g.telefono||"") !== v.telefono; });
+
+    const guardarCambios = async () => {
+      const lista = cambiados();
+      if(!lista.length) return 0;
+      const b = db.batch(), ref = db.collection("dhs_comunidades").doc(id).collection("contactos");
+      lista.forEach(v => b.set(ref.doc(v.clave), {piso:v.piso, nombre:v.nombre, telefono:v.telefono, modificado:firma()}, {merge:true}));
+      await b.commit();
+      await db.collection("dhs_registro").add({por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp(), accion:"cambio", coleccion:"dhs_comunidades/contactos", docId:id, n:lista.length});
+      lista.forEach(v => guardados[v.clave] = {...(guardados[v.clave]||{}), ...v});
+      return lista.length;
+    };
+
+    el.querySelector("#btnGuardarVec").onclick = async () => {
+      msg("Guardando…");
+      try{ const n = await guardarCambios(); msg(n ? "Guardado (" + n + (n===1?" piso)":" pisos)") : "No hay cambios."); vecinos(el, id, c, oficina, repintarInfo); }
+      catch(err){ msg("No se ha podido guardar (" + (err.code||err) + ")."); }
+    };
+
+    if(oficina) el.querySelectorAll(".estrella").forEach(b => b.onclick = async () => {
+      const r = b.closest(".veci"), clave = r.dataset.clave;
+      const nombre = r.querySelector(".v-nombre").value.trim(), telefono = r.querySelector(".v-tel").value.trim();
+      if(pr.clave === clave) return;
+      if(!nombre){ msg("Escribe primero el nombre del vecino de " + r.dataset.piso + "."); return; }
+      const anyo = new Date().getFullYear();
+      const historial = (c.historialPresidentes || []).slice();
+      if(pr.nombre) historial.push({nombre:pr.nombre, piso:pr.piso||"", clave:pr.clave||"", desde:pr.desde||null, hasta:anyo});
+      const cambios = {presidente:{nombre, piso:r.dataset.piso, telefono, clave, desde:anyo}, historialPresidentes:historial, modificado:firma()};
+      msg("Guardando…");
+      try{
+        await guardarCambios();
+        await db.collection("dhs_comunidades").doc(id).update(cambios);
+        await db.collection("dhs_registro").add({por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp(), accion:"cambio presidente", coleccion:"dhs_comunidades", docId:id, nuevo:nombre, anterior:pr.nombre||""});
+        Object.assign(c, cambios); CACHE.coms[id] = c;
+        repintarInfo();
+      }catch(err){ msg("No se ha podido guardar (" + (err.code||err) + ")."); }
+    });
+  }
+
+  function configurar(el, id, c, oficina, repintarInfo){
+    const e = c.estructura || {escaleras:1, plantas:4, puertas:2, bajos:true, entresuelo:false, atico:false, puertas_letra:false};
+    const num = (n, l, v, min, max) => `<label class="campo"><span>${l}</span><select name="${n}">${Array.from({length:max-min+1},(_,i)=>i+min).map(x=>`<option ${x===v?"selected":""}>${x}</option>`).join("")}</select></label>`;
+    const chk = (n, l, v) => `<label class="chk"><input type="checkbox" name="${n}" ${v?"checked":""}> ${l}</label>`;
+    el.innerHTML = `
+      <form id="fEstr"><h3>Distribución del edificio</h3>
+        <div class="rejilla-p" style="max-width:640px">
+          ${num("plantas","Plantas (sin contar bajos)",e.plantas,0,20)}
+          ${num("puertas","Vecinos por rellano",e.puertas,1,8)}
+          ${num("escaleras","Escaleras",e.escaleras,1,6)}
+        </div>
+        <div class="chks">${chk("bajos","Hay bajos",e.bajos)}${chk("entresuelo","Hay entresuelo",e.entresuelo)}${chk("atico","Hay ático",e.atico)}${chk("puertas_letra","Puertas con letra (A, B…) en vez de 1ª, 2ª",e.puertas_letra)}</div>
+        <p class="vacio" id="previa" style="margin:8px 0"></p>
+        <p><button class="btn" type="submit">Guardar distribución</button> <button class="btn sec" type="button" id="cancEstr">Cancelar</button> <span id="msgEstr" class="vacio"></span></p>
+        ${c.estructura ? `<p class="vacio">Si cambias la distribución, los vecinos ya apuntados se mantienen en los pisos que sigan existiendo.</p>` : ""}
+      </form>`;
+    const f = el.querySelector("#fEstr");
+    const leer = () => { const d = new FormData(f); return {plantas:+d.get("plantas"), puertas:+d.get("puertas"), escaleras:+d.get("escaleras"), bajos:d.has("bajos"), entresuelo:d.has("entresuelo"), atico:d.has("atico"), puertas_letra:d.has("puertas_letra")}; };
+    const previa = () => { const L = pisos(leer()); el.querySelector("#previa").textContent = L.length + " pisos: " + L.slice(0,6).map(x=>x.piso).join(", ") + (L.length > 6 ? "…" : ""); };
+    f.onchange = previa; previa();
+    el.querySelector("#cancEstr").onclick = () => vecinos(el, id, c, oficina, repintarInfo);
+    f.onsubmit = async ev => {
+      ev.preventDefault();
+      const estructura = leer(), {db, S} = D();
+      const cambios = {estructura, modificado:{por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp()}};
+      if(c.vecinos == null) cambios.vecinos = pisos(estructura).length;
+      el.querySelector("#msgEstr").textContent = "Guardando…";
+      try{
+        await db.collection("dhs_comunidades").doc(id).update(cambios);
+        await db.collection("dhs_registro").add({por:cambios.modificado.por, en:cambios.modificado.en, accion:"cambio", coleccion:"dhs_comunidades", docId:id, campos:Object.keys(cambios)});
+        Object.assign(c, cambios); CACHE.coms[id] = c;
+        window.DHS_COM.ficha(document.getElementById("contenido"), id);
+      }catch(err){ el.querySelector("#msgEstr").textContent = "No se ha podido guardar (" + (err.code||err) + ")."; }
+    };
+  }
 
   // ---------- EDICIÓN ----------
   function editar(el, id, c, oficina){
@@ -169,7 +307,7 @@
         vecinos:num(f.vecinos), acceso:f.acceso.trim(),
         videoportero:{marca:f.vpMarca.trim(), modelo:f.vpModelo.trim(), año:num(f.vpAno), monitores:f.vpMon.trim()},
         tv:{antena:f.tvAntena.trim(), multibanda:b3(f.tvMulti), parabolica:b3(f.tvPara)},
-        presidente:{nombre:f.prNombre.trim(), piso:f.prPiso.trim(), telefono:f.prTel.trim()},
+        presidente:Object.assign({}, c.presidente||{}, {nombre:f.prNombre.trim(), piso:f.prPiso.trim(), telefono:f.prTel.trim()}),
         notas:f.notas, modificado:firma
       } : { notas:f.notas, modificado:firma };
       document.getElementById("msgEdit").textContent = "Guardando…";

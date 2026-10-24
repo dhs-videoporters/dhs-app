@@ -118,3 +118,22 @@ main{padding:16px;max-width:1300px;margin:0 auto}
 .rejilla-p{flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px}
 .rejilla-p input{width:100%;padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit}
 @media (max-width:760px){ .bloque[style*="span 2"]{grid-column:auto!important} .persona-edit{flex-direction:column} }
+
+/* Vecinos por piso */
+.cab-vecinos{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.tabla-vecinos{border-top:1px solid var(--linea)}
+.veci{display:grid;grid-template-columns:34px 110px 1fr 150px 28px auto;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #f0f2f6}
+.veci input{width:100%;padding:6px 8px;border:1px solid #cfd7e3;border-radius:6px;font:inherit}
+.v-piso{font-weight:700;font-size:13px}
+.v-llamar{text-decoration:none;text-align:center}
+.estrella{border:0;background:none;font-size:20px;color:#cfd7e3;line-height:1}
+.estrella.on{color:#f5b301}
+.estrella:not(:disabled):hover{color:#f5b301}
+.estrella:disabled{cursor:default}
+.tag.presi{background:#fff4d6;color:#8a6200}
+.chks{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+.chk{display:flex;align-items:center;gap:6px;font-size:13px}
+@media (max-width:760px){
+  .veci{grid-template-columns:30px 1fr 28px;grid-template-areas:"e p l" "n n n" "t t t" "x x x"}
+  .veci .estrella{grid-area:e}.veci .v-piso{grid-area:p}.veci .v-llamar{grid-area:l}.veci .v-nombre{grid-area:n}.veci .v-tel{grid-area:t}.veci .v-presi{grid-area:x}
+}
