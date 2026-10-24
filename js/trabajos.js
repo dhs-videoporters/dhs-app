@@ -32,9 +32,10 @@
   const avisaTxt = t => t.avisa ? [t.avisa.nombre, t.avisa.piso].filter(Boolean).join(" · ") : "";
   const especTxt = t => ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " + ESPEC[t.especialidad][1] : "";
 
-  let PERSONAL = null;
+  let PERSONAL = null, PERSONAL_EN = 0;
   async function personal(){
-    if(!PERSONAL){ const q = await D().db.collection("dhs_personal").get(); PERSONAL = {}; q.forEach(d => PERSONAL[d.id] = d.data()); }
+    // Se vuelve a leer como mucho cada minuto (si se da de alta a alguien, sale enseguida)
+    if(!PERSONAL || Date.now() - PERSONAL_EN > 60000){ const q = await D().db.collection("dhs_personal").get(); PERSONAL = {}; q.forEach(d => PERSONAL[d.id] = d.data()); PERSONAL_EN = Date.now(); }
     return PERSONAL;
   }
 
@@ -240,7 +241,8 @@
     f.onsubmit = async ev => {
       ev.preventDefault();
       const fd = new FormData(f), v = k => (fd.get(k) || "").toString().trim();
-      const asignados = fd.getAll("asignados");
+      let asignados = fd.getAll("asignados");
+      if(!asignados.length && pre && (pre.personal||[]).length) asignados = pre.personal.slice();   // desde la columna del técnico en el calendario
       const sinFecha = el.querySelector("#sinFecha").checked;
       let cliente;
       if(origen() === "comunidad"){
