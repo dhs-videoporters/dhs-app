@@ -316,6 +316,41 @@
   const ICO_EST = {nuevo:"🆕", presupuesto:"📝", esperando:"⏳", agendado:"📅", amedias:"🔧", hecho:"✅", facturado:"🧾", cobrado:"💶", cancelado:"✖️"};
   const horaReg = ts => ts && ts.toDate ? ts.toDate().toLocaleString("es-ES", {day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit"}) : "ahora";
 
+  // ---------- Aviso de edición simultánea (18b) ----------
+  // Al empezar a cambiar algo se marca `editando` durante 10 minutos; si otro abre la misma intervención, ve el aviso.
+  const MIN_EDICION = 10;
+  function avisoEdicion(t){
+    const e = t.editando, yo = D().S.usuario.email.toLowerCase();
+    if(!e || !e.hasta || e.hasta < Date.now() || e.por === yo) return "";
+    return `<div class="aviso-edicion">✏️ <b>${esc(e.nombre || e.por)}</b> está cambiando esta intervención ahora mismo (desde las ${new Date(e.hasta - MIN_EDICION*60000).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"})}). Espera a que termine o llámale para no pisaros los cambios.</div>`;
+  }
+  function marcarEdicion(ref){
+    let hecho = false;
+    return () => {
+      if(hecho) return; hecho = true;
+      const {S} = D(), yo = S.usuario.email.toLowerCase();
+      ref.update({editando:{por:yo, nombre:S.nombre, hasta:Date.now() + MIN_EDICION*60000}, modificado:{por:yo, en:firebase.firestore.FieldValue.serverTimestamp()}}).catch(() => {});
+    };
+  }
+
+  // ---------- WhatsApp (22): texto con lo justo para pasar la intervención a un técnico o subcontrata ----------
+  async function textoWhatsApp(t, id, conEnlace){
+    const {S} = D(); let c = null;
+    if(t.comunidadId && S.puede("comunidades")){ try{ c = (await window.DHS_COM.datos()).coms[t.comunidadId] || null; }catch(e){} }
+    const cita = (t.citas||[])[0], pr = PRIOR[t.urgencia] || PRIOR.normal;
+    const l = [];
+    l.push(`*${pr[0]} ${especTxt(t) || "Intervención"}* · ${t.numero}`);
+    l.push(`📍 ${[t.direccion || t.nombre, t.poblacion].filter(Boolean).join(", ")}`);
+    if(cita) l.push(`📅 ${fmtFecha(cita.fecha)} a las ${cita.hora} (${durTxt(cita.duracion)})`);
+    l.push(""); l.push(t.descripcion || "");
+    if(t.avisa && (t.avisa.nombre || t.avisa.telefono)) l.push("", `📞 Avisa: ${[t.avisa.nombre, t.avisa.telefono].filter(Boolean).join(" · ")}`);
+    else if(!t.comunidadId && t.telefono) l.push("", `📞 ${t.nombre} · ${t.telefono}`);
+    if(c && c.acceso) l.push(`🔑 ${c.acceso}`);
+    l.push("", "🗺️ " + mapa(t));
+    if(conEnlace) l.push("", "Ficha en la app: " + location.origin + location.pathname + "#trabajo/" + id);
+    return l.join("\n");
+  }
+
   async function ficha(el, id){
     const {db, S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
@@ -340,6 +375,7 @@
 
     el.innerHTML = `
       <a href="#intervenciones" class="volver">‹ Intervenciones</a>
+      ${avisoEdicion(t)}
       <div class="panel cab-ficha">
         <div class="ico-ficha">${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] : "🛠️"}</div>
         <div class="cab-txt"><h1>${cliente}</h1>
@@ -386,7 +422,14 @@
         ${t.falta ? `<p class="ft-nota">🔧 Falta: ${esc(t.falta)}</p>` : ""}
         ${(t.material||[]).length ? dato("Material", (t.material).map(x => esc(x.cant + " × " + x.desc)).join("<br>")) : ""}
         ${t.tiempoReal ? dato("Tiempo", esc(durTxt(t.tiempoReal))) : ""}</div>` : ""}
-      <p style="margin-top:12px">${conFicha ? `<a class="btn sec" href="#comunidad/${encodeURIComponent(t.comunidadId)}">Ver ficha de ${esc(t.nombre)}</a> ` : ""}<a class="btn sec" href="#trabajo/${id}">📋 Ficha de trabajo (lo que ve el técnico)</a></p>
+      <p style="margin-top:12px">${conFicha ? `<a class="btn sec" href="#comunidad/${encodeURIComponent(t.comunidadId)}">Ver ficha de ${esc(t.nombre)}</a> ` : ""}<a class="btn sec" href="#trabajo/${id}">📋 Ficha de trabajo (lo que ve el técnico)</a>
+        ${S.puede("trabajos","editar") ? ` <button class="btn sec" id="btnWA">📲 Pasar por WhatsApp</button>` : ""}</p>
+      <div id="cajaWA" class="oculto bloque" style="margin-top:10px">
+        <label class="chk"><input type="checkbox" id="waEnlace" checked> Añadir enlace a la ficha (solo si la persona tiene acceso a la app)</label>
+        <textarea id="waTexto" rows="10" style="width:100%;margin-top:8px;padding:8px;border:1px solid #cfd7e3;border-radius:6px;font:inherit"></textarea>
+        <p style="margin-top:6px"><a class="btn" id="waAbrir" target="_blank" rel="noopener">Abrir WhatsApp</a> <button class="btn sec" id="waCopiar">Copiar texto</button> <span id="waMsg" class="vacio"></span></p>
+        <p class="vacio">Puedes retocar el texto antes de enviarlo. WhatsApp te dejará elegir a quién.</p>
+      </div>
       </div>
 
       <div class="panel" style="margin-top:14px" id="bFotosInt"></div>
@@ -402,6 +445,18 @@
 
     window.DHS_FOTOS.bloqueTrabajo(el.querySelector("#bFotosInt"), id, t, puedeTocar);
     const firma = () => ({por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
+    const empiezo = marcarEdicion(ref);
+    const bWA = el.querySelector("#btnWA");
+    if(bWA){
+      const caja = el.querySelector("#cajaWA"), tx = el.querySelector("#waTexto"), abrir = el.querySelector("#waAbrir");
+      const actualizar = () => abrir.href = "https://wa.me/?text=" + encodeURIComponent(tx.value);
+      const generar = async () => { tx.value = await textoWhatsApp(t, id, el.querySelector("#waEnlace").checked); actualizar(); };
+      bWA.onclick = async () => { caja.classList.toggle("oculto"); if(!caja.classList.contains("oculto")) await generar(); };
+      el.querySelector("#waEnlace").onchange = generar;
+      tx.oninput = actualizar;
+      el.querySelector("#waCopiar").onclick = async () => { try{ await navigator.clipboard.writeText(tx.value); el.querySelector("#waMsg").textContent = "Copiado."; }catch(e){ tx.select(); el.querySelector("#waMsg").textContent = "Selecciona y copia."; } };
+      abrir.onclick = () => registro("enviada por WhatsApp");
+    }
     const nota = datos => ref.collection("notas").add({...datos, por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
     const registro = accion => db.collection("dhs_registro").add({por:yo, en:firebase.firestore.FieldValue.serverTimestamp(), accion, coleccion:"dhs_trabajos", docId:id, nombre:t.numero + " · " + t.nombre});
 
@@ -409,7 +464,7 @@
     let elegido = null;
     const caja = el.querySelector("#cajaEstado");
     el.querySelectorAll(".est-btn").forEach(b => b.onclick = () => {
-      elegido = b.dataset.k;
+      elegido = b.dataset.k; empiezo();
       el.querySelectorAll(".est-btn").forEach(x => x.classList.toggle("marcado", x === b));
       caja.classList.remove("oculto");
       el.querySelector("#cajaHecho").classList.toggle("oculto", elegido !== "hecho");
@@ -422,7 +477,7 @@
         const texto = el.querySelector("#notaEst").value.trim();
         if(elegido === "amedias" && !texto) return m("Escribe qué falta.");
         if(elegido === "cancelado" && !texto) return m("Escribe el motivo.");
-        const cambio = {estado:elegido, modificado:firma()};
+        const cambio = {estado:elegido, editando:null, modificado:firma()};
         if(elegido === "hecho"){
           const hp = [...el.querySelectorAll('input[name=hechoPor]:checked')].map(x => x.value);
           if(!hp.length) return m("Marca quién lo ha hecho.");
@@ -453,10 +508,10 @@
     // Cita (solo "todo": Dirección y Oficina)
     const fC = el.querySelector("#fCita");
     if(fC){
-      el.querySelector("#btnCita").onclick = () => fC.classList.toggle("oculto");
+      el.querySelector("#btnCita").onclick = () => { fC.classList.toggle("oculto"); empiezo(); };
       const guardarCita = async (citas, asignados, texto) => {
         const m = x => el.querySelector("#msgCita").textContent = x;
-        const cambio = {citas, asignados, modificado:firma()};
+        const cambio = {citas, asignados, editando:null, modificado:firma()};
         if(citas.length && ["nuevo"].includes(t.estado)) cambio.estado = "agendado";
         if(!citas.length && t.estado === "agendado") cambio.estado = "nuevo";
         m("Guardando…");
@@ -539,6 +594,7 @@
     el.innerHTML = `
       <a href="#mitrabajo" class="volver">‹ Mi trabajo</a>
       <div class="panel ficha-trabajo">
+        ${avisoEdicion(t)}
         <div class="ft-cab"><span class="ft-prio">${pr[0]} ${pr[1]}</span><span class="vacio">${esc(t.numero)}</span></div>
         <h1>${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.direccion || t.nombre)}</h1>
         <p class="vacio">${esc([t.nombre !== t.direccion ? t.nombre : "", t.poblacion].filter(Boolean).join(" · "))}</p>
@@ -589,6 +645,8 @@
 
     window.DHS_FOTOS.bloqueTrabajo(el.querySelector("#bFotos"), id, t, puede);
     const f = el.querySelector("#fFin"); if(!f) return;
+    const empiezo = marcarEdicion(ref);
+    f.addEventListener("input", empiezo); f.addEventListener("change", empiezo);
     el.querySelector("#masMat").onclick = () => el.querySelector("#lineasMat").insertAdjacentHTML("beforeend", lineaMat());
     const m = x => el.querySelector("#msgFin").textContent = x;
     let modoMedias = false;
@@ -600,7 +658,7 @@
       if(!hp.length) return m("Marca quién lo ha hecho.");
       if(estado === "amedias" && !falta) return m("Escribe qué falta.");
       const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
-      const cambio = {estado, resumenHecho:resumen, material, tiempoReal:Number(fd.get("tiempo")), hechoPor:hp, falta: estado === "amedias" ? falta : "", fechaHecho:hoyISO(), modificado:{por:yo, en}};
+      const cambio = {estado, resumenHecho:resumen, material, tiempoReal:Number(fd.get("tiempo")), hechoPor:hp, falta: estado === "amedias" ? falta : "", fechaHecho:hoyISO(), editando:null, modificado:{por:yo, en}};
       m("Guardando…");
       try{
         await ref.update(cambio);

@@ -233,3 +233,4 @@ a.fila-eq:hover{background:#f6f8fb}
 .btn-foto{display:inline-block;cursor:pointer;margin:4px 0}
 .sube-finca{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .sube-finca select{padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit}
+.aviso-edicion{background:#fff1dc;border:1px solid #f0c27a;color:#7a4a00;border-radius:8px;padding:10px 12px;margin:0 0 12px}
