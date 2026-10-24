@@ -73,6 +73,7 @@
   const prefijar = p => { PREFIJO = p; };
   async function nueva(el, comId){
     const pre = PREFIJO; PREFIJO = null;
+    const deCal = !!(pre && pre.fecha), dePres = !!(pre && pre.presupuestoId);   // desde el calendario / desde un presupuesto aceptado
     const {S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
     let C = {coms:{}, admins:{}}, P;
@@ -84,10 +85,11 @@
     const activos = Object.entries(P).filter(([k,p]) => p.activo !== false).sort((a,b) => a[1].nombre.localeCompare(b[1].nombre));
     const hoy = new Date().toISOString().slice(0,10);
     el.innerHTML = `
-      <a href="${pre ? "#calendario" : (com ? "#comunidad/" + encodeURIComponent(comId) : "#intervenciones")}" class="volver">‹ ${pre ? "Calendario" : (com ? esc(com.nombre) : "Intervenciones")}</a>
+      <a href="${deCal ? "#calendario" : (com ? "#comunidad/" + encodeURIComponent(comId) : "#intervenciones")}" class="volver">‹ ${deCal ? "Calendario" : (com ? esc(com.nombre) : "Intervenciones")}</a>
       <form id="fT" class="panel form">
         <h2>Nueva intervención</h2>
-        ${pre ? `<p class="aviso-cal">📅 <b>${esc(fmtFecha(pre.fecha))} · ${esc(pre.hora)} (${esc(durTxt(pre.duracion))})</b> · ${(pre.personal||[]).map(k => P[k] ? esc(P[k].nombre) : "").join(", ")} — elige la comunidad y qué hay que hacer.</p>` : ""}
+        ${dePres ? `<p class="aviso-cal">✅ Desde el presupuesto aceptado <b>${esc(pre.presupuestoNumero)}</b>: elige día, hora y quién va (o déjala sin fecha).</p>` : ""}
+        ${deCal ? `<p class="aviso-cal">📅 <b>${esc(fmtFecha(pre.fecha))} · ${esc(pre.hora)} (${esc(durTxt(pre.duracion))})</b> · ${(pre.personal||[]).map(k => P[k] ? esc(P[k].nombre) : "").join(", ")} — elige la comunidad y qué hay que hacer.</p>` : ""}
         <div class="rejilla" style="margin-top:10px">
           <div class="bloque"><h3>Cliente</h3>
             <div class="seg2">
@@ -163,7 +165,9 @@
     };
     f.querySelectorAll('input[name=origen]').forEach(r => r.onchange = pintarOrigen); pintarOrigen();
     el.querySelector("#sinFecha").onchange = e => el.querySelector("#bloqueCita").classList.toggle("oculto", e.target.checked);
-    if(pre){
+    if(pre && pre.descripcion) f.descripcion.value = pre.descripcion;
+    if(dePres){ const ti = f.querySelector('select[name=tipo]'); if(ti) ti.value = "instalacion"; }
+    if(deCal){
       f.fecha.value = pre.fecha; f.hora.value = pre.hora;
       if(![...f.duracion.options].some(o => Number(o.value) === pre.duracion)) f.duracion.insertAdjacentHTML("beforeend", `<option value="${pre.duracion}">${durTxt(pre.duracion)}</option>`);
       f.duracion.value = String(pre.duracion);
@@ -288,6 +292,7 @@
           descripcion:v("descripcion"), avisa:avisa,
           duracionEstimada:dur, citas, asignados, hechoPor:[], material:[], tiempoReal:null, fotos:[],
           creadoPorTecnico: !S.puede("trabajos","todo"),
+          ...(dePres ? {presupuestoId:pre.presupuestoId, presupuestoNumero:pre.presupuestoNumero} : {}),
           creado:firma, modificado:firma
         };
         const ref = await db.collection("dhs_trabajos").add(datos);
@@ -302,7 +307,11 @@
           }catch(e){ console.warn("Vecino no guardado", e.code); }
         }
         // Al guardar: si es de una comunidad, se abre su ficha en la pestaña Intervenciones.
-        if(pre) location.hash = "calendario";        // apuntada desde el calendario: se vuelve a él con la cita puesta
+        if(dePres){   // el presupuesto queda unido a su intervención
+          try{ await db.collection("dhs_presupuestos").doc(pre.presupuestoId).update({intervencionId:ref.id, numeroIntervencion:numero, modificado:firma}); }catch(e){ console.warn("Presupuesto no unido", e.code); }
+        }
+        if(deCal) location.hash = "calendario";        // apuntada desde el calendario: se vuelve a él con la cita puesta
+        else if(dePres){ window.DHS_COM.abrirPestana("presupuestos"); location.hash = "comunidad/" + encodeURIComponent(cliente.comunidadId); }
         else if(cliente.comunidadId && S.puede("comunidades")){ window.DHS_COM.abrirPestana("intervenciones"); location.hash = "comunidad/" + encodeURIComponent(cliente.comunidadId); }
         else location.hash = "intervencion/" + ref.id;
       }catch(e){ msg("No se ha podido guardar (" + (e.code||e) + ")."); }

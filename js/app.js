@@ -32,6 +32,7 @@
     {id:"comunidades",    nombre:"Comunidades",     ico:"🏢", ap:"comunidades"},
     {id:"intervenciones", nombre:"Intervenciones",  ico:"🛠️", ap:"trabajos", minimo:"propios"},
     {id:"administradores",nombre:"Administradores", ico:"👥", ap:"administradores"},
+    {id:"economia",       nombre:"Economía",        ico:"💶", ap:"cobros"},
     {id:"ajustes",        nombre:"Ajustes",         ico:"⚙️", ap:"ajustes"}
   ];
 
@@ -141,6 +142,7 @@
     calendario: el => window.DHS_CAL.vista(el),
     intervenciones: el => window.DHS_TRAB.lista(el),
     mitrabajo: el => window.DHS_TRAB.miTrabajo(el),
+    economia: el => window.DHS_ECO.vista(el),
     comunidades: el => window.DHS_COM.lista(el),
     administradores: el => window.DHS_ADM.lista(el),
     ajustes: el => window.DHS_AJ.vista(el)

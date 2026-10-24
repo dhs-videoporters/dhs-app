@@ -115,7 +115,20 @@
       <div class="cab-lista"><h3>Presupuestos</h3>${puedePrecios() ? `<button class="btn" id="btnNuevoP">+ Nuevo presupuesto</button>` : ""}</div>
       ${!com.csId && !com.nif ? `<p class="aviso-cal">Esta comunidad no tiene NIF ni código de Contasimple: complétalo en «Editar ficha» antes de presupuestar.</p>` : ""}
       <h4 style="margin-top:10px">Pendientes (${pend.length})</h4><div class="lista">${pend.map(fila).join("") || `<p class="vacio">Ninguno.</p>`}</div>
-      <h4 style="margin-top:14px">Resueltos (${resto.length})</h4><div class="lista">${resto.map(fila).join("") || `<p class="vacio">Ninguno.</p>`}</div>`;
+      <h4 style="margin-top:14px">Resueltos (${resto.length})</h4><div class="lista">${resto.map(fila).join("") || `<p class="vacio">Ninguno.</p>`}</div>
+      ${window.DHS_ECO && D().S.puede("cobros","ver") ? `<h3 style="margin-top:18px">🧾 Facturas</h3><div id="factCom"><p class="vacio">Cargando de Contasimple y cobros…</p></div>` : ""}`;
+    const fc = el.querySelector("#factCom");
+    if(fc){
+      if(!com.csId) fc.innerHTML = `<p class="vacio">Esta comunidad no está unida a un cliente de Contasimple (falta el código). Se une sola al hacerle su primer presupuesto.</p>`;
+      else window.DHS_ECO.deComunidad(com.csId).then(F => {
+        const tot = r2(F.reduce((n,f) => n + (f.total||0), 0)), pen = r2(F.filter(f => f.estado !== "Payed").reduce((n,f) => n + (f.pendiente||0), 0));
+        fc.innerHTML = F.length ? `<p class="vacio">${F.length} factura${F.length===1?"":"s"} en los últimos 13 meses · facturado <b>${eur(tot)}</b>${pen ? ` · pendiente de cobrar <b>${eur(pen)}</b>` : " · todo cobrado"}</p>
+          <table class="tabla-fi"><thead><tr><th>Factura</th><th>Fecha</th><th>Total</th><th>Estado</th></tr></thead><tbody>
+          ${F.map(f => `<tr><td>${esc(f.numero)}</td><td>${f.fecha ? new Date(f.fecha + "T12:00").toLocaleDateString("es-ES") : ""}</td><td>${eur(f.total)}</td>
+            <td>${f.estado === "Payed" ? `<span class="tag est-p-aceptado">✅ Cobrada${(f.pagos||[]).length && f.pagos[f.pagos.length-1].fecha ? " " + new Date(f.pagos[f.pagos.length-1].fecha + "T12:00").toLocaleDateString("es-ES") : ""}</span>` : `<span class="tag est-p-pendiente">⏳ Pendiente ${eur(f.pendiente)}</span>`}${f.devuelto ? ` <span class="tag aviso">devuelto</span>` : ""}</td></tr>`).join("")}
+          </tbody></table>` : `<p class="vacio">Sin facturas en los últimos 13 meses.</p>`;
+      }).catch(e => fc.innerHTML = `<p class="vacio">No se han podido leer las facturas: ${esc(e.message||e)}</p>`);
+    }
     const bN = el.querySelector("#btnNuevoP"); if(bN) bN.onclick = () => editor(el, comId, com);
     el.querySelectorAll(".fila-pres").forEach(a => a.onclick = ev => { ev.preventDefault(); detalle(el, comId, com, L.find(p => p.id === a.dataset.id)); });
   }
@@ -212,6 +225,7 @@
         <button class="btn sec" id="bPdf">📄 Ver PDF</button>
         ${edita ? `<button class="btn sec" id="bEnviar">📧 Enviar por correo</button>` : ""}
         ${edita && ["pendiente","enviado"].includes(p.estado) ? `<button class="btn btn-ok" id="bAcepta">✅ Aceptado</button><button class="btn sec" id="bRechaza">✖️ Rechazado</button>` : ""}
+        ${edita && ["aceptado","parcial"].includes(p.estado) ? (p.intervencionId ? `<a class="btn sec" href="#intervencion/${esc(p.intervencionId)}">🛠️ Ver intervención ${esc(p.numeroIntervencion||"")}</a>` : `<button class="btn" id="bProgramar">📅 Programar intervención</button>`) : ""}
         ${dir && ["aceptado","parcial"].includes(p.estado) ? `<button class="btn" id="bFacturar">🧾 Facturar…</button>` : ""}
       </div>
       <div id="cajaAcc" class="bloque oculto" style="margin-top:10px"></div>
@@ -247,6 +261,12 @@
         const v = caja.querySelector('input[name=fp]:checked').value;
         cambiaEstado("aceptado", "Aceptado", {formaPago: v === "otro" ? (caja.querySelector("#fpOtro").value.trim() || "Otro") : v, aceptadoEl:new Date().toISOString().slice(0,10)});
       };
+    };
+    const bPg = el.querySelector("#bProgramar");
+    if(bPg) bPg.onclick = () => {
+      window.DHS_TRAB.prefijar({presupuestoId:p.id, presupuestoNumero:p.numero, comunidadId:comId,
+        descripcion:"Presupuesto aceptado " + p.numero + ": " + (p.lineas||[]).map(l => (l.cantidad !== 1 ? l.cantidad + " × " : "") + l.concepto).join(", ")});
+      location.hash = "nueva-intervencion/" + encodeURIComponent(comId);
     };
     const bR = el.querySelector("#bRechaza"); if(bR) bR.onclick = () => { if(confirm("¿Marcar como rechazado?")) cambiaEstado("rechazado", "Rechazado"); };
     const bE = el.querySelector("#bEnviar");
