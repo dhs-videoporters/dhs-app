@@ -139,6 +139,10 @@
       </div>`;
     const tb = el.querySelector("#tbL");
     const calc = l => r2(l.cantidad * l.precio * (1 - (l.descuento||0)/100));
+    const totales = () => {
+      const base = r2(lineas.reduce((n,l) => n + calc(l), 0)), iva = r2(base * IVA / 100);
+      el.querySelector("#totP").innerHTML = `Base <b>${eur(base)}</b> · IVA 21 % <b>${eur(iva)}</b> · Total <b class="grande">${eur(base + iva)}</b>`;
+    };
     const pintar = () => {
       tb.innerHTML = lineas.map((l, i) => `<tr data-i="${i}">
         <td>${dir || !l.productoId ? `<input class="lC" value="${esc(l.concepto)}">` : esc(l.concepto)}</td>
@@ -146,11 +150,11 @@
         <td>${dir ? `<input class="lP" type="number" step="0.01" value="${l.precio}">` : eur(l.precio)}</td>
         <td>${dir ? `<input class="lD" type="number" min="0" max="100" value="${l.descuento||0}">` : (l.descuento ? l.descuento + " %" : "")}</td>
         <td>${eur(calc(l))}</td><td><button class="btn sec mini-btn lX">✕</button></td></tr>`).join("") || `<tr><td colspan="6" class="vacio">Añade líneas del catálogo${dir ? " o una línea libre" : ""}.</td></tr>`;
-      const base = r2(lineas.reduce((n,l) => n + calc(l), 0)), iva = r2(base * IVA / 100);
-      el.querySelector("#totP").innerHTML = `Base <b>${eur(base)}</b> · IVA 21 % <b>${eur(iva)}</b> · Total <b class="grande">${eur(base + iva)}</b>`;
+      totales();
       tb.querySelectorAll("tr[data-i]").forEach(tr => {
         const l = lineas[tr.dataset.i];
-        const on = (cls, f) => { const x = tr.querySelector(cls); if(x) x.onchange = () => { f(x.value); pintar(); }; };
+        // Al escribir solo se recalcula el importe y los totales (sin redibujar: no se pierde lo que se teclea)
+        const on = (cls, f) => { const x = tr.querySelector(cls); if(x) x.oninput = () => { f(x.value); tr.children[4].textContent = eur(calc(l)); totales(); }; };
         on(".lC", v => l.concepto = v); on(".lQ", v => l.cantidad = Number(v)||0); on(".lP", v => l.precio = Number(v)||0); on(".lD", v => l.descuento = Math.min(100, Math.max(0, Number(v)||0)));
         tr.querySelector(".lX").onclick = () => { lineas.splice(tr.dataset.i, 1); pintar(); };
       });
