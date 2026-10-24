@@ -106,6 +106,27 @@ const PUENTE = {
     return { enviado: true };
   },
 
+  // Facturas emitidas desde una fecha (SOLO LECTURA), para la pantalla de Economía
+  facturas: function (d, u) {
+    exige_(u, 'cobros', 'ver');
+    const tk = csToken_();
+    const desde = d.desde || Utilities.formatDate(new Date(Date.now() - 400 * 86400000), 'Europe/Madrid', "yyyy-MM-dd'T'00:00:00");
+    let todas = [], i = 0;
+    for (;;) {
+      const r = cs_(tk, 'get', '/accounting/invoices/issued/from?date=' + encodeURIComponent(desde) + '&startIndex=' + i + '&numRows=100');
+      const L = (r && r.data) || [];
+      todas = todas.concat(L); if (L.length < 100 || todas.length > 5000) break; i += 100;
+    }
+    return todas.map(f => ({
+      id: f.id, numero: f.number, fecha: (f.invoiceDate || '').slice(0, 10), estado: f.status,
+      total: f.totalAmount, pagado: f.totalPayedAmount || 0, pendiente: f.totalAmountPerPay,
+      clienteId: (f.target && f.target.id) || f.originalTargetEntityID || null,
+      cliente: (f.target && (f.target.organization || f.target.name)) || f.entityString || '',
+      presupuestoId: f.relatedEstimateId || null, rectificativa: !!f.isRectificationInvoice,
+      pagos: (f.payments || []).map(p => ({ fecha: (p.date || p.paymentDate || '').slice(0, 10), importe: p.amount || p.totalAmount || 0 }))
+    }));
+  },
+
   // Facturar (todo o un plazo) a partir de un presupuesto aceptado. SOLO Dirección.
   facturar: function (d, u) {
     if (!u.direccion) throw new Error('Solo Dirección puede facturar.');
