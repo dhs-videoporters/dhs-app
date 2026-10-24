@@ -15,12 +15,13 @@
     const P = {}; q.forEach(d => P[d.id] = d.data()); return P;
   }
 
-  function vista(el){
-    const tabs = [["equipo","Equipo"],["perfiles","Perfiles y permisos"],["registro","Registro de cambios"]];
+  function vista(el, sub){
+    if(sub) pest = sub;
+    const tabs = [["equipo","Equipo"],["perfiles","Perfiles y permisos"],["copias","Copias"],["registro","Registro de cambios"]];
     el.innerHTML = `
       <div class="pestanas">${tabs.map(([k,n]) => `<button class="pest ${k===pest?"on":""}" data-k="${k}">${n}</button>`).join("")}</div>
       <div id="cuerpoAj" class="panel cuerpo-ficha"></div>`;
-    const pintar = () => ({equipo, perfiles, registro})[pest](el.querySelector("#cuerpoAj"));
+    const pintar = () => ({equipo, perfiles, registro, copias: x => window.DHS_COPIAS.vista(x)})[pest](el.querySelector("#cuerpoAj"));
     el.querySelectorAll(".pest").forEach(b => b.onclick = () => { pest = b.dataset.k; el.querySelectorAll(".pest").forEach(x => x.classList.toggle("on", x===b)); pintar(); });
     pintar();
   }
@@ -198,7 +199,7 @@
       const q = await db.collection("dhs_registro").orderBy("en", "desc").limit(150).get();
       const fmt = t => t && t.toDate ? t.toDate().toLocaleString("es-ES", {day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit"}) : "";
       const quien = e => e === "herrerazarzoso@gmail.com" ? "Ángel" : (e === "dhsvideoporters@gmail.com" ? "Joel" : e);
-      const QUE = {"dhs_comunidades":"Comunidad", "dhs_comunidades/contactos":"Vecinos", "dhs_admins":"Administración", "dhs_personal":"Equipo", "dhs_perfiles":"Perfiles"};
+      const QUE = {"todas":"Todo","dhs_comunidades":"Comunidad", "dhs_comunidades/contactos":"Vecinos", "dhs_admins":"Administración", "dhs_personal":"Equipo", "dhs_perfiles":"Perfiles"};
       el.innerHTML = `<h3>Registro de cambios · últimos ${q.size}</h3>
         <p class="vacio" style="margin-bottom:8px">Quién ha cambiado qué y cuándo. No se puede modificar ni borrar.</p>
         <div class="lista">${q.docs.map(d => { const r = d.data(); return `

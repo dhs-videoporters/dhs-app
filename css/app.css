@@ -158,3 +158,10 @@ a.fila-eq:hover{background:#f6f8fb}
 .nivel{padding:6px 8px;border:1px solid #cfd7e3;border-radius:6px;font:inherit;font-size:13px;min-width:120px}
 .nivel.n-no{background:#fdecec;color:#9b1c1c}.nivel.n-propios{background:#fff4d6;color:#8a6200}.nivel.n-ver{background:#eef4ff;color:#1e4fa3}.nivel.n-editar{background:#e7f6ec;color:#166534}.nivel.n-todo{background:#dcfce7;color:#14532d;font-weight:700}
 .mini{border:0;background:none;color:var(--ko);font-size:13px;margin-left:4px}
+
+/* Copias */
+.aviso-copia{background:#fff4d6;border:1px solid #f3d58a;color:#7a5200;border-radius:8px;padding:10px 12px;margin:8px 0 12px}
+.aviso-flotante{position:fixed;right:16px;bottom:16px;z-index:50;background:#fff4d6;border:1px solid #f3d58a;color:#7a5200;border-radius:10px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-width:340px;font-size:13px}
+.aviso-flotante a{color:var(--azul);font-weight:700;margin-left:6px}
+.aviso-flotante button{border:0;background:none;margin-left:8px;color:#7a5200}
+@media (max-width:760px){ .aviso-flotante{left:12px;right:12px;bottom:76px} }

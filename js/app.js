@@ -94,6 +94,7 @@
     if(S.puede("comunidades")) window.DHS_COM.buscadorGlobal(document.querySelector("#buscaGlobal"), document.querySelector("#resGlobal"));
     mostrar("app");
     irA(location.hash.slice(1) || "calendario");
+    window.DHS_COPIAS.avisoAlEntrar();
   });
 
   function mostrar(cual){
@@ -120,6 +121,7 @@
     document.title = sec.nombre + " · DHS App" + (C.entorno === "pruebas" ? " (pruebas)" : "");
     if(id0 === "comunidad" && arg && S.puede("comunidades")) return window.DHS_COM.ficha($("#contenido"), arg);
     if(id0 === "administrador" && arg && S.puede("administradores")) return window.DHS_ADM.ficha($("#contenido"), arg);
+    if(id0 === "ajustes" && arg) return window.DHS_AJ.vista($("#contenido"), arg);
     (VISTAS[id] || (()=>{}))($("#contenido"));
   }
 
