@@ -682,14 +682,20 @@
           <span>${esc(t.poblacion||"")}${t.estado === "amedias" ? " · 🔧 a medias" : ""}${t.estado === "encurso" ? " · ▶️ en curso" : ""}</span>
           <span class="tt-desc">${esc((t.descripcion||"").slice(0,90))}</span></div></a>`).join("") || `<p class="vacio">Nada.</p>`);
     const ord = (a,b) => (fecha(a)+hora(a)).localeCompare(fecha(b)+hora(b)) || porPrioridad(a,b);
+    const bloquear = window.DHS_FICHA ? await window.DHS_FICHA.debeFichar() : false;
     el.innerHTML = `<div class="panel mi-trabajo">
       <h2>Mi trabajo</h2>
       <p class="vacio">${new Date().toLocaleDateString("es-ES", {weekday:"long", day:"numeric", month:"long"})}</p>
+      <div id="fiCard"></div>
+      ${bloquear ? `<p class="fi-obliga">Antes de empezar, <b>ficha la entrada</b>. Hasta entonces no se pueden abrir las intervenciones.</p>` : ""}
+      <div class="${bloquear ? "bloqueado" : ""}">
       ${grupo("Hoy", abiertas.filter(t => fecha(t) && fecha(t) <= hoy).sort(ord))}
       ${grupo("Próximos días", abiertas.filter(t => fecha(t) > hoy).sort(ord))}
       ${grupo("Sin fecha", abiertas.filter(t => !fecha(t)).sort(porPrioridad))}
       ${grupo("Hecho hoy", docs.filter(t => CERRADOS.includes(t.estado) && t.fechaHecho === hoy))}
+      </div>
     </div>`;
+    if(window.DHS_FICHA) window.DHS_FICHA.tarjeta(el.querySelector("#fiCard"), () => miTrabajo(el));
   }
 
   async function fichaTrabajo(el, id){
@@ -708,10 +714,12 @@
     const transcurrido = t.estado === "encurso" && t.empezado ? Math.round((Date.now() - t.empezado) / 900000) * 15 : 0;
     const tiempoDefecto = t.tiempoReal || (transcurrido >= 15 ? Math.min(transcurrido, 600) : 0) || (cita && cita.duracion) || 60;
     const puede = S.puede("trabajos","editar") || (t.asignados||[]).includes(S.personalId);
+    const bloquear = window.DHS_FICHA ? await window.DHS_FICHA.debeFichar() : false;
     el.innerHTML = `
       <a href="#mitrabajo" class="volver">‹ Mi trabajo</a>
       <div class="panel ficha-trabajo">
         ${avisoEdicion(t)}
+        ${bloquear ? `<p class="fi-obliga">Antes de empezar, <b>ficha la entrada</b>.</p><div id="fiCard"></div>` : ""}
         <div class="ft-cab"><span class="ft-prio">${pr[0]} ${pr[1]}</span><span class="vacio">${esc(t.numero)}</span></div>
         <h1>${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.direccion || t.nombre)}</h1>
         <p class="vacio">${esc([t.nombre !== t.direccion ? t.nombre : "", t.poblacion].filter(Boolean).join(" · "))}</p>
@@ -765,6 +773,10 @@
       </div>`;
 
     window.DHS_FOTOS.bloqueTrabajo(el.querySelector("#bFotos"), id, t, puede);
+    if(bloquear){
+      window.DHS_FICHA.tarjeta(el.querySelector("#fiCard"), () => fichaTrabajo(el, id));
+      el.querySelectorAll("#btnEmpiezo, #btnHecho, #btnMedias").forEach(b => { b.disabled = true; b.title = "Ficha primero la entrada"; });
+    }
     const bE = el.querySelector("#btnEmpiezo");
     if(bE) bE.onclick = async () => {
       bE.disabled = true;

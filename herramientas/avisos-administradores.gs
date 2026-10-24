@@ -7,6 +7,9 @@
  *
  * IMPORTANTE: en la versión de PRUEBAS los correos NO van a las administraciones: van a AVISAR_A (DHS) con "[PRUEBAS]".
  *
+ * También: AVISO DE FICHAJES cada mañana laborable a las 9:45 → correo a AVISAR_A (DHS) solo si alguien de plantilla
+ * con citas hoy no ha fichado, o ayer dejó la jornada sin fichar la salida.
+ *
  * Instalación: pega este archivo en el mismo proyecto, ejecuta "instalarAvisos" y acepta los permisos.
  */
 
@@ -17,7 +20,42 @@ const FIRMA = 'DHS Videoporters';
 function instalarAvisos() {
   ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'avisosAdministradores') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('avisosAdministradores').timeBased().everyMinutes(AVISOS_CADA_MIN).create();
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'avisoFichajes') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('avisoFichajes').timeBased().everyDays(1).atHour(9).nearMinute(45).inTimezone('Europe/Madrid').create();
   avisosAdministradores();
+}
+
+/** Cada mañana laborable (~9:45): ¿quién con citas hoy no ha fichado? ¿quién no fichó la salida ayer? */
+function avisoFichajes() {
+  const ahora = new Date(), dia = Number(Utilities.formatDate(ahora, 'Europe/Madrid', 'u'));   // 1 lunes … 7 domingo
+  if (dia > 5) return;
+  const f = d => Utilities.formatDate(d, 'Europe/Madrid', 'yyyy-MM-dd');
+  const hoy = f(ahora);
+  let ayerD = new Date(ahora.getTime() - 86400000); while ([6, 7].indexOf(Number(Utilities.formatDate(ayerD, 'Europe/Madrid', 'u'))) >= 0) ayerD = new Date(ayerD.getTime() - 86400000);
+  const ayer = f(ayerD);
+  const personal = {}; listarDocs_('dhs_personal').forEach(d => { const p = aJSON_(d.fields || {}); if (p.activo !== false && p.tipo === 'plantilla') personal[d.name.split('/').pop()] = p; });
+  const fich = consulta_('dhs_fichajes', 'fecha', 'IN', [hoy, ayer]);
+  const trabajos = listarDocs_('dhs_trabajos').map(d => aJSON_(d.fields || {}));
+  const lineas = [];
+  Object.keys(personal).forEach(k => {
+    const p = personal[k];
+    const citasHoy = trabajos.filter(t => t.estado !== 'cancelado').reduce((n, t) => n + (t.citas || []).filter(c => c.fecha === hoy && ((c.personal && c.personal.length ? c.personal : t.asignados) || []).indexOf(k) >= 0).length, 0);
+    const deHoy = fich.filter(x => x.personalId === k && x.fecha === hoy);
+    if (citasHoy > 0 && !deHoy.length) lineas.push('• ' + p.nombre + ': tiene ' + citasHoy + ' cita(s) hoy y todavía no ha fichado la entrada.');
+    const deAyer = fich.filter(x => x.personalId === k && x.fecha === ayer).map(x => x.tipo === 'correccion' ? x.que : x.tipo);
+    if (deAyer.length && deAyer.indexOf('salida') < 0) lineas.push('• ' + p.nombre + ': ayer (' + ayer.split('-').reverse().join('/') + ') no fichó la salida.');
+  });
+  if (!lineas.length) return;
+  MailApp.sendEmail({ to: AVISAR_A, name: 'DHS App', subject: (ENTORNO !== 'oficial' ? '[PRUEBAS] ' : '') + '⏱️ Fichajes: falta fichar',
+    body: 'Buenos días:\n\n' + lineas.join('\n') + '\n\nPuedes verlo en la app: Ajustes › Fichajes.\n\nDHS App' });
+}
+
+// Consulta simple a una colección (campo op valor) y devuelve los documentos como objetos
+function consulta_(col, campo, op, valor) {
+  const v = Array.isArray(valor) ? { arrayValue: { values: valor.map(x => ({ stringValue: x })) } } : { stringValue: valor };
+  const r = pedir_(BASE + ':runQuery', { method: 'post', payload: JSON.stringify({ structuredQuery: {
+    from: [{ collectionId: col }], where: { fieldFilter: { field: { fieldPath: campo }, op: op, value: v } } } }) });
+  return (r || []).filter(x => x.document).map(x => aJSON_(x.document.fields || {}));
 }
 
 function avisosAdministradores() {

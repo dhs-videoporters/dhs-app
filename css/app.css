@@ -306,3 +306,23 @@ a.fila-eq:hover{background:#f6f8fb}
 @media (max-width:760px){ .cal-ayuda-movil{display:block} }
 .aviso-admin{margin:8px 0;padding:8px 10px;background:#eef4ff;border-radius:8px}
 .aviso-estado{margin-top:12px;background:#f3f7fd;border-radius:8px;padding:8px 10px;font-size:14px}
+/* ---------- Fichajes ---------- */
+.fichaje{border:2px solid #cfd7e3;border-radius:10px;padding:10px 12px;margin:10px 0;background:#fff}
+.fichaje.est-fuera{border-color:#e0362c;background:#fff6f5}.fichaje.est-dentro{border-color:#1d9a5b;background:#f1fbf4}.fichaje.est-pausa{border-color:#f0a000;background:#fffaf0}
+.fi-cab{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.fi-cab span{color:var(--gris);font-size:13px}
+.fi-botones{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.fi-botones .btn{flex:1;padding:13px;font-size:16px;min-width:120px}
+.fi-entrada{background:#1d9a5b}.fi-salida{background:#c0392b}.fi-pausa,.fi-vuelta{background:#e08a00}
+.fi-lista{font-size:13px;color:var(--gris);margin-top:6px}
+.fi-obliga{background:#fdecea;color:#8a1f15;border-radius:8px;padding:8px 10px;margin:8px 0}
+.bloqueado{opacity:.4;pointer-events:none}
+.fi-barra{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.fi-barra input{padding:6px 8px;border:1px solid #cfd7e3;border-radius:6px;font:inherit}
+.fi-persona{margin-top:12px}
+.tabla-fi{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+.tabla-fi th{text-align:left;color:var(--gris);font-weight:600;border-bottom:1px solid var(--linea);padding:4px}
+.tabla-fi td{padding:4px;border-bottom:1px solid #f0f2f5}
+.tabla-fi tr.fi-mal td{background:#fdecea}.tabla-fi tr.fi-abierto td{background:#fff7e6}
+.mini-btn{padding:2px 8px;font-size:12px}
+.aviso-fi{background:#fdecea;color:#8a1f15}

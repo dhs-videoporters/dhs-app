@@ -17,11 +17,11 @@
 
   function vista(el, sub){
     if(sub) pest = sub;
-    const tabs = [["equipo","Equipo"],["perfiles","Perfiles y permisos"],["copias","Copias"],["registro","Registro de cambios"]];
+    const tabs = [["equipo","Equipo"],["perfiles","Perfiles y permisos"],["fichajes","Fichajes"],["copias","Copias"],["registro","Registro de cambios"]];
     el.innerHTML = `
       <div class="pestanas">${tabs.map(([k,n]) => `<button class="pest ${k===pest?"on":""}" data-k="${k}">${n}</button>`).join("")}</div>
       <div id="cuerpoAj" class="panel cuerpo-ficha"></div>`;
-    const pintar = () => ({equipo, perfiles, registro, copias: x => window.DHS_COPIAS.vista(x)})[pest](el.querySelector("#cuerpoAj"));
+    const pintar = () => ({equipo, perfiles, registro, copias: x => window.DHS_COPIAS.vista(x), fichajes: x => window.DHS_FICHA.vista(x)})[pest](el.querySelector("#cuerpoAj"));
     el.querySelectorAll(".pest").forEach(b => b.onclick = () => { pest = b.dataset.k; el.querySelectorAll(".pest").forEach(x => x.classList.toggle("on", x===b)); pintar(); });
     pintar();
   }

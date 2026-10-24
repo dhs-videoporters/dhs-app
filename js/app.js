@@ -96,6 +96,7 @@
     mostrar("app");
     irA(location.hash.slice(1) || (S.personalId && !S.puede("trabajos","todo") ? "mitrabajo" : "calendario"));
     window.DHS_COPIAS.avisoAlEntrar();
+    if(window.DHS_FICHA) window.DHS_FICHA.avisoAlEntrar();
   });
 
   function mostrar(cual){

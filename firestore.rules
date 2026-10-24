@@ -1,5 +1,5 @@
 rules_version = '2';
-// Reglas de seguridad — App DHS (intervenciones). Versión 6 (24/10/2026): v5 (el técnico rellena al terminar qué se ha hecho, qué falta y la fecha) + fotos de la finca + estado "En curso" (el técnico pulsa Empiezo) + aviso a la administración al terminar.
+// Reglas de seguridad — App DHS (intervenciones). Versión 6 (24/10/2026): v5 (el técnico rellena al terminar qué se ha hecho, qué falta y la fecha) + fotos de la finca + estado "En curso" (el técnico pulsa Empiezo) + aviso a la administración al terminar + fichajes.
 // Proyecto de PRUEBAS (dhs-pruebas).
 // Norma: sin cuenta de Google autorizada no se lee ni se escribe nada.
 // Cada usuario tiene un perfil (dhs_perfiles) con un nivel por apartado: no / propios / ver / editar / todo.
@@ -135,6 +135,20 @@ service cloud.firestore {
                       && request.resource.data.por == correo();
         allow update, delete: if puede('trabajos', 3);
       }
+    }
+
+    // ---------- Fichajes (registro de jornada): no se modifican ni se borran ----------
+    // Cada uno ficha solo lo suyo y con la hora del servidor. Dirección añade correcciones con motivo.
+    match /dhs_fichajes/{id} {
+      allow read: if (conSesion() && resource.data.email == correo()) || puede('ajustes', 1);
+      allow create: if (esUsuario() && request.resource.data.email == correo()
+                        && request.resource.data.personalId == miPersonal() && miPersonal() != ''
+                        && request.resource.data.tipo in ['entrada', 'pausa', 'vuelta', 'salida']
+                        && request.resource.data.en == request.time)
+                    || (esDireccion() && request.resource.data.tipo == 'correccion'
+                        && request.resource.data.por == correo() && request.resource.data.motivo is string
+                        && request.resource.data.motivo.size() > 3);
+      allow update, delete: if false;
     }
 
     // ---------- Numeración (2026-0001, P2026-0001) ----------
