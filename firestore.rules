@@ -1,5 +1,5 @@
 rules_version = '2';
-// Reglas de seguridad — App DHS (intervenciones). Versión 6 (24/10/2026): v5 (el técnico rellena al terminar qué se ha hecho, qué falta y la fecha) + fotos de la finca + estado "En curso" (el técnico pulsa Empiezo) + aviso a la administración al terminar + fichajes.
+// Reglas de seguridad — App DHS (intervenciones). Versión 7 (24/10/2026): v6 + catálogo, presupuestos y números de cuenta. v6: v5 (el técnico rellena al terminar qué se ha hecho, qué falta y la fecha) + fotos de la finca + estado "En curso" (el técnico pulsa Empiezo) + aviso a la administración al terminar + fichajes.
 // Proyecto de PRUEBAS (dhs-pruebas).
 // Norma: sin cuenta de Google autorizada no se lee ni se escribe nada.
 // Cada usuario tiene un perfil (dhs_perfiles) con un nivel por apartado: no / propios / ver / editar / todo.
@@ -149,6 +149,23 @@ service cloud.firestore {
                         && request.resource.data.por == correo() && request.resource.data.motivo is string
                         && request.resource.data.motivo.size() > 3);
       allow update, delete: if false;
+    }
+
+    // ---------- Catálogo (de Contasimple) ----------
+    match /dhs_catalogo/{id} {
+      allow read: if esUsuario();
+      allow write: if puede('precios', 2);
+    }
+    // ---------- Presupuestos (copia de lo creado en Contasimple) ----------
+    match /dhs_presupuestos/{id} {
+      allow read: if puede('precios', 2) || puede('cobros', 1);
+      allow create, update: if puede('precios', 2) && firmaBien();
+      allow delete: if esDireccion();
+    }
+    // ---------- Números de cuenta: solo Cobros (Dirección) ----------
+    match /dhs_bancos/{id} {
+      allow read: if puede('cobros', 1);
+      allow write: if puede('cobros', 2) && firmaBien();
     }
 
     // ---------- Numeración (2026-0001, P2026-0001) ----------

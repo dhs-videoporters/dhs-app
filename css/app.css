@@ -328,3 +328,14 @@ a.fila-eq:hover{background:#f6f8fb}
 .aviso-fi{background:#fdecea;color:#8a1f15}
 .pin{text-decoration:none;font-size:12px}.pin.sin{opacity:.6}
 .fi-nota{font-size:11px;color:var(--gris);margin-top:6px}
+/* ---------- Presupuestos / catálogo / cuentas ---------- */
+.tabla-cat td,.tabla-lineas td{vertical-align:top}
+.tabla-lineas input{width:100%;padding:5px 6px;border:1px solid #cfd7e3;border-radius:5px;font:inherit}
+.tabla-lineas td:nth-child(2) input,.tabla-lineas td:nth-child(4) input{width:70px}.tabla-lineas td:nth-child(3) input{width:90px}
+.totales{text-align:right;margin-top:8px;font-size:15px}.totales .grande{font-size:18px}
+.botones-pres{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.tag.est-p-pendiente,.tag.est-p-enviado{background:#fff3d6;color:#8a5a00}
+.tag.est-p-aceptado{background:#dcf3e3;color:#1d7a3e}.tag.est-p-rechazado{background:#eef0f3;color:var(--gris)}
+.tag.est-p-facturado,.tag.est-p-parcial{background:#dbe8ff;color:#2f6fd6}
+.fila-pres.est-p-aceptado{border-left:4px solid #1d9a5b}.fila-pres.est-p-pendiente,.fila-pres.est-p-enviado{border-left:4px solid #f0a000}
+.iban{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;letter-spacing:.5px}

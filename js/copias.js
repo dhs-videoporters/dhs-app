@@ -5,10 +5,10 @@
   // Colecciones de la app y sus subcolecciones.
   const COLECCIONES = [
     ["dhs_admins"], ["dhs_comunidades", "contactos"], ["dhs_personal"], ["dhs_usuarios"], ["dhs_perfiles"],
-    ["dhs_ausencias"], ["dhs_trabajos", "notas"], ["dhs_contadores"], ["dhs_registro"]
+    ["dhs_ausencias"], ["dhs_trabajos", "notas"], ["dhs_contadores"], ["dhs_fichajes"], ["dhs_catalogo"], ["dhs_presupuestos"], ["dhs_bancos"], ["dhs_registro"]
   ];
   const NOMBRES = {dhs_admins:"Administraciones", dhs_comunidades:"Comunidades", dhs_personal:"Equipo", dhs_usuarios:"Accesos", dhs_perfiles:"Perfiles",
-                   dhs_ausencias:"Ausencias", dhs_trabajos:"Trabajos", dhs_contadores:"Numeración", dhs_registro:"Registro de cambios"};
+                   dhs_ausencias:"Ausencias", dhs_trabajos:"Intervenciones", dhs_contadores:"Numeración", dhs_fichajes:"Fichajes", dhs_catalogo:"Catálogo", dhs_presupuestos:"Presupuestos", dhs_bancos:"Números de cuenta", dhs_registro:"Registro de cambios"};
   const ACCION = "copia de seguridad";
   const DIAS_AVISO = 8;   // la copia automática es cada viernes: si pasan más de 8 días, algo ha fallado
 
@@ -65,7 +65,7 @@
     const firma = {por:yo, en:firebase.firestore.FieldValue.serverTimestamp()};
     let ops = [];
     for(const [col, sub] of COLECCIONES){
-      if(col === "dhs_registro") continue;            // el registro no se reescribe nunca
+      if(col === "dhs_registro" || col === "dhs_fichajes") continue;   // el registro y los fichajes no se reescriben nunca
       const docs = (copia.datos || {})[col] || {};
       for(const [id, doc] of Object.entries(docs)){
         const datos = deJSON(doc.datos || {});

@@ -67,7 +67,7 @@
 
   // ---------- FICHA ----------
   const PESTANAS = [
-    ["info","Info"],["intervenciones","Intervenciones"],["documentos","Documentos"],["economicos","Datos económicos"],["galeria","Galería"]
+    ["info","Info"],["intervenciones","Intervenciones"],["presupuestos","Presupuestos"],["documentos","Documentos"],["galeria","Galería"]
   ];
   let pestanaActual = "info";
 
@@ -93,7 +93,7 @@
       </div>
       ${D().S.puede("trabajos","editar") ? `<p style="margin:10px 0 0"><a class="btn" href="#nueva-intervencion/${encodeURIComponent(id)}">📅 Agendar intervención</a></p>` : ""}
       ${c.nueva ? `<div class="aviso-edicion" style="margin-top:12px">✱ <b>Comunidad nueva: faltan datos</b>${c.creadaDesde ? " (creada desde la intervención " + esc(c.creadaDesde) + ")" : ""}. Completa NIF, administración, pisos y vecinos, instalación… ${oficina ? `<button class="btn" id="btnCompletar" style="margin-left:6px">Completar datos</button>` : ""}</div>` : ""}
-      <div class="pestanas">${PESTANAS.map(([k,n]) => `<button class="pest ${k===pestanaActual?"on":""}" data-k="${k}">${n}</button>`).join("")}</div>
+      <div class="pestanas">${PESTANAS.filter(([k]) => k !== "presupuestos" || (window.DHS_PRES && window.DHS_PRES.puedeVerPres())).map(([k,n]) => `<button class="pest ${k===pestanaActual?"on":""}" data-k="${k}">${n}</button>`).join("")}</div>
       <div id="cuerpoFicha" class="panel cuerpo-ficha"></div>`;
     const pintar = () => (CONTENIDO[pestanaActual])(document.getElementById("cuerpoFicha"), id, c, oficina);
     el.querySelectorAll(".pest").forEach(b => b.onclick = () => { pestanaActual = b.dataset.k; el.querySelectorAll(".pest").forEach(x=>x.classList.toggle("on",x===b)); pintar(); });
@@ -129,15 +129,17 @@
             ${(c.historialPresidentes||[]).length ? `<p class="vacio" style="margin-top:6px">Anteriores: ${(c.historialPresidentes).slice().reverse().map(h => esc(h.nombre)+" ("+esc(h.piso||"")+", "+esc(h.desde||"?")+"–"+esc(h.hasta||"?")+")").join(" · ")}</p>` : ""}
           </div>
           <div class="bloque"><h3>Notas</h3><p style="white-space:pre-wrap">${esc(c.notas) || '<span class="vacio">Sin notas.</span>'}</p></div>
+          ${window.DHS_BANCO && D().S.puede("cobros","ver") ? `<div class="bloque" id="bloqueBanco"></div>` : ""}
         </div>
         ${oficina || D().S.puede("vecinos","editar") ? `<p style="margin-top:14px"><button class="btn" id="btnEditar">${oficina ? "Editar ficha" : "Editar notas"}</button></p>` : ""}
         ${D().S.puede("vecinos") ? `<div class="bloque" id="bloqueVecinos" style="margin-top:14px"></div>` : ""}`;
       const bE = el.querySelector("#btnEditar"); if(bE) bE.onclick = () => editar(el, id, c, oficina);
+      if(window.DHS_BANCO) window.DHS_BANCO.bloque(el.querySelector("#bloqueBanco"), id);
       if(D().S.puede("vecinos")) vecinos(el.querySelector("#bloqueVecinos"), id, c, oficina, () => CONTENIDO.info(el, id, c, oficina));
     },
     intervenciones: (el, id) => D().S.puede("trabajos","ver") ? window.DHS_TRAB.deComunidad(el, id) : el.innerHTML = `<h3>Intervenciones</h3><p class="vacio">Tu perfil no puede ver las intervenciones.</p>`,
     documentos:     el => el.innerHTML = `<h3>Documentos</h3><p class="vacio">Aquí se guardarán los presupuestos en PDF, actas y contratos (fase 6).</p>`,
-    economicos:     el => el.innerHTML = `<h3>Datos económicos</h3><p class="vacio">Aquí saldrán los presupuestos enviados, aceptados y rechazados, las facturas y lo pendiente de cobro (fases 6 y 7).</p>`,
+    presupuestos:   (el, id, c) => window.DHS_PRES.pestana(el, id, c),
     galeria:        (el, id) => window.DHS_FOTOS.galeriaComunidad(el, id)
   };
 
