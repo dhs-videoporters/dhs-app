@@ -285,3 +285,22 @@ a.fila-eq:hover{background:#f6f8fb}
 .cal-cita.moviendo{opacity:.55;z-index:8}
 .cal-cita.solapa{box-shadow:0 0 0 2px #e0362c}
 .cal-cita.solapa b::before{content:"⚠️ "}
+/* Calendario: vista de un día (móvil) */
+.cal-semana.un-dia{min-width:0;grid-template-columns:44px 1fr}
+.cal-semana.un-dia .cal-cita{font-size:12px}
+.cal-semana.un-dia .cal-quien span{font-size:12px}
+.cal-modo{display:flex;border:1px solid #cfd7e3;border-radius:999px;overflow:hidden}
+.cal-modo button{border:0;background:#fff;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+.cal-modo button.on{background:var(--azul);color:#fff}
+.cal-tira{display:flex;gap:4px;overflow-x:auto;margin-bottom:8px;padding-bottom:2px}
+.cal-tira button{flex:1;min-width:46px;border:1px solid var(--linea);background:#fff;border-radius:8px;padding:4px 2px;display:flex;flex-direction:column;align-items:center;font:inherit;cursor:pointer}
+.cal-tira span{font-size:11px;color:var(--gris)}.cal-tira b{font-size:16px}
+.cal-tira i{font-style:normal;font-size:10px;color:var(--azul);font-weight:700;min-height:12px}
+.cal-tira button.hoy{border-color:var(--azul)}
+.cal-tira button.on{background:var(--azul);color:#fff;border-color:var(--azul)}.cal-tira button.on span,.cal-tira button.on i{color:#dbe6f5}
+@media (max-width:760px){ .cal-barra h2{width:100%} .cal-barra .btn{padding:6px 10px} .cal-semanas{overflow-x:visible} }
+.cal-semana.un-dia{grid-template-columns:44px minmax(0,1fr)}
+.cal-cuerpo,.cal-semanas{min-width:0;max-width:100%}
+@media (max-width:760px){ .cal-ayuda{display:none} .cal-semanas{overflow-x:hidden} .cal-tira{max-width:100%} }
+.cal-ayuda-movil{display:none}
+@media (max-width:760px){ .cal-ayuda-movil{display:block} }

@@ -32,6 +32,10 @@
   const aMin = h => { const [a,b] = (h||"09:00").split(":").map(Number); return a*60 + (b||0); };
 
   let inicio = null;   // lunes de la primera semana que se ve
+  // Modo: "semanas" (15 días) o "dia" (un día, técnicos lado a lado; por defecto en el móvil)
+  let modo = window.innerWidth < 760 ? "dia" : "semanas";
+  let diaSel = null;   // "2026-10-27"
+  const laborable = (d, paso) => { let x = d; do{ x = masDias(x, paso); }while([0,6].includes(x.getDay())); return x; };
   let ocultos = {};    // técnicos ocultados con el filtro
 
   // En vivo: el calendario escucha los cambios de las intervenciones (cuando Pedro marca "Hecho" en el móvil,
@@ -56,6 +60,8 @@
   async function vista(el, refresco){
     const {db, S} = D();
     if(!inicio) inicio = lunesDe(new Date());
+    if(!diaSel){ const h = new Date(); diaSel = iso([0,6].includes(h.getDay()) ? laborable(h, 1) : h); }
+    if(modo === "dia"){ const dS = new Date(diaSel + "T12:00"); if(dS < inicio || dS > masDias(inicio, 13)) inicio = lunesDe(dS); }
     if(!refresco) el.innerHTML = `<div class="panel">Cargando…</div>`;
     const scroll = [...el.querySelectorAll(".cal-semanas")].map(x => x.scrollLeft);
     let P = {}, trabajos = [], ausencias = [];
@@ -90,8 +96,10 @@
     const semana = lunes => {
       const dias = [0,1,2,3,4,5,6].map(i => masDias(lunes, i));
       const finde = [5,6].filter(i => citas.some(x => x.c.fecha === iso(dias[i])));
-      const verDias = dias.filter((d, i) => i < 5 || finde.includes(i));
-      return `<div class="cal-semana" style="--ncol:${verDias.length}">
+      return rejilla(dias.filter((d, i) => i < 5 || finde.includes(i)));
+    };
+    const rejilla = verDias => {
+      return `<div class="cal-semana ${verDias.length === 1 ? "un-dia" : ""}" style="--ncol:${verDias.length}">
         <div class="cal-horas"><div class="cal-cabdia"></div><div class="cal-quien"></div>${Array.from({length:H_FIN-H_INI}, (_,i) => `<div class="cal-hora" style="height:${PX_H}px">${H_INI+i}:00</div>`).join("")}</div>
         ${verDias.map(d => {
           const f = iso(d);
@@ -125,13 +133,14 @@
       <div class="panel cal">
         <div class="cal-barra">
           <h2>Calendario</h2>
-          <div class="cal-nav"><button class="btn sec" data-mov="-7">‹</button><button class="btn sec" data-mov="0">Hoy</button><button class="btn sec" data-mov="7">›</button></div>
-          <span class="vacio">${rango}</span>
+          <div class="cal-nav"><button class="btn sec" data-mov="-1">‹</button><button class="btn sec" data-mov="0">Hoy</button><button class="btn sec" data-mov="1">›</button></div>
+          <div class="cal-modo"><button class="${modo==="dia"?"on":""}" data-modo="dia">Día</button><button class="${modo==="semanas"?"on":""}" data-modo="semanas">2 semanas</button></div>
+          <span class="vacio">${modo === "dia" ? new Date(diaSel + "T12:00").toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long"}) : rango}</span>
           <div class="cal-leyenda">${tecnicos.map(([k,p]) => `<label class="${ocultos[k] ? "off" : ""}"><input type="checkbox" data-k="${esc(k)}" ${ocultos[k] ? "" : "checked"}><i style="background:${esc(p.color||"#9aa5b5")}"></i>${esc(p.nombre)}</label>`).join("")}</div>
           ${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Intervención</a>` : ""}
           ${puedeAus ? `<button class="btn sec" id="btnAus">+ Ausencia</button>` : ""}
         </div>
-        ${puedeCrear && tecnicos.length ? `<p class="vacio" style="margin-top:6px">Para apuntar una intervención: <b>arrastra</b> en la columna del técnico desde la hora de inicio hasta la de fin (en el móvil, <b>toca</b> la hora).${puedeMover ? " Para <b>mover</b> una cita, arrástrala a otro día, hora o técnico; para cambiar lo que dura, <b>estira</b> su borde de abajo." : ""}</p>` : ""}
+        ${puedeCrear && tecnicos.length ? `<p class="vacio cal-ayuda-movil" style="margin-top:6px">Toca la hora en la columna del técnico para apuntar una intervención.</p><p class="vacio cal-ayuda" style="margin-top:6px">Para apuntar una intervención: <b>arrastra</b> en la columna del técnico desde la hora de inicio hasta la de fin (en el móvil, <b>toca</b> la hora).${puedeMover ? " Para <b>mover</b> una cita, arrástrala a otro día, hora o técnico; para cambiar lo que dura, <b>estira</b> su borde de abajo." : ""}</p>` : ""}
         ${!tecnicos.length ? `<p class="vacio" style="margin-top:10px">Da de alta al equipo (Pedro, Alberto…) en Ajustes › Equipo para que salgan sus columnas.</p>` : ""}
         <form id="fAus" class="oculto bloque" style="margin-top:10px">
           <h3>Nueva ausencia</h3>
@@ -144,7 +153,9 @@
           <button class="btn" type="submit">Guardar ausencia</button> <span id="msgAus" class="vacio"></span>
         </form>
         <div class="cal-cuerpo">
-          <div class="cal-semanas">${semana(inicio)}${semana(masDias(inicio, 7))}</div>
+          <div class="cal-semanas">${modo === "dia"
+            ? `<div class="cal-tira">${[0,1,2,3,4,7,8,9,10,11].map(i => masDias(inicio, i)).map(d => { const f = iso(d), n = citas.filter(x => x.c.fecha === f).length; return `<button class="${f === diaSel ? "on" : ""} ${f === hoy ? "hoy" : ""}" data-dia="${f}"><span>${DIAS[(d.getDay()+6)%7]}</span><b>${d.getDate()}</b><i>${n ? n : ""}</i></button>`; }).join("")}</div>` + rejilla([new Date(diaSel + "T12:00")])
+            : semana(inicio) + semana(masDias(inicio, 7))}</div>
           ${S.puede("trabajos","ver") ? `<aside class="cal-sinfecha"><h3>Sin fecha (${sinFecha.length})</h3>
             ${sinFecha.map(t => `<a href="#intervencion/${t.id}" class="sf-item"><b>${PRIOR[t.urgencia]||"🟡"} ${ESPEC[t.especialidad]||""} ${esc(t.direccion || t.nombre)}</b><span>${esc((t.descripcion||"").slice(0,70))}</span></a>`).join("") || `<p class="vacio">Todo agendado.</p>`}
             <p class="vacio" style="margin-top:6px">Ábrela y pulsa "Poner cita".</p></aside>` : ""}
@@ -152,7 +163,14 @@
       </div>`;
 
     el.querySelectorAll(".cal-semanas").forEach((x, i) => { if(scroll[i]) x.scrollLeft = scroll[i]; });
-    el.querySelectorAll("[data-mov]").forEach(b => b.onclick = () => { const n = Number(b.dataset.mov); inicio = n ? masDias(inicio, n) : lunesDe(new Date()); vista(el); });
+    el.querySelectorAll("[data-mov]").forEach(b => b.onclick = () => {
+      const n = Number(b.dataset.mov);
+      if(modo === "dia"){ diaSel = n ? iso(laborable(new Date(diaSel + "T12:00"), n)) : null; if(!n) inicio = null; }
+      else inicio = n ? masDias(inicio, n * 7) : lunesDe(new Date());
+      vista(el);
+    });
+    el.querySelectorAll("[data-modo]").forEach(b => b.onclick = () => { modo = b.dataset.modo; vista(el); });
+    el.querySelectorAll("[data-dia]").forEach(b => b.onclick = () => { diaSel = b.dataset.dia; vista(el); });
     el.querySelectorAll(".cal-leyenda input").forEach(i => i.onchange = () => { ocultos[i.dataset.k] = !i.checked; vista(el); });
     // Pulsar una cita → ficha de la comunidad, pestaña Intervenciones (si es particular, la intervención)
     // ---------- Mover (arrastrar a otro día, hora o técnico) y estirar (duración) — sesión 26 ----------
