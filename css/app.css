@@ -359,3 +359,11 @@ a.fila-eq:hover{background:#f6f8fb}
 h1 .emp-chip{font-size:13px}
 .cal-cita .emp-chip{font-size:10px;padding:0 5px;margin-left:3px}
 .cal-emp{position:absolute;right:0;top:0;bottom:0;width:6px;background:var(--emp);border-radius:0 4px 4px 0}
+
+/* Empresa que encarga (Álamo, Armengol): ficha y lista bien marcadas con su color */
+.cab-emp{border-left:8px solid var(--emp);background:color-mix(in srgb, var(--emp) 12%, #fff)}
+.cab-emp-txt{display:inline-block;margin-bottom:4px;padding:2px 10px;border-radius:6px;background:var(--emp);color:#fff;font-size:13px}
+.cab-emp-txt b{color:#fff}
+.cab-emp h1 .emp-chip{display:none}
+.fila-emp{border-left:5px solid var(--emp);background:color-mix(in srgb, var(--emp) 7%, #fff)}
+.fila-emp:hover{background:color-mix(in srgb, var(--emp) 14%, #fff)}

@@ -50,7 +50,7 @@
       }).sort((a,b) => a[1].nombre.localeCompare(b[1].nombre));
       document.getElementById("cuentaCom").textContent = filas.length + (filas.length === 1 ? " resultado" : " resultados");
       document.getElementById("listaCom").innerHTML = filas.map(([id,c]) => `
-        <a class="fila" href="#comunidad/${encodeURIComponent(id)}">
+        <a class="fila${c.empresaId && window.DHS_EMP && window.DHS_EMP.esEmpresa(c.empresaId) ? " fila-emp" : ""}" style="${c.empresaId && window.DHS_EMP && window.DHS_EMP.esEmpresa(c.empresaId) ? "--emp:" + esc(window.DHS_EMP.color(c.empresaId)) : ""}" href="#comunidad/${encodeURIComponent(id)}">
           <div class="f-nombre">${c.nueva ? '<span class="tag aviso">✱ Faltan datos</span> ' : ""}${esc(c.nombre)}${c.empresaId && window.DHS_EMP ? " " + window.DHS_EMP.chip(c.empresaId) : ""}</div>
           <div class="f-sub">${esc([c.direccion, c.poblacion].filter(Boolean).join(" · ") || TIPOS[c.tipo] || "")}</div>
           <div class="f-tags">
@@ -82,9 +82,10 @@
     const oficina = D().S.puede("comunidades","editar");
     el.innerHTML = `
       <a href="#comunidades" class="volver">‹ Comunidades</a>
-      <div class="panel cab-ficha">
+      <div class="panel cab-ficha${c.empresaId && window.DHS_EMP && window.DHS_EMP.esEmpresa(c.empresaId) ? " cab-emp" : ""}" style="${c.empresaId && window.DHS_EMP && window.DHS_EMP.esEmpresa(c.empresaId) ? "--emp:" + esc(window.DHS_EMP.color(c.empresaId)) : ""}">
         <div class="ico-ficha">${c.tipo==="particular"?"🏠":(c.tipo==="empresa"?"🏭":"🏢")}</div>
         <div class="cab-txt">
+          ${c.empresaId && window.DHS_EMP && window.DHS_EMP.esEmpresa(c.empresaId) ? `<div class="cab-emp-txt">🏗️ Trabajos de parte de <b>${esc(window.DHS_EMP.nombre(c.empresaId))}</b></div>` : ""}
           <h1>${esc(c.nombre)}${c.empresaId && window.DHS_EMP ? " " + window.DHS_EMP.chip(c.empresaId) : ""}</h1>
           <div class="vacio">${c.adminId ? "Administración: <b>"+(D().S.puede("administradores") ? '<a href="#administrador/'+encodeURIComponent(c.adminId)+'">'+esc(nombreAdmin(c.adminId))+'</a>' : esc(nombreAdmin(c.adminId)))+"</b>" : (c.tipo==="comunidad" ? '<span class="tag aviso">Sin administración</span>' : esc(TIPOS[c.tipo]))}${c.nif ? " · NIF "+esc(c.nif) : ""}</div>
         </div>
