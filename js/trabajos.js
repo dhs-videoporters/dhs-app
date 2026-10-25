@@ -467,6 +467,7 @@
     const l = [];
     l.push(`*${pr[0]} ${especTxt(t) || "Intervención"}* · ${t.numero}`);
     l.push(`📍 ${[t.direccion || t.nombre, t.poblacion].filter(Boolean).join(", ")}`);
+    if(t.encargo && window.DHS_EMP){ const e = window.DHS_EMP.lista().find(x => x[0] === t.encargo); if(e) l.push(`🏗️ De parte de ${e[1].nombre}`); }
     if(cita) l.push(`📅 ${fmtFecha(cita.fecha)} a las ${cita.hora} (${durTxt(cita.duracion)})`);
     l.push(""); l.push(t.descripcion || "");
     if(t.avisa && (t.avisa.nombre || t.avisa.telefono || t.avisa.piso)) l.push("", `📞 Avisa: ${[avisaTxt(t), t.avisa.telefono].filter(Boolean).join(" · ")}`);
@@ -555,7 +556,7 @@
       <p style="margin-top:12px">${conFicha ? `<a class="btn sec" href="#comunidad/${encodeURIComponent(t.comunidadId)}">Ver ficha de ${esc(t.nombre)}</a> ` : ""}<a class="btn sec" href="#trabajo/${id}">📋 Ficha de trabajo (lo que ve el técnico)</a>
         ${S.puede("trabajos","editar") ? ` <button class="btn sec" id="btnWA">📲 Pasar por WhatsApp</button>` : ""}</p>
       <div id="cajaWA" class="oculto bloque" style="margin-top:10px">
-        <label class="chk"><input type="checkbox" id="waEnlace" checked> Añadir enlace a la ficha (solo si la persona tiene acceso a la app)</label>
+        <label class="chk"><input type="checkbox" id="waEnlace"> Añadir enlace a la ficha (solo si la persona tiene acceso a la app)</label>
         <textarea id="waTexto" rows="10" style="width:100%;margin-top:8px;padding:8px;border:1px solid #cfd7e3;border-radius:6px;font:inherit"></textarea>
         <p style="margin-top:6px"><a class="btn" id="waAbrir" target="_blank" rel="noopener">Abrir WhatsApp</a> <button class="btn sec" id="waCopiar">Copiar texto</button> <span id="waMsg" class="vacio"></span></p>
         <p class="vacio">Puedes retocar el texto antes de enviarlo. WhatsApp te dejará elegir a quién.</p>
