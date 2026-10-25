@@ -137,6 +137,7 @@
         const ant = id ? C[id] : null;
         if(id && !ant && !x.err) x.err = "Ese ID no está en el catálogo (para uno nuevo, deja el ID vacío)";
         if(!id && !x.err && porNombre[sinAc(nombre).trim()]) x.err = "Ya existe uno con ese nombre: pon su ID para cambiarlo";
+        if(!id && !x.err && L.some(y => !y.id && sinAc(y.nombre).trim() === sinAc(nombre).trim())) x.err = "Repetido en el Excel (fila " + L.find(y => !y.id && sinAc(y.nombre).trim() === sinAc(nombre).trim()).fila + ")";
         if(!x.err){
           if(!ant){ x.nuevo = true; if(x.iva === null) x.iva = IVA; }
           else {
