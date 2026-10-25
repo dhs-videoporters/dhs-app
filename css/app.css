@@ -347,3 +347,4 @@ a.fila-eq:hover{background:#f6f8fb}
 .eco-caja input{font:inherit;font-size:12px;border:1px solid #cfd7e3;border-radius:5px;padding:1px 4px}
 .eco-prev{margin-top:10px;font-size:14px;background:#f6f9fd;border-radius:8px;padding:8px 10px}
 .eco-hist{border:1px solid var(--linea);border-radius:10px;padding:10px 12px;background:#fafbfc}.eco-hist summary{cursor:pointer;color:var(--gris);font-size:14px}
+.tabla-imp td{vertical-align:top;font-size:13px}.tabla-imp .cCom{width:220px;max-width:100%}.tabla-imp tr.imp-igual{opacity:.55}
