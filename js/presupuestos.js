@@ -126,7 +126,9 @@
       const L = [];
       filas.forEach((r, i) => {
         const nombre = String(cf(r, "Producto / servicio", "Producto", "Nombre", "Servicio") || "").trim();
-        const id = String(cf(r, "ID Contasimple", "ID", "csId") || "").trim();
+        let id = String(cf(r, "ID Contasimple", "ID", "csId") || "").trim();
+        // Sin ID pero con el nombre exacto de uno que ya existe: es ese mismo (p. ej. uno creado en una subida anterior que se cortó)
+        let porNom = false; if(!id && nombre && porNombre[sinAc(nombre).trim()]){ id = porNombre[sinAc(nombre).trim()]; porNom = true; }
         if(!nombre && !id) return;
         const x = {fila:i+2, id, nombre, codigo:String(cf(r, "Código", "Codigo") || "").trim(), tipo:String(cf(r, "Tipo") || "").trim(), grupo:grupoDe(cf(r, "Grupo")),
           tecnico:siNo(cf(r, "Técnico", "Tecnico"), false), dtoMax:Math.min(100, Math.max(0, Math.round(num(cf(r, "Dto. máx. %", "Dto max", "Descuento máximo")) || 0))),
@@ -136,7 +138,7 @@
         else if(x.iva !== null && (isNaN(x.iva) || x.iva < 0 || x.iva > 21)) x.err = "IVA no válido";
         const ant = id ? C[id] : null;
         if(id && !ant && !x.err) x.err = "Ese ID no está en el catálogo (para uno nuevo, deja el ID vacío)";
-        if(!id && !x.err && porNombre[sinAc(nombre).trim()]) x.err = "Ya existe uno con ese nombre: pon su ID para cambiarlo";
+        if(porNom && !x.err) x.app.push("(sin ID en el Excel: unido por el nombre)");
         // En Contasimple el código no se puede repetir: cada producto el suyo (para agrupar está la columna Grupo)
         const cod = sinAc(x.codigo).trim();
         if(cod && !x.err){
