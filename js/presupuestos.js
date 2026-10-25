@@ -11,6 +11,15 @@
   const GRUPOS = ["Instalación","Mantenimiento","Cámaras","Otros"];
   const ESTADOS = {pendiente:["⏳","Pendiente"], enviado:["📨","Enviado"], aceptado:["✅","Aceptado"], rechazado:["✖️","Rechazado"], facturado:["🧾","Facturado"], parcial:["🧾","Facturado en parte"]};
   const r2 = x => Math.round(x * 100) / 100;
+  // Quién hizo cada presupuesto: nombre de la persona según su cuenta (se guarda al crearlo; para los antiguos, se busca por el correo)
+  const FIJOS = {"herrerazarzoso@gmail.com":"Ángel", "dhsvideoporters@gmail.com":"Joel"};
+  let QUIEN = null;
+  async function cargarQuien(){
+    if(QUIEN) return QUIEN; QUIEN = {...FIJOS};
+    try{ (await D().db.collection("dhs_personal").get()).forEach(d => { const x = d.data(); if(x.email) QUIEN[String(x.email).toLowerCase()] = (x.nombre || "").split(" ")[0] || x.email; }); }catch(e){}
+    return QUIEN;
+  }
+  const quien = c => !c ? "" : (c.nombre || (QUIEN && QUIEN[String(c.por||"").toLowerCase()]) || FIJOS[String(c.por||"").toLowerCase()] || String(c.por||"").split("@")[0]);
 
   // ---------- Puente con Contasimple ----------
   async function llamar(accion, datos){
@@ -226,7 +235,7 @@
     if(!puedeVerPres()){ el.innerHTML = `<h3>Economía</h3><p class="vacio">Tu perfil no puede ver presupuestos.</p>`; return; }
     el.innerHTML = `<p class="vacio">Cargando…</p>`;
     let L = [];
-    try{ (await db.collection("dhs_presupuestos").where("comunidadId", "==", comId).get()).forEach(d => L.push({id:d.id, ...d.data()})); }
+    try{ await cargarQuien(); (await db.collection("dhs_presupuestos").where("comunidadId", "==", comId).get()).forEach(d => L.push({id:d.id, ...d.data()})); }
     catch(e){ el.innerHTML = `<p class="vacio">No se han podido leer (${esc(e.code||e)}).</p>`; return; }
     L.sort((a,b) => (b.numero||"").localeCompare(a.numero||""));
     const verFact = !!(window.DHS_ECO && S.puede("cobros","ver"));
@@ -242,7 +251,7 @@
     const suma = (X, g) => r2(X.reduce((n,x) => n + (g(x)||0), 0));
     const fch = f => f ? new Date(f + "T12:00").toLocaleDateString("es-ES") : "";
     const fila = p => { const e = ESTADOS[p.estado] || ["",p.estado]; return `<a class="fila fila-pres est-p-${esc(p.estado)}" href="#" data-id="${esc(p.id)}">
-      <div class="f-nombre">${esc(p.numero)} <span class="vacio">· ${esc(fch(p.fecha))}</span></div>
+      <div class="f-nombre">${esc(p.numero)} <span class="vacio">· ${esc(fch(p.fecha))}${p.creado ? " · por " + esc(quien(p.creado)) : ""}</span></div>
       <div class="f-sub">${esc((p.lineas||[]).map(l => l.concepto).join(", ").slice(0,120))}</div>
       <div class="f-tags"><b>${eur(tot(p))}</b> <span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span>${p.estado === "parcial" ? ` <span class="vacio">falta ${eur(tot(p) - facturado(p))}</span>` : ""}</div></a>`; };
     const filaF = f => `<tr><td>${esc(f.numero)}</td><td>${esc(fch(f.fecha))}</td><td>${eur(f.total)}</td>
@@ -349,7 +358,7 @@
         await db.collection("dhs_presupuestos").doc(String(r.id)).set({csId:r.id, numero:r.numero, comunidadId:comId || null, nombre:rapido ? (rNom || "Particular") : com.nombre, clienteId:r.clienteId || null,
           ...(rapido ? {rapido:true, telefono:rTel} : {}),
           fecha:new Date().toISOString().slice(0,10), lineas:L, totales:r.totales, notas:notasCS, estado:"pendiente", facturas:[],
-          creado:{por:yo, en}, modificado:{por:yo, en}});
+          creado:{por:yo, en, nombre:quien({por:yo}) || S.nombre || ""}, modificado:{por:yo, en}});
         if(!rapido && !com.csId && r.clienteId){ try{ await db.collection("dhs_comunidades").doc(comId).update({csId:r.clienteId, modificado:{por:yo, en}}); com.csId = r.clienteId; }catch(e){} }
         await db.collection("dhs_registro").add({por:yo, en, accion:"presupuesto " + r.numero + " creado (" + eur(r.totales.total) + ")", coleccion:"dhs_presupuestos", docId:String(r.id), nombre:com.nombre});
         vuelve();
@@ -366,6 +375,7 @@
     el.innerHTML = `
       <div class="cab-lista"><h3>${esc(p.numero)} · ${esc(com.nombre)}</h3><button class="btn sec" id="btnVolverP">‹ Volver</button></div>
       <p><span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span> <span class="vacio">${p.fecha ? new Date(p.fecha + "T12:00").toLocaleDateString("es-ES") : ""}</span>
+        ${p.creado ? ` · ✍️ hecho por <b>${esc(quien(p.creado))}</b>` : ""}${p.modificado && p.creado && p.modificado.por && p.modificado.por !== p.creado.por ? ` <span class="vacio">(último cambio: ${esc(quien(p.modificado))})</span>` : ""}
         ${p.telefono ? ` · 📞 <a href="tel:${esc(p.telefono)}">${esc(p.telefono)}</a>` : ""}
         ${!comId ? ` <span class="tag aviso">⚡ rápido · sin asociar a ninguna ficha</span>` : (!p.clienteId ? ` <span class="tag gris">sin cliente en Contasimple (falta NIF)</span>` : "")}</p>
       <table class="tabla-fi"><thead><tr><th>Concepto</th><th>Cant.</th><th>Precio</th><th>Dto.</th><th>Importe</th></tr></thead><tbody>
@@ -573,7 +583,7 @@
     if(!puedePrecios()){ el.innerHTML = `<div class="panel">Sin permiso.</div>`; return; }
     el.innerHTML = `<div class="panel"><p class="vacio">Cargando…</p></div>`;
     let L = [], C;
-    try{ (await db.collection("dhs_presupuestos").get()).forEach(d => L.push({id:d.id, ...d.data()})); C = await window.DHS_COM.datos(); }
+    try{ await cargarQuien(); (await db.collection("dhs_presupuestos").get()).forEach(d => L.push({id:d.id, ...d.data()})); C = await window.DHS_COM.datos(); }
     catch(e){ el.innerHTML = `<div class="panel">No se ha podido cargar (${esc(e.code||e.message||e)}).</div>`; return; }
     L.sort((a,b) => (b.numero||"").localeCompare(a.numero||""));
     const nombres = {}; Object.entries(C.coms).forEach(([k,c]) => { let n = (c.nombre || k) + (c.poblacion ? " (" + c.poblacion + ")" : ""); while(nombres[n]) n += " ·"; nombres[n] = k; });
@@ -586,9 +596,9 @@
     };
     const pinta = () => {
       const q = sinAc(filtroG.q);
-      const V = L.filter(F[filtroG.f][1]).filter(p => !q || sinAc([p.numero, p.nombre, p.telefono, p.comunidadId && C.coms[p.comunidadId] ? C.coms[p.comunidadId].nombre : "", (p.lineas||[]).map(l => l.concepto).join(" ")].join(" ")).includes(q));
+      const V = L.filter(F[filtroG.f][1]).filter(p => !q || sinAc([p.numero, p.nombre, p.telefono, quien(p.creado), p.comunidadId && C.coms[p.comunidadId] ? C.coms[p.comunidadId].nombre : "", (p.lineas||[]).map(l => l.concepto).join(" ")].join(" ")).includes(q));
       el.querySelector("#listaG").innerHTML = V.map(p => { const e = ESTADOS[p.estado] || ["",p.estado]; return `<a class="fila fila-pres est-p-${esc(p.estado)}" href="#" data-id="${esc(p.id)}">
-        <div class="f-nombre">${esc(p.numero)} · ${esc(p.comunidadId && C.coms[p.comunidadId] ? C.coms[p.comunidadId].nombre : (p.nombre || "Particular"))} <span class="vacio">· ${p.fecha ? esc(new Date(p.fecha + "T12:00").toLocaleDateString("es-ES")) : ""}</span></div>
+        <div class="f-nombre">${esc(p.numero)} · ${esc(p.comunidadId && C.coms[p.comunidadId] ? C.coms[p.comunidadId].nombre : (p.nombre || "Particular"))} <span class="vacio">· ${p.fecha ? esc(new Date(p.fecha + "T12:00").toLocaleDateString("es-ES")) : ""}${p.creado ? " · por " + esc(quien(p.creado)) : ""}</span></div>
         <div class="f-sub">${!p.comunidadId ? `⚡ ${p.telefono ? "📞 " + esc(p.telefono) + " · " : ""}` : ""}${esc((p.lineas||[]).map(l => l.concepto).join(", ").slice(0,110))}</div>
         <div class="f-tags"><b>${eur(p.totales && p.totales.total)}</b> <span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span></div></a>`; }).join("") || `<p class="vacio">Nada con este filtro.</p>`;
       el.querySelector("#cuentaG").textContent = V.length + " presupuesto" + (V.length === 1 ? "" : "s") + " · " + eur(r2(V.reduce((n,p) => n + ((p.totales && p.totales.total) || 0), 0)));
