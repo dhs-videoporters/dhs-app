@@ -92,12 +92,13 @@ const PUENTE = {
     exige_(u, 'precios', 'editar');
     descuentos_(d.lineas);
     const tk = csToken_();
-    const cliente = cliente_(tk, d.cliente || {});
+    // Presupuesto rápido (particular que solo da el teléfono): sin cliente en Contasimple hasta que se asocie
+    const cliente = d.sinCliente ? null : cliente_(tk, d.cliente || {});
     const lineas = lineas_(d.lineas);
     const f = formatoPresupuesto_(tk);
     const num = numero_(cs_(tk, 'get', '/accounting/estimates/nextEstimateNumber/' + f.id));
     const r = cs_(tk, 'post', '/accounting/estimates', {
-      targetEntityId: cliente, numberingFormatId: f.id, number: num,
+      targetEntityId: cliente || undefined, numberingFormatId: f.id, number: num,
       date: Utilities.formatDate(new Date(), 'Europe/Madrid', "yyyy-MM-dd'T'00:00:00"),
       status: 'Creado', notes: d.notas || '', lines: lineas
     });
@@ -116,6 +117,25 @@ const PUENTE = {
   },
 
   // Cambiar estado en Contasimple: Enviado / Aceptado / Rechazado
+  // Asociar un presupuesto rápido a su cliente cuando ya se tienen los datos (NIF): busca o crea el cliente en Contasimple
+  // y pone sus datos en el presupuesto (mismas líneas, número, fecha, estado y notas). Lo segundo, si falla, no impide lo primero.
+  asignarCliente: function (d, u) {
+    exige_(u, 'precios', 'editar');
+    const tk = csToken_();
+    const c = d.cliente || {};
+    const clienteId = cliente_(tk, c);
+    let pdf = true, aviso = '';
+    try {
+      const f = formatoPresupuesto_(tk);
+      cs_(tk, 'put', '/accounting/estimates/' + Number(d.id), {
+        targetEntity: { organization: c.nombre || '', nif: c.nif || '', address: c.direccion || '', city: c.poblacion || '', country: 'España', phone: c.telefono || '' },
+        numberingFormatId: f.id, number: d.numero, status: d.estadoCS || 'Creado',
+        date: (d.fecha || Utilities.formatDate(new Date(), 'Europe/Madrid', 'yyyy-MM-dd')) + 'T00:00:00', notes: d.notas || '', lines: lineas_(d.lineas)
+      });
+    } catch (e) { pdf = false; aviso = String(e && e.message || e).slice(0, 200); }
+    return { clienteId: clienteId, pdf: pdf, aviso: aviso };
+  },
+
   estadoPresupuesto: function (d, u) {
     exige_(u, 'precios', 'editar');
     const ok = ['Creado', 'Enviado', 'Aceptado', 'Rechazado'];

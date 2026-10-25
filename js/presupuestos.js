@@ -275,14 +275,17 @@
   }
 
   // ---------- Nuevo presupuesto ----------
-  async function editor(el, comId, com){
+  async function editor(el, comId, com, volver){
+    const vuelve = volver || (() => pestana(el, comId, com)), rapido = !comId;
     const {db, S} = D();
     let C; try{ C = await catalogo(); }catch(e){ C = {}; }
     const dir = puedePrecios();
     const lineas = [];
     el.innerHTML = `
-      <div class="cab-lista"><h3>Nuevo presupuesto · ${esc(com.nombre)}</h3><button class="btn sec" id="btnVolverP">‹ Volver</button></div>
-      <p class="vacio">Se guarda en Contasimple con el siguiente número correlativo y esta comunidad como cliente. IVA 21 %.</p>
+      <div class="cab-lista"><h3>${rapido ? "⚡ Presupuesto rápido" : "Nuevo presupuesto · " + esc(com.nombre)}</h3><button class="btn sec" id="btnVolverP">‹ Volver</button></div>
+      <p class="vacio">${rapido ? "Para un particular que aún no ha dado la dirección: solo nombre y teléfono. Se guarda en Contasimple con el siguiente número, sin cliente; cuando lo acepte, lo asocias a su ficha." : "Se guarda en Contasimple con el siguiente número correlativo y esta comunidad como cliente."} IVA 21 %.</p>
+      ${rapido ? `<div class="bloque" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap"><label class="campo" style="flex:1;min-width:200px"><span>Nombre</span><input id="rNombre" value="${esc(com.nombre||"")}" placeholder="Ej.: Marta (vecina de Sabadell)"></label>
+        <label class="campo" style="flex:1;min-width:160px"><span>Teléfono</span><input id="rTel" type="tel" value="${esc(com.telefono||"")}" placeholder="600 000 000"></label></div>` : ""}
       <div class="bloque" style="margin-top:10px">
         <label class="campo"><span>Añadir del catálogo</span><input id="busCat" placeholder="Escribe: LNB, monitor Fermax, hora de trabajo…" autocomplete="off"><div id="resCat" class="res-local oculto"></div></label>
         ${dir ? `<button class="btn sec" id="btnLibre">+ Línea libre (fuera de catálogo)</button>` : ""}
@@ -327,36 +330,44 @@
     };
     bus.onblur = () => setTimeout(() => res.classList.add("oculto"), 150);
     const bL = el.querySelector("#btnLibre"); if(bL) bL.onclick = () => { lineas.push({concepto:"", cantidad:1, precio:0, descuento:0}); pintar(); tb.querySelector("tr:last-child .lC").focus(); };
-    el.querySelector("#btnVolverP").onclick = () => pestana(el, comId, com);
+    el.querySelector("#btnVolverP").onclick = () => vuelve();
     el.querySelector("#btnGuardarP").onclick = async () => {
       const m = x => el.querySelector("#msgP").textContent = x;
       const L = lineas.filter(l => l.concepto && l.cantidad > 0);
       if(!L.length) return m("Añade al menos una línea con concepto y cantidad.");
       if(L.some(l => !l.productoId && !dir)) return m("Solo Dirección puede añadir líneas fuera de catálogo.");
+      const rNom = rapido ? el.querySelector("#rNombre").value.trim() : "", rTel = rapido ? el.querySelector("#rTel").value.trim() : "";
+      if(rapido && !rNom && !rTel) return m("Pon al menos el nombre o el teléfono.");
       if(!await DHS_PREGUNTA("Se va a crear el presupuesto en Contasimple con el siguiente número. ¿Seguir?")) return;
       const b = el.querySelector("#btnGuardarP"); b.disabled = true; m("Guardando en Contasimple…");
       try{
-        const r = await llamar("crearPresupuesto", {cliente:{csId:com.csId||null, nif:com.nif||"", nombre:com.nombre, direccion:com.direccion||"", poblacion:com.poblacion||""},
-          lineas:L, notas:el.querySelector("#notasP").value.trim()});
+        const notas = el.querySelector("#notasP").value.trim();
+        const notasCS = rapido ? [notas, "Presupuesto para " + (rNom || "particular") + (rTel ? " · Tel. " + rTel : "")].filter(Boolean).join("\n") : notas;
+        const r = await llamar("crearPresupuesto", rapido ? {sinCliente:true, lineas:L, notas:notasCS}
+          : {cliente:{csId:com.csId||null, nif:com.nif||"", nombre:com.nombre, direccion:com.direccion||"", poblacion:com.poblacion||""}, lineas:L, notas});
         const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
-        await db.collection("dhs_presupuestos").doc(String(r.id)).set({csId:r.id, numero:r.numero, comunidadId:comId, nombre:com.nombre, clienteId:r.clienteId,
-          fecha:new Date().toISOString().slice(0,10), lineas:L, totales:r.totales, notas:el.querySelector("#notasP").value.trim(), estado:"pendiente", facturas:[],
+        await db.collection("dhs_presupuestos").doc(String(r.id)).set({csId:r.id, numero:r.numero, comunidadId:comId || null, nombre:rapido ? (rNom || "Particular") : com.nombre, clienteId:r.clienteId || null,
+          ...(rapido ? {rapido:true, telefono:rTel} : {}),
+          fecha:new Date().toISOString().slice(0,10), lineas:L, totales:r.totales, notas:notasCS, estado:"pendiente", facturas:[],
           creado:{por:yo, en}, modificado:{por:yo, en}});
-        if(!com.csId && r.clienteId){ try{ await db.collection("dhs_comunidades").doc(comId).update({csId:r.clienteId, modificado:{por:yo, en}}); com.csId = r.clienteId; }catch(e){} }
+        if(!rapido && !com.csId && r.clienteId){ try{ await db.collection("dhs_comunidades").doc(comId).update({csId:r.clienteId, modificado:{por:yo, en}}); com.csId = r.clienteId; }catch(e){} }
         await db.collection("dhs_registro").add({por:yo, en, accion:"presupuesto " + r.numero + " creado (" + eur(r.totales.total) + ")", coleccion:"dhs_presupuestos", docId:String(r.id), nombre:com.nombre});
-        pestana(el, comId, com);
+        vuelve();
       }catch(e){ m("No se ha podido: " + (e.message||e)); b.disabled = false; }
     };
     pintar();
   }
 
   // ---------- Detalle: PDF, enviar, aceptar/rechazar, facturar ----------
-  function detalle(el, comId, com, p){
+  function detalle(el, comId, com, p, volver){
     const {db, S} = D(), dir = S.direccion, edita = puedePrecios();
+    const vuelve = volver || (() => pestana(el, comId, com));
     const e = ESTADOS[p.estado] || ["",p.estado];
     el.innerHTML = `
       <div class="cab-lista"><h3>${esc(p.numero)} · ${esc(com.nombre)}</h3><button class="btn sec" id="btnVolverP">‹ Volver</button></div>
-      <p><span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span> <span class="vacio">${p.fecha ? new Date(p.fecha + "T12:00").toLocaleDateString("es-ES") : ""}</span></p>
+      <p><span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span> <span class="vacio">${p.fecha ? new Date(p.fecha + "T12:00").toLocaleDateString("es-ES") : ""}</span>
+        ${p.telefono ? ` · 📞 <a href="tel:${esc(p.telefono)}">${esc(p.telefono)}</a>` : ""}
+        ${!comId ? ` <span class="tag aviso">⚡ rápido · sin asociar a ninguna ficha</span>` : (!p.clienteId ? ` <span class="tag gris">sin cliente en Contasimple (falta NIF)</span>` : "")}</p>
       <table class="tabla-fi"><thead><tr><th>Concepto</th><th>Cant.</th><th>Precio</th><th>Dto.</th><th>Importe</th></tr></thead><tbody>
         ${(p.lineas||[]).map(l => `<tr><td>${esc(l.concepto)}</td><td>${l.cantidad}</td><td>${eur(l.precio)}</td><td>${l.descuento ? l.descuento + " %" : ""}</td><td>${eur(r2(l.cantidad*l.precio*(1-(l.descuento||0)/100)))}</td></tr>`).join("")}
       </tbody></table>
@@ -366,10 +377,15 @@
       ${p.formaPago ? `<p class="vacio">Forma de pago: ${esc(p.formaPago)}</p>` : ""}
       <div class="botones-pres">
         <button class="btn sec" id="bPdf">📄 Ver PDF</button>
+        ${edita ? `<button class="btn sec" id="bWa">💬 WhatsApp</button>` : ""}
         ${edita ? `<button class="btn sec" id="bEnviar">📧 Enviar por correo</button>` : ""}
+        ${edita && (!comId || !p.clienteId) ? `<button class="btn" id="bAsociar">🔗 ${!comId ? "Asociar a una ficha" : "Unir al cliente de Contasimple"}</button>` : ""}
         ${edita && ["pendiente","enviado"].includes(p.estado) ? `<button class="btn btn-ok" id="bAcepta">✅ Aceptado</button><button class="btn sec" id="bRechaza">✖️ Rechazado</button>` : ""}
-        ${edita && ["aceptado","parcial"].includes(p.estado) ? (p.intervencionId ? `<a class="btn sec" href="#intervencion/${esc(p.intervencionId)}">🛠️ Ver intervención ${esc(p.numeroIntervencion||"")}</a>` : `<button class="btn" id="bProgramar">📅 Programar intervención</button>`) : ""}
-        ${dir && ["aceptado","parcial"].includes(p.estado) ? `<button class="btn" id="bFacturar">🧾 Facturar…</button>` : ""}
+        ${edita && comId && ["aceptado","parcial"].includes(p.estado) ? (p.intervencionId ? `<a class="btn sec" href="#intervencion/${esc(p.intervencionId)}">🛠️ Ver intervención ${esc(p.numeroIntervencion||"")}</a>` : `<button class="btn" id="bProgramar">📅 Programar intervención</button>`) : ""}
+        ${dir && p.clienteId && ["aceptado","parcial"].includes(p.estado) ? `<button class="btn" id="bFacturar">🧾 Facturar…</button>` : ""}
+      </div>
+      ${["aceptado","parcial"].includes(p.estado) && (!comId || !p.clienteId) ? `<p class="aviso-cal" style="margin-top:8px">Para ${!comId ? "programar la intervención y facturar, asócialo a su ficha" : "facturar, completa el NIF en la ficha y pulsa «Unir al cliente de Contasimple»"} (dirección${!comId ? ", teléfono" : ""} y NIF).</p>` : ""}
+      <div>
       </div>
       <div id="cajaAcc" class="bloque oculto" style="margin-top:10px"></div>
       <p id="msgD" class="vacio" style="margin-top:6px"></p>`;
@@ -378,18 +394,98 @@
     const yo = S.usuario.email.toLowerCase(), en = () => firebase.firestore.FieldValue.serverTimestamp();
     const ref = db.collection("dhs_presupuestos").doc(p.id);
     const reg = accion => db.collection("dhs_registro").add({por:yo, en:en(), accion:"presupuesto " + p.numero + ": " + accion, coleccion:"dhs_presupuestos", docId:p.id, nombre:com.nombre});
-    el.querySelector("#btnVolverP").onclick = () => pestana(el, comId, com);
+    el.querySelector("#btnVolverP").onclick = () => vuelve();
     el.querySelector("#bPdf").onclick = async () => {
       m("Pidiendo el PDF a Contasimple…");
       try{
-        const r = await llamar("pdfPresupuesto", {id:p.csId, numero:p.numero});
-        const bin = atob(r.base64), u8 = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-        window.open(URL.createObjectURL(new Blob([u8], {type:"application/pdf"})), "_blank"); m("");
+        window.open(URL.createObjectURL(await pdfBlob()), "_blank"); m("");
       }catch(e){ m("No se ha podido: " + (e.message||e)); }
+    };
+    const pdfBlob = async () => {
+      const r = await llamar("pdfPresupuesto", {id:p.csId, numero:p.numero});
+      const bin = atob(r.base64), u8 = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return new Blob([u8], {type:"application/pdf"});
+    };
+    // WhatsApp: en el móvil se comparte el PDF directamente; en el ordenador se descarga el PDF y se abre WhatsApp con el texto
+    const bW = el.querySelector("#bWa");
+    if(bW) bW.onclick = async () => {
+      const tel0 = (p.telefono || com.telefono || "").replace(/\D/g, ""), tel = tel0.length === 9 ? "34" + tel0 : tel0;
+      const texto = "Hola" + (p.rapido && p.nombre && p.nombre !== "Particular" ? " " + p.nombre.split(" ")[0] : "") + ", te paso el presupuesto " + p.numero + " de DHS Videoporters: " + eur(p.totales.total) + " (IVA incluido). Cualquier duda me dices. Un saludo.";
+      m("Preparando el PDF…");
+      try{
+        const blob = await pdfBlob(), file = new File([blob], "Presupuesto " + p.numero + ".pdf", {type:"application/pdf"});
+        if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], text:texto}); m(""); }
+        else {
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+          window.open("https://wa.me/" + (tel || "") + "?text=" + encodeURIComponent(texto), "_blank");
+          m("PDF descargado: arrástralo al chat de WhatsApp que se ha abierto.");
+        }
+        if(p.estado === "pendiente"){ try{ await llamar("estadoPresupuesto", {id:p.csId, estado:"Enviado"}); await ref.update({estado:"enviado", enviadoA:"WhatsApp " + (tel0 || ""), enviadoEl:new Date().toISOString().slice(0,10), modificado:{por:yo, en:en()}}); p.estado = "enviado"; await reg("enviado por WhatsApp"); }catch(e){} }
+      }catch(e){ if(e && e.name === "AbortError") m(""); else m("No se ha podido: " + (e.message||e)); }
+    };
+    // Asociar a una ficha (comunidad o particular). Si la ficha tiene NIF, se une también al cliente de Contasimple.
+    const bAs = el.querySelector("#bAsociar");
+    if(bAs) bAs.onclick = async () => {
+      const C = await window.DHS_COM.datos();
+      const nombres = {}; Object.entries(C.coms).forEach(([k,c]) => { let n = (c.nombre || k) + (c.poblacion ? " (" + c.poblacion + ")" : ""); while(nombres[n]) n += " ·"; nombres[n] = k; });
+      caja.classList.remove("oculto");
+      caja.innerHTML = `<h4>${comId ? "Unir al cliente de Contasimple" : "Asociar " + esc(p.numero) + " a una ficha"}</h4>
+        ${comId ? `<p class="vacio">La ficha «${esc(com.nombre)}» ${com.nif ? "tiene NIF " + esc(com.nif) : "no tiene NIF todavía: complétalo en su ficha (Editar ficha) y vuelve aquí"}.</p>` : `
+        <label class="chk"><input type="radio" name="asT" value="existe" checked> Una ficha que ya existe (comunidad o cliente)</label>
+        <div id="asExiste" style="margin:4px 0 8px 22px"><input id="asBus" list="dlAs" placeholder="Escribe y elige…" style="width:100%;max-width:420px"><datalist id="dlAs">${Object.keys(nombres).map(n => `<option value="${esc(n)}">`).join("")}</datalist></div>
+        <label class="chk"><input type="radio" name="asT" value="nuevo"> Cliente nuevo (particular)</label>
+        <div id="asNuevo" class="oculto" style="margin:4px 0 8px 22px;display:grid;gap:6px;max-width:460px">
+          <label class="campo"><span>Nombre y apellidos</span><input id="asNom" value="${esc(p.nombre && p.nombre !== "Particular" ? p.nombre : "")}"></label>
+          <label class="campo"><span>Teléfono</span><input id="asTel" type="tel" value="${esc(p.telefono||"")}"></label>
+          <label class="campo"><span>Dirección</span><input id="asDir" placeholder="Calle, número, piso"></label>
+          <label class="campo"><span>Población</span><input id="asPob"></label>
+          <label class="campo"><span>DNI / NIF (para facturar; si aún no lo tienes, déjalo vacío)</span><input id="asNif"></label>
+        </div>`}
+        <p><button class="btn" id="okAs">${comId ? "Unir" : "Asociar"}</button></p>`;
+      if(!comId){
+        const tg = () => { const n = caja.querySelector('input[name=asT]:checked').value === "nuevo"; caja.querySelector("#asNuevo").classList.toggle("oculto", !n); caja.querySelector("#asExiste").classList.toggle("oculto", n); };
+        caja.querySelectorAll('input[name=asT]').forEach(r => r.onchange = tg); tg();
+      }
+      caja.querySelector("#okAs").onclick = async () => {
+        let cid = comId, c = com;
+        const firma = {por:yo, en:en()};
+        try{
+          if(!cid){
+            if(caja.querySelector('input[name=asT]:checked').value === "existe"){
+              cid = nombres[caja.querySelector("#asBus").value]; if(!cid) return m("Elige la ficha de la lista.");
+              c = C.coms[cid];
+            } else {
+              const v = id => caja.querySelector(id).value.trim();
+              const nom = v("#asNom"); if(!nom) return m("Pon el nombre.");
+              const nif = v("#asNif").toUpperCase().replace(/[\s-]/g,"");
+              const slug = nom.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50) || "particular";
+              cid = "c_" + slug; let n = 2; while(C.coms[cid]) cid = "c_" + slug + "-" + (n++);
+              c = {nombre:nom, telefono:v("#asTel"), direccion:v("#asDir"), poblacion:v("#asPob"), nif, tipo:"particular", origen:"particular", adminId:null, activo:true,
+                   nueva: !(nif && v("#asDir")), creadaDesde:"presupuesto " + p.numero, modificado:firma};
+              await db.collection("dhs_comunidades").doc(cid).set(c); window.DHS_COM.anadir(cid, c);
+              await db.collection("dhs_registro").add({por:yo, en:en(), accion:"alta (cliente particular desde presupuesto " + p.numero + ")", coleccion:"dhs_comunidades", docId:cid, nombre:nom});
+            }
+            await ref.update({comunidadId:cid, nombre:c.nombre, asociadoEl:new Date().toISOString().slice(0,10), modificado:firma});
+            Object.assign(p, {comunidadId:cid, nombre:c.nombre}); await reg("asociado a " + c.nombre);
+          }
+          let aviso = "";
+          if(c.csId || c.nif){
+            m("Uniendo al cliente en Contasimple…");
+            const map = {pendiente:"Creado", enviado:"Enviado", aceptado:"Aceptado", parcial:"Parcial", rechazado:"Rechazado", facturado:"Facturado"};
+            const r = await llamar("asignarCliente", {id:p.csId, numero:p.numero, fecha:p.fecha, notas:p.notas || "", lineas:p.lineas, estadoCS:map[p.estado] || "Creado",
+              cliente:{csId:c.csId || null, nif:c.nif || "", nombre:c.nombre, direccion:c.direccion || "", poblacion:c.poblacion || "", telefono:c.telefono || ""}});
+            await ref.update({clienteId:r.clienteId, modificado:firma}); p.clienteId = r.clienteId;
+            if(!c.csId){ try{ await db.collection("dhs_comunidades").doc(cid).update({csId:r.clienteId, modificado:firma}); c.csId = r.clienteId; }catch(e){} }
+            if(!r.pdf) aviso = " (el cliente queda unido, pero Contasimple no ha dejado poner sus datos en el PDF del presupuesto)";
+          } else aviso = " Falta el NIF para unirlo en Contasimple: complétalo en la ficha cuando lo tengas.";
+          detalle(el, cid, c, p, volver);
+          el.querySelector("#msgD").textContent = "Hecho." + aviso;
+        }catch(e){ m("No se ha podido: " + (e.message||e)); }
+      };
     };
     const cambiaEstado = async (nuevo, csEstado, extra = {}) => {
       m("Guardando…");
-      try{ await llamar("estadoPresupuesto", {id:p.csId, estado:csEstado}); await ref.update({estado:nuevo, ...extra, modificado:{por:yo, en:en()}}); await reg(ESTADOS[nuevo][1].toLowerCase()); Object.assign(p, {estado:nuevo}, extra); detalle(el, comId, com, p); }
+      try{ await llamar("estadoPresupuesto", {id:p.csId, estado:csEstado}); await ref.update({estado:nuevo, ...extra, modificado:{por:yo, en:en()}}); await reg(ESTADOS[nuevo][1].toLowerCase()); Object.assign(p, {estado:nuevo}, extra); detalle(el, comId, com, p, volver); }
       catch(e){ m("No se ha podido: " + (e.message||e)); }
     };
     const bA = el.querySelector("#bAcepta");
@@ -432,7 +528,7 @@
           const nuevo = p.estado === "pendiente" ? "enviado" : p.estado;
           await ref.update({estado:nuevo, enviadoA:para2, enviadoEl:new Date().toISOString().slice(0,10), modificado:{por:yo, en:en()}});
           if(nuevo === "enviado") try{ await llamar("estadoPresupuesto", {id:p.csId, estado:"Enviado"}); }catch(e){}
-          await reg("enviado a " + para2); Object.assign(p, {estado:nuevo}); detalle(el, comId, com, p);
+          await reg("enviado a " + para2); Object.assign(p, {estado:nuevo}); detalle(el, comId, com, p, volver);
         }catch(e){ m("No se ha podido: " + (e.message||e)); }
       };
     };
@@ -464,11 +560,60 @@
           const nuevo = baseFact >= p.totales.base - 0.01 ? "facturado" : "parcial";
           await ref.update({facturas, estado:nuevo, modificado:{por:yo, en:en()}});
           await reg("factura " + r.numero + " emitida (" + eur(r.totales.total) + ")");
-          Object.assign(p, {facturas, estado:nuevo}); detalle(el, comId, com, p);
+          Object.assign(p, {facturas, estado:nuevo}); detalle(el, comId, com, p, volver);
         }catch(e){ m("No se ha podido: " + (e.message||e)); }
       };
     };
   }
 
-  window.DHS_PRES = { llamar, vistaCatalogo, pestana, puedeVerPres };
+  // ---------- Apartado Presupuestos: todos juntos y los rápidos (particulares que solo dan el teléfono) ----------
+  let filtroG = {q:"", f:"todos"};
+  async function vistaGeneral(el){
+    const {db} = D();
+    if(!puedePrecios()){ el.innerHTML = `<div class="panel">Sin permiso.</div>`; return; }
+    el.innerHTML = `<div class="panel"><p class="vacio">Cargando…</p></div>`;
+    let L = [], C;
+    try{ (await db.collection("dhs_presupuestos").get()).forEach(d => L.push({id:d.id, ...d.data()})); C = await window.DHS_COM.datos(); }
+    catch(e){ el.innerHTML = `<div class="panel">No se ha podido cargar (${esc(e.code||e.message||e)}).</div>`; return; }
+    L.sort((a,b) => (b.numero||"").localeCompare(a.numero||""));
+    const nombres = {}; Object.entries(C.coms).forEach(([k,c]) => { let n = (c.nombre || k) + (c.poblacion ? " (" + c.poblacion + ")" : ""); while(nombres[n]) n += " ·"; nombres[n] = k; });
+    const F = {
+      todos:["Todos", () => true],
+      rapidos:["⚡ Rápidos sin asociar", p => !p.comunidadId],
+      aceptar:["⏳ Por aceptar", p => ["pendiente","enviado"].includes(p.estado)],
+      aceptados:["✅ Aceptados", p => ["aceptado","parcial"].includes(p.estado)],
+      cerrados:["Cerrados", p => ["facturado","rechazado"].includes(p.estado)]
+    };
+    const pinta = () => {
+      const q = sinAc(filtroG.q);
+      const V = L.filter(F[filtroG.f][1]).filter(p => !q || sinAc([p.numero, p.nombre, p.telefono, p.comunidadId && C.coms[p.comunidadId] ? C.coms[p.comunidadId].nombre : "", (p.lineas||[]).map(l => l.concepto).join(" ")].join(" ")).includes(q));
+      el.querySelector("#listaG").innerHTML = V.map(p => { const e = ESTADOS[p.estado] || ["",p.estado]; return `<a class="fila fila-pres est-p-${esc(p.estado)}" href="#" data-id="${esc(p.id)}">
+        <div class="f-nombre">${esc(p.numero)} · ${esc(p.comunidadId && C.coms[p.comunidadId] ? C.coms[p.comunidadId].nombre : (p.nombre || "Particular"))} <span class="vacio">· ${p.fecha ? esc(new Date(p.fecha + "T12:00").toLocaleDateString("es-ES")) : ""}</span></div>
+        <div class="f-sub">${!p.comunidadId ? `⚡ ${p.telefono ? "📞 " + esc(p.telefono) + " · " : ""}` : ""}${esc((p.lineas||[]).map(l => l.concepto).join(", ").slice(0,110))}</div>
+        <div class="f-tags"><b>${eur(p.totales && p.totales.total)}</b> <span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span></div></a>`; }).join("") || `<p class="vacio">Nada con este filtro.</p>`;
+      el.querySelector("#cuentaG").textContent = V.length + " presupuesto" + (V.length === 1 ? "" : "s") + " · " + eur(r2(V.reduce((n,p) => n + ((p.totales && p.totales.total) || 0), 0)));
+      el.querySelectorAll("#listaG .fila-pres").forEach(a => a.onclick = ev => {
+        ev.preventDefault(); const p = L.find(x => x.id === a.dataset.id);
+        const cid = p.comunidadId && C.coms[p.comunidadId] ? p.comunidadId : null;
+        detalle(el.querySelector(".panel"), cid, cid ? C.coms[cid] : {nombre:p.nombre || "Particular", telefono:p.telefono || ""}, p, () => vistaGeneral(el));
+      });
+    };
+    el.innerHTML = `<div class="panel">
+      <div class="cab-lista"><h2>Presupuestos</h2>
+        <span><button class="btn" id="bRapido">⚡ Presupuesto rápido</button> <button class="btn sec" id="bParaCom">+ Para una comunidad o cliente</button></span></div>
+      <p class="vacio">«Rápido» es para quien te pide precio por WhatsApp sin dar la dirección: solo nombre y teléfono. Si lo acepta, lo asocias a su ficha y sigue como los demás.</p>
+      <div id="cajaCom" class="bloque oculto" style="margin:8px 0"><input id="busCom" list="dlComG" placeholder="Escribe la comunidad o el cliente y elígelo…" style="width:100%;max-width:460px"><datalist id="dlComG">${Object.keys(nombres).map(n => `<option value="${esc(n)}">`).join("")}</datalist></div>
+      <div class="fi-barra" style="margin-top:8px"><input id="qG" placeholder="Buscar: número, nombre, teléfono, comunidad, producto…" value="${esc(filtroG.q)}" style="flex:1;min-width:200px">
+        <span class="chips">${Object.entries(F).map(([k,[t]]) => `<button class="chip ${filtroG.f === k ? "on" : ""}" data-f="${k}">${t} (${L.filter(F[k][1]).length})</button>`).join("")}</span></div>
+      <p id="cuentaG" class="vacio" style="font-weight:600"></p>
+      <div class="lista" id="listaG"></div></div>`;
+    el.querySelector("#qG").oninput = e => { filtroG.q = e.target.value; pinta(); };
+    el.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filtroG.f = b.dataset.f; vistaGeneral(el); });
+    el.querySelector("#bRapido").onclick = () => editor(el.querySelector(".panel"), null, {nombre:"", telefono:""}, () => vistaGeneral(el));
+    el.querySelector("#bParaCom").onclick = () => { el.querySelector("#cajaCom").classList.toggle("oculto"); el.querySelector("#busCom").focus(); };
+    el.querySelector("#busCom").onchange = e => { const k = nombres[e.target.value]; if(!k) return; window.DHS_COM.abrirPestana("presupuestos"); location.hash = "comunidad/" + encodeURIComponent(k); };
+    pinta();
+  }
+
+  window.DHS_PRES = { llamar, vistaCatalogo, pestana, puedeVerPres, vistaGeneral };
 })();

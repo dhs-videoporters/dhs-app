@@ -33,6 +33,7 @@
     {id:"intervenciones", nombre:"Intervenciones",  ico:"🛠️", ap:"trabajos", minimo:"propios"},
     {id:"administradores",nombre:"Administradores", ico:"👥", ap:"administradores"},
     {id:"economia",       nombre:"Economía",        ico:"💶", ap:"cobros"},
+    {id:"presupuestos",   nombre:"Presupuestos",    ico:"📝", ap:"precios", minimo:"editar"},
     {id:"ajustes",        nombre:"Ajustes",         ico:"⚙️", ap:"ajustes"}
   ];
 
@@ -143,6 +144,7 @@
     intervenciones: el => window.DHS_TRAB.lista(el),
     mitrabajo: el => window.DHS_TRAB.miTrabajo(el),
     economia: el => window.DHS_ECO.vista(el),
+    presupuestos: el => window.DHS_PRES.vistaGeneral(el),
     comunidades: el => window.DHS_COM.lista(el),
     administradores: el => window.DHS_ADM.lista(el),
     ajustes: el => window.DHS_AJ.vista(el)
