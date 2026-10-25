@@ -61,6 +61,32 @@ const PUENTE = {
       descripcion: p.description || '', activo: p.active !== false, codigo: p.internalCode || '' }));
   },
 
+  // Guardar productos en Contasimple desde el Excel del catálogo (crear los nuevos y cambiar los que han cambiado). Solo Dirección / Precios: editar.
+  // Cada producto: {fila, id (vacío = nuevo), nombre, precio, iva, descripcion, codigo, activo}. No borra nada.
+  guardarProductos: function (d, u) {
+    exige_(u, 'precios', 'editar');
+    const tk = csToken_(), out = [];
+    (d.productos || []).slice(0, 100).forEach(p => {
+      try {
+        if (!p.nombre) throw new Error('Falta el nombre');
+        const precio = Number(p.precio); if (!(precio >= 0)) throw new Error('Precio no válido');
+        const iva = (p.iva === '' || p.iva === null || p.iva === undefined) ? null : Number(p.iva);
+        if (p.id) {
+          const r = cs_(tk, 'get', '/products/' + Number(p.id)); const a = (r && r.data) || r;
+          const body = Object.assign({}, a, { name: String(p.nombre), price: precio, description: p.descripcion || '', internalCode: p.codigo || '', active: p.activo !== false });
+          if (iva !== null) body.vat = iva;
+          cs_(tk, 'put', '/products/' + Number(p.id), body);
+          out.push({ fila: p.fila, id: Number(p.id), ok: true });
+        } else {
+          const r = cs_(tk, 'post', '/products', { name: String(p.nombre), price: precio, vat: iva === null ? 21 : iva, description: p.descripcion || '', internalCode: p.codigo || '', active: p.activo !== false });
+          const n = (r && r.data) || r;
+          out.push({ fila: p.fila, id: n.id, ok: true, nuevo: true, iva: n.vat });
+        }
+      } catch (e) { out.push({ fila: p.fila, ok: false, error: String(e && e.message || e) }); }
+    });
+    return out;
+  },
+
   // Crear presupuesto en Contasimple para una comunidad. Solo Dirección (o quien tenga "Precios: editar").
   crearPresupuesto: function (d, u) {
     exige_(u, 'precios', 'editar');

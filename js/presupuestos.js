@@ -40,26 +40,29 @@
     const filtro = {q:"", grupo:"todos"};
     el.innerHTML = `
       <h3>Catálogo</h3>
-      <p class="vacio" style="margin:4px 0 10px">Productos y servicios de Contasimple. ${edita ? "Pulsa <b>Actualizar desde Contasimple</b> para traer los precios al día. Elige el <b>grupo</b> de cada uno, marca qué puede presupuestar un técnico (por defecto, lo de Mantenimiento) y en <b>Dto. máx.</b> pon hasta qué % se le puede hacer descuento (vacío = sin descuento)." : "Solo lectura."}</p>
+      <p class="vacio" style="margin:4px 0 10px">Productos y servicios de Contasimple. ${edita ? "Para cambiar muchos a la vez o añadir nuevos: <b>Descargar Excel</b>, lo modificas y <b>Subir Excel</b>; se guarda aquí y en Contasimple. Pulsa <b>Actualizar desde Contasimple</b> para traer los precios al día. Elige el <b>grupo</b> de cada uno, marca qué puede presupuestar un técnico (por defecto, lo de Mantenimiento) y en <b>Dto. máx.</b> pon hasta qué % se le puede hacer descuento (vacío = sin descuento)." : "Solo lectura."}</p>
       <div class="fi-barra">
         <input id="qCat" placeholder="Buscar…" style="flex:1;min-width:180px">
         <select id="gCat"><option value="todos">Todos los grupos</option>${GRUPOS.concat(["(sin grupo)"]).map(g => `<option>${g}</option>`).join("")}</select>
         ${edita ? `<button class="btn" id="btnSync">⟳ Actualizar desde Contasimple</button>` : ""}
+        <button class="btn sec" id="btnXls">⬇️ Descargar Excel</button>
+        ${edita ? `<label class="btn sec" style="cursor:pointer">⬆️ Subir Excel<input type="file" id="fXls" accept=".xlsx,.xls,.csv" style="display:none"></label>` : ""}
         <span id="msgCat" class="vacio"></span>
       </div>
+      <div id="impCat"></div>
       <p id="cuentaCat" class="vacio" style="font-weight:600"></p>
-      <table class="tabla-fi tabla-cat"><thead><tr><th>Producto / servicio</th><th>Precio</th><th>IVA</th><th>Grupo</th><th>Técnico</th><th title="Descuento máximo permitido. Vacío = no admite descuento">Dto. máx.</th></tr></thead><tbody id="tbCat"></tbody></table>`;
+      <table class="tabla-fi tabla-cat"><thead><tr><th>Código</th><th>Producto / servicio</th><th>Tipo</th><th>Precio</th><th>IVA</th><th>Grupo</th><th>Técnico</th><th title="Descuento máximo permitido. Vacío = no admite descuento">Dto. máx.</th></tr></thead><tbody id="tbCat"></tbody></table>`;
     const pintar = () => {
       const q = sinAc(filtro.q);
-      const L = Object.entries(C).filter(([k,p]) => p.activo !== false && (!q || sinAc(p.nombre + " " + (p.descripcion||"")).includes(q))
+      const L = Object.entries(C).filter(([k,p]) => p.activo !== false && (!q || sinAc(p.nombre + " " + (p.descripcion||"") + " " + (p.codigo||"")).includes(q))
         && (filtro.grupo === "todos" || (filtro.grupo === "(sin grupo)" ? !p.grupo : p.grupo === filtro.grupo))).sort((a,b) => a[1].nombre.localeCompare(b[1].nombre));
       el.querySelector("#cuentaCat").textContent = L.length + " de " + Object.keys(C).length;
       el.querySelector("#tbCat").innerHTML = L.map(([k,p]) => `<tr data-k="${k}">
-        <td>${esc(p.nombre)}${p.descripcion && p.descripcion !== p.nombre ? `<br><span class="vacio">${esc(p.descripcion)}</span>` : ""}</td>
+        <td>${esc(p.codigo||"")}</td><td>${esc(p.nombre)}${p.descripcion && p.descripcion !== p.nombre ? `<br><span class="vacio">${esc(p.descripcion)}</span>` : ""}</td><td>${esc(p.tipo||"")}</td>
         <td>${eur(p.precio)}</td><td>${p.iva === IVA ? IVA + " %" : `<span class="tag aviso">${esc(p.iva)} %</span>`}</td>
         <td>${edita ? `<select class="selGrupo"><option value="">—</option>${GRUPOS.map(g => `<option ${p.grupo===g?"selected":""}>${g}</option>`).join("")}</select>` : esc(p.grupo||"—")}</td>
         <td>${edita ? `<input type="checkbox" class="chkTec" ${p.tecnico ? "checked" : ""}>` : (p.tecnico ? "Sí" : "")}</td>
-        <td>${edita ? `<input type="number" class="numDto" min="0" max="100" step="1" placeholder="no" value="${p.dtoMax || ""}" style="width:62px"> %` : (p.dtoMax ? "hasta " + p.dtoMax + " %" : "no")}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio">${Object.keys(C).length ? "Nada con ese filtro." : "Todavía vacío: pulsa «Actualizar desde Contasimple»."}</td></tr>`;
+        <td>${edita ? `<input type="number" class="numDto" min="0" max="100" step="1" placeholder="no" value="${p.dtoMax || ""}" style="width:62px"> %` : (p.dtoMax ? "hasta " + p.dtoMax + " %" : "no")}</td></tr>`).join("") || `<tr><td colspan="8" class="vacio">${Object.keys(C).length ? "Nada con ese filtro." : "Todavía vacío: pulsa «Actualizar desde Contasimple»."}</td></tr>`;
       if(!edita) return;
       const guardar = async (k, cambio) => {
         const yo = S.usuario.email.toLowerCase();
@@ -95,6 +98,108 @@
         C = await catalogo(true); pintar();
       }catch(e){ m("No se ha podido: " + (e.message||e)); }
       bS.disabled = false;
+    };
+    // ---------- Excel del catálogo: descargar, cambiar lo que sea, añadir nuevos y volver a subir ----------
+    const COLS = ["ID Contasimple","Código","Producto / servicio","Tipo","Grupo","Técnico","Dto. máx. %","Precio sin IVA","IVA %","Descripción","Activo"];
+    el.querySelector("#btnXls").onclick = async () => {
+      const m = x => el.querySelector("#msgCat").textContent = x;
+      try{
+        const filas = Object.entries(C).sort((a,b) => (a[1].codigo||"~").localeCompare(b[1].codigo||"~") || a[1].nombre.localeCompare(b[1].nombre)).map(([k,p]) => ({
+          "ID Contasimple": p.csId || Number(k), "Código": p.codigo||"", "Producto / servicio": p.nombre||"", "Tipo": p.tipo||"", "Grupo": p.grupo||"",
+          "Técnico": p.tecnico ? "Sí" : "No", "Dto. máx. %": p.dtoMax || "", "Precio sin IVA": Number(p.precio)||0, "IVA %": p.iva ?? IVA, "Descripción": p.descripcion && p.descripcion !== p.nombre ? p.descripcion : "", "Activo": p.activo === false ? "No" : "Sí"}));
+        if(!filas.length) filas.push(Object.fromEntries(COLS.map(c => [c, ""])));
+        await window.DHS_XLS.descargar("DHS catálogo " + new Date().toISOString().slice(0,10), filas, "Catálogo");
+        m("Descargado. Para añadir uno nuevo, pon una fila con el ID vacío.");
+      }catch(e){ m("No se ha podido: " + (e.message||e)); }
+    };
+    const fX = el.querySelector("#fXls");
+    if(fX) fX.onchange = async () => {
+      const box = el.querySelector("#impCat"), file = fX.files[0]; fX.value = "";
+      if(!file) return;
+      box.innerHTML = `<p class="vacio">Leyendo…</p>`;
+      let filas; try{ filas = await window.DHS_XLS.leer(file); }catch(e){ box.innerHTML = `<p class="ko">No se puede leer: ${esc(e.message||e)}</p>`; return; }
+      const cf = window.DHS_XLS.campo;
+      const num = v => { if(typeof v === "number") return v; let t = String(v||"").replace(/[€%\s]/g,""); if(!t) return null; if(t.includes(",") && t.includes(".")) t = t.replace(/\./g,""); t = t.replace(",","."); const n = Number(t); return isNaN(n) ? NaN : n; };
+      const siNo = (v, def) => { const t = sinAc(String(v||"")).trim(); return !t ? def : ["si","s","x","1","true"].includes(t); };
+      const grupoDe = v => { const t = sinAc(String(v||"")).trim(); return GRUPOS.find(g => sinAc(g) === t) || (t ? String(v).trim() : ""); };
+      const porNombre = {}; Object.entries(C).forEach(([k,p]) => porNombre[sinAc(p.nombre).trim()] = k);
+      const L = [];
+      filas.forEach((r, i) => {
+        const nombre = String(cf(r, "Producto / servicio", "Producto", "Nombre", "Servicio") || "").trim();
+        const id = String(cf(r, "ID Contasimple", "ID", "csId") || "").trim();
+        if(!nombre && !id) return;
+        const x = {fila:i+2, id, nombre, codigo:String(cf(r, "Código", "Codigo") || "").trim(), tipo:String(cf(r, "Tipo") || "").trim(), grupo:grupoDe(cf(r, "Grupo")),
+          tecnico:siNo(cf(r, "Técnico", "Tecnico"), false), dtoMax:Math.min(100, Math.max(0, Math.round(num(cf(r, "Dto. máx. %", "Dto max", "Descuento máximo")) || 0))),
+          precio:num(cf(r, "Precio sin IVA", "Precio")), iva:num(cf(r, "IVA %", "IVA")), descripcion:String(cf(r, "Descripción", "Descripcion") || "").trim(), activo:siNo(cf(r, "Activo"), true), err:"", cs:[], app:[]};
+        if(!nombre) x.err = "Falta el nombre";
+        else if(x.precio === null || isNaN(x.precio) || x.precio < 0) x.err = "Precio no válido";
+        else if(x.iva !== null && (isNaN(x.iva) || x.iva < 0 || x.iva > 21)) x.err = "IVA no válido";
+        const ant = id ? C[id] : null;
+        if(id && !ant && !x.err) x.err = "Ese ID no está en el catálogo (para uno nuevo, deja el ID vacío)";
+        if(!id && !x.err && porNombre[sinAc(nombre).trim()]) x.err = "Ya existe uno con ese nombre: pon su ID para cambiarlo";
+        if(!x.err){
+          if(!ant){ x.nuevo = true; if(x.iva === null) x.iva = IVA; }
+          else {
+            const dif = (k, a, b, f) => { if((a ?? "") !== (b ?? "")) x.cs.push(f + ": " + (a === "" || a == null ? "—" : a) + " → " + (b === "" || b == null ? "—" : b)); };
+            dif("nombre", ant.nombre, nombre, "nombre"); if(r2(ant.precio) !== r2(x.precio)) x.cs.push("precio: " + eur(ant.precio) + " → " + eur(x.precio));
+            if(x.iva !== null && Number(ant.iva) !== x.iva) x.cs.push("IVA: " + ant.iva + " % → " + x.iva + " %");
+            dif("codigo", ant.codigo||"", x.codigo, "código"); dif("desc", (ant.descripcion && ant.descripcion !== ant.nombre ? ant.descripcion : ""), x.descripcion, "descripción");
+            if((ant.activo !== false) !== x.activo) x.cs.push(x.activo ? "se activa" : "se desactiva");
+            if((ant.tipo||"") !== x.tipo) x.app.push("tipo: " + (ant.tipo||"—") + " → " + (x.tipo||"—"));
+            if((ant.grupo||"") !== x.grupo) x.app.push("grupo: " + (ant.grupo||"—") + " → " + (x.grupo||"—"));
+            if(!!ant.tecnico !== x.tecnico) x.app.push("técnico: " + (x.tecnico ? "sí" : "no"));
+            if((Number(ant.dtoMax)||0) !== x.dtoMax) x.app.push("dto. máx.: " + (ant.dtoMax ? ant.dtoMax + " %" : "no") + " → " + (x.dtoMax ? x.dtoMax + " %" : "no"));
+            if(x.iva === null) x.iva = Number(ant.iva);
+          }
+        }
+        L.push(x);
+      });
+      const nuevos = L.filter(x => x.nuevo), cambiaCS = L.filter(x => !x.err && !x.nuevo && x.cs.length), soloApp = L.filter(x => !x.err && !x.nuevo && !x.cs.length && x.app.length), errores = L.filter(x => x.err);
+      const iguales = L.length - nuevos.length - cambiaCS.length - soloApp.length - errores.length;
+      const fila = (x, que) => `<tr><td>${x.fila}</td><td>${esc(x.codigo)}</td><td>${esc(x.nombre)}</td><td>${que}</td></tr>`;
+      box.innerHTML = `<div class="bloque" style="margin:10px 0">
+        <h4>Revisión del Excel «${esc(file.name)}»</h4>
+        <p><b>${nuevos.length}</b> nuevos · <b>${cambiaCS.length}</b> cambian en Contasimple · <b>${soloApp.length}</b> cambian solo aquí (grupo, tipo, técnico, descuento) · ${iguales} sin cambios${errores.length ? ` · <b class="ko">${errores.length} con error (no se guardan)</b>` : ""}</p>
+        <p class="vacio">Lo que no esté en el Excel no se borra. Para quitar uno, pon «No» en Activo.</p>
+        ${L.length - iguales ? `<div style="max-height:380px;overflow:auto"><table class="tabla-fi"><thead><tr><th>Fila</th><th>Código</th><th>Producto / servicio</th><th>Qué pasa</th></tr></thead><tbody>
+          ${errores.map(x => fila(x, `<span class="tag aviso">${esc(x.err)}</span>`)).join("")}
+          ${nuevos.map(x => fila(x, `<span class="tag est-p-aceptado">nuevo</span> ${eur(x.precio)} · IVA ${x.iva} %${x.grupo ? " · " + esc(x.grupo) : ""}`)).join("")}
+          ${cambiaCS.map(x => fila(x, esc(x.cs.concat(x.app).join(" · ")))).join("")}
+          ${soloApp.map(x => fila(x, `<span class="vacio">solo aquí:</span> ` + esc(x.app.join(" · ")))).join("")}
+        </tbody></table></div>` : ""}
+        ${nuevos.length + cambiaCS.length + soloApp.length ? `<p style="margin-top:10px"><button class="btn" id="bGuardarXls">Guardar${nuevos.length + cambiaCS.length ? " aquí y en Contasimple" : ""}</button> <button class="btn sec" id="bCancelXls">Cancelar</button> <span id="msgXls" class="vacio"></span></p>` : `<p><button class="btn sec" id="bCancelXls">Cerrar</button></p>`}
+      </div>`;
+      box.querySelector("#bCancelXls").onclick = () => box.innerHTML = "";
+      const bG = box.querySelector("#bGuardarXls"); if(!bG) return;
+      bG.onclick = async () => {
+        const m = t => box.querySelector("#msgXls").textContent = t;
+        const aCS = nuevos.concat(cambiaCS);
+        if(!confirm((aCS.length ? aCS.length + " productos se van a crear o cambiar también en Contasimple. " : "") + "¿Guardar?")) return;
+        bG.disabled = true;
+        const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
+        const res = {}; let fallos = [];
+        const doc = (x, id) => [String(id), {csId:Number(id), nombre:x.nombre, precio:x.precio, iva:x.iva, descripcion:x.descripcion || x.nombre, codigo:x.codigo, activo:x.activo,
+          tipo:x.tipo, grupo:x.grupo, tecnico:x.tecnico, dtoMax:x.dtoMax, modificado:{por:yo, en}}];
+        const escribir = async ops => { for(let i = 0; i < ops.length; i += 400){ const b = db.batch(); ops.slice(i, i+400).forEach(([id, d]) => b.set(db.collection("dhs_catalogo").doc(id), d, {merge:true})); await b.commit(); } };
+        try{
+          // De 25 en 25: cada tanda se guarda aquí en cuanto Contasimple la acepta (si se corta, no se duplica nada al volver a subir)
+          for(let i = 0; i < aCS.length; i += 25){
+            m("Contasimple: " + Math.min(i + 25, aCS.length) + " de " + aCS.length + "…");
+            const lote = aCS.slice(i, i+25);
+            const R = await llamar("guardarProductos", {productos: lote.map(x => ({fila:x.fila, id:x.id || null, nombre:x.nombre, precio:x.precio, iva:x.iva, descripcion:x.descripcion, codigo:x.codigo, activo:x.activo}))});
+            R.forEach(r => { res[r.fila] = r; if(!r.ok) fallos.push("fila " + r.fila + ": " + r.error); });
+            await escribir(lote.filter(x => res[x.fila] && res[x.fila].ok).map(x => doc(x, x.id || res[x.fila].id)));
+          }
+          m("Guardando aquí…");
+          await escribir(soloApp.map(x => doc(x, x.id)));
+          const nOk = aCS.filter(x => res[x.fila] && res[x.fila].ok);
+          await db.collection("dhs_registro").add({por:yo, en, accion:"catálogo subido por Excel (" + nOk.filter(x => x.nuevo).length + " nuevos, " + nOk.filter(x => !x.nuevo).length + " cambiados en Contasimple, " + soloApp.length + " solo en la app" + (fallos.length ? ", " + fallos.length + " fallos" : "") + ")", coleccion:"dhs_catalogo"});
+          C = await catalogo(true); pintar();
+          box.innerHTML = `<div class="bloque" style="margin:10px 0"><p>✅ Hecho: ${nOk.filter(x => x.nuevo).length} nuevos y ${nOk.filter(x => !x.nuevo).length} cambiados (aquí y en Contasimple), ${soloApp.length} cambiados solo aquí.</p>
+            ${fallos.length ? `<p class="ko">No se han podido guardar ${fallos.length}:</p><ul>${fallos.map(f => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}<p><button class="btn sec" id="bCerrarXls">Cerrar</button></p></div>`;
+          box.querySelector("#bCerrarXls").onclick = () => box.innerHTML = "";
+        }catch(e){ m("Se ha parado: " + (e.message||e) + ". Lo que ya estaba hecho se queda; vuelve a subir el Excel para seguir."); bG.disabled = false; }
+      };
     };
     pintar();
   }
