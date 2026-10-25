@@ -77,7 +77,7 @@
     const {S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
     let C = {coms:{}, admins:{}}, P;
-    try{ P = await personal(); if(S.puede("comunidades")) C = await window.DHS_COM.datos(); }
+    try{ P = await personal(); if(S.puede("comunidades")) C = await window.DHS_COM.datos(); if(window.DHS_EMP) await window.DHS_EMP.cargar(); }
     catch(e){ el.innerHTML = `<div class="panel">No se han podido leer los datos (${esc(e.code)}).</div>`; return; }
     Object.entries(C.coms).forEach(([k,c]) => c._id = k);
     const com = comId ? C.coms[comId] : null;
@@ -132,6 +132,7 @@
           <div class="bloque"><h3>Qué hay que hacer</h3>
             <div class="campo"><span>De qué es *</span><div class="seg2 grande">${Object.entries(ESPEC).map(([k,[i,n]]) => `<label><input type="radio" name="especialidad" value="${k}"> ${i} ${n}</label>`).join("")}</div></div>
             <div class="campo"><span>Prioridad</span><div class="seg2 grande">${ORDEN_PRIOR.map(k => `<label><input type="radio" name="urgencia" value="${k}" ${k==="normal"?"checked":""}> ${PRIOR[k][0]} ${PRIOR[k][1]}</label>`).join("")}</div></div>
+            ${window.DHS_EMP && window.DHS_EMP.lista().length ? `<label class="campo"><span>¿Viene de parte de una empresa?</span><select name="encargo">${window.DHS_EMP.opciones("")}</select></label>` : ""}
             <label class="campo"><span>Tipo</span><select name="tipo">${Object.entries(TIPOS).map(([k,n]) => `<option value="${k}">${n}</option>`).join("")}</select></label>
             <label class="campo"><span>Descripción *</span><textarea name="descripcion" rows="4" placeholder="Ej.: No funciona el monitor del 3º 1ª, no se oye."></textarea></label>
             <div class="campo"><span>Quién avisa</span>
@@ -205,6 +206,7 @@
       f.comunidadId.value = id || "";
       const c = C.coms[id];
       info.innerHTML = c ? miniFicha(c, C.admins) : "";
+      if(c && c.empresaId && f.encargo && !f.encargo.value) f.encargo.value = c.empresaId;
       if(c && document.activeElement !== bus) bus.value = c.nombre;
       cargarVecinos(c ? id : null);
       if(selCom.value !== (id || "")) selCom.value = id || "";
@@ -293,9 +295,14 @@
           duracionEstimada:dur, citas, asignados, hechoPor:[], material:[], tiempoReal:null, fotos:[],
           creadoPorTecnico: !S.puede("trabajos","todo"),
           ...(dePres ? {presupuestoId:pre.presupuestoId, presupuestoNumero:pre.presupuestoNumero} : {}),
+          ...(v("encargo") ? {encargo:v("encargo")} : {}),
           creado:firma, modificado:firma
         };
         const ref = await db.collection("dhs_trabajos").add(datos);
+        // La comunidad queda marcada con la empresa que nos manda trabajo allí (para verla con su color en la lista)
+        if(v("encargo") && cliente.comunidadId && C.coms[cliente.comunidadId] && C.coms[cliente.comunidadId].empresaId !== v("encargo")){
+          try{ await db.collection("dhs_comunidades").doc(cliente.comunidadId).set({empresaId:v("encargo"), modificado:firma}, {merge:true}); C.coms[cliente.comunidadId].empresaId = v("encargo"); }catch(e){}
+        }
         await db.collection("dhs_registro").add({por:yo, en:firma.en, accion:"alta", coleccion:"dhs_trabajos", docId:ref.id, nombre:numero + " · " + cliente.nombre});
         // El vecino que avisa se guarda (o se completa) en los vecinos de la comunidad
         const g = VEC[clave] || {};
@@ -338,7 +345,7 @@
       <a class="f-cuerpo" href="#intervencion/${t.id}">
         <div class="f-nombre">${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.nombre)} <span class="vacio">· ${esc(t.numero)}</span></div>
         <div class="f-sub">${CERRADOS.includes(t.estado) && t.resumenHecho ? "✅ " + (t.fechaHecho ? esc(fmtFecha(t.fechaHecho)) + " · " : "") + esc(t.resumenHecho.slice(0,110)) : esc((t.descripcion||"").slice(0,110))}${t.estado === "amedias" && t.falta ? ` <span class="tag aviso">Falta: ${esc(t.falta.slice(0,60))}</span>` : ""}</div>
-        <div class="f-tags">${quien}<span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span>${cita ? `<span class="tag gris">${esc(fmtFecha(cita.fecha))} ${esc(cita.hora)}</span>` : `<span class="tag aviso">Sin fecha</span>`}</div>
+        <div class="f-tags">${window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}${quien}<span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span>${cita ? `<span class="tag gris">${esc(fmtFecha(cita.fecha))} ${esc(cita.hora)}</span>` : `<span class="tag aviso">Sin fecha</span>`}</div>
       </a></div>`;
   }
 
@@ -357,12 +364,12 @@
   }
 
   // ---------- LISTA (pendientes primero, por prioridad) ----------
-  const filtro = {ver:"pendientes", espec:"todas", quien:"todos", estado:"todos", texto:""};
+  const filtro = {ver:"pendientes", espec:"todas", quien:"todos", estado:"todos", texto:"", emp:"todas"};
   async function lista(el){
     const {S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
     let docs, P;
-    try{ P = await personal(); docs = await leer(); }
+    try{ P = await personal(); docs = await leer(); if(window.DHS_EMP) await window.DHS_EMP.cargar(); }
     catch(e){ el.innerHTML = `<div class="panel">No se han podido leer las intervenciones (${esc(e.code)}).</div>`; return; }
     el.innerHTML = `
       <div class="panel">
@@ -378,6 +385,7 @@
           <input id="busInt" placeholder="Buscar calle, número, descripción…" value="${esc(filtro.texto)}">
           <select id="selQuien"><option value="todos">Todo el equipo</option><option value="nadie" ${filtro.quien==="nadie"?"selected":""}>Sin asignar</option>${Object.entries(P).filter(([k,p]) => p.activo !== false).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,p]) => `<option value="${esc(k)}" ${filtro.quien===k?"selected":""}>${esc(p.nombre)}</option>`).join("")}</select>
           <select id="selEstado"><option value="todos">Todos los estados</option>${Object.entries(ESTADOS).map(([k,n]) => `<option value="${k}" ${filtro.estado===k?"selected":""}>${n}</option>`).join("")}</select>
+          ${window.DHS_EMP && window.DHS_EMP.lista().length ? `<select id="selEmp"><option value="todas">De parte de cualquiera</option><option value="ninguna" ${filtro.emp==="ninguna"?"selected":""}>Directo (sin empresa)</option>${window.DHS_EMP.lista().map(([k,a]) => `<option value="${esc(k)}" ${filtro.emp===k?"selected":""}>🏗️ ${esc(a.nombre)}</option>`).join("")}</select>` : ""}
         </div>
         <p class="vacio" style="margin-top:8px">${ORDEN_PRIOR.map(k => PRIOR[k][0] + " " + PRIOR[k][1]).join(" · ")}${S.puede("trabajos","todo") ? " — toca el punto para cambiar la prioridad" : ""}</p>
         <p id="cuentaInt" class="vacio" style="margin-top:4px;font-weight:600"></p><div class="lista" id="listaInt" style="margin-top:4px"></div>
@@ -386,6 +394,7 @@
       const vis = docs.filter(t => (filtro.ver === "todas" || (filtro.ver === "pendientes" ? !CERRADOS.includes(t.estado) : CERRADOS.includes(t.estado)))
                               && (filtro.espec === "todas" || t.especialidad === filtro.espec)
                               && (filtro.estado === "todos" || t.estado === filtro.estado)
+                              && (filtro.emp === "todas" || (filtro.emp === "ninguna" ? !t.encargo : t.encargo === filtro.emp))
                               && (filtro.quien === "todos" || (filtro.quien === "nadie" ? !(t.asignados||[]).length : (t.asignados||[]).includes(filtro.quien)))
                               && (!filtro.texto || sinAc([t.numero, t.nombre, t.direccion, t.poblacion, t.descripcion, avisaTxt(t)].join(" ")).includes(sinAc(filtro.texto)))).sort(porPrioridad);
       el.querySelector("#cuentaInt").textContent = vis.length + (vis.length === 1 ? " intervención" : " intervenciones");
@@ -397,6 +406,7 @@
     chips("#chVer", "ver"); chips("#chEsp", "espec");
     el.querySelector("#busInt").oninput = e => { filtro.texto = e.target.value.trim(); pintar(); };
     el.querySelector("#selQuien").onchange = e => { filtro.quien = e.target.value; pintar(); };
+    const sE = el.querySelector("#selEmp"); if(sE) sE.onchange = e => { filtro.emp = e.target.value; pintar(); };
     el.querySelector("#selEstado").onchange = e => { filtro.estado = e.target.value; if(e.target.value !== "todos"){ filtro.ver = "todas"; el.querySelectorAll("#chVer .chip").forEach(x => x.classList.toggle("on", x.dataset.k === "todas")); } pintar(); };
     pintar();
   }
@@ -473,7 +483,7 @@
     const ref = db.collection("dhs_trabajos").doc(id);
     let t, P, notas = [];
     try{
-      P = await personal(); const d = await ref.get(); if(!d.exists) throw {code:"no existe"}; t = d.data();
+      P = await personal(); const d = await ref.get(); if(!d.exists) throw {code:"no existe"}; t = d.data(); if(window.DHS_EMP) await window.DHS_EMP.cargar();
       (await ref.collection("notas").orderBy("en").get()).forEach(n => notas.push(n.data()));
     }catch(e){ el.innerHTML = `<div class="panel">No se ha podido abrir la intervención (${esc(e.code)}). <a href="#intervenciones">Volver</a></div>`; return; }
     const todo = S.puede("trabajos","todo");
@@ -514,6 +524,7 @@
       <div class="panel" style="margin-top:14px"><div class="rejilla">
         <div class="bloque"><h3>Intervención</h3>
           ${dato("De qué es", esc(especTxt(t)))}${dato("Tipo", esc(TIPOS[t.tipo]))}
+          ${window.DHS_EMP && (t.encargo || (todo && window.DHS_EMP.lista().length)) ? dato("De parte de", todo ? `<select id="selEmpF">${window.DHS_EMP.opciones(t.encargo || "")}</select>` : window.DHS_EMP.chip(t.encargo)) : ""}
           ${dato("Prioridad", todo && !CERRADOS.includes(t.estado) ? `<select id="selPrio">${ORDEN_PRIOR.map(k => `<option value="${k}" ${k===(t.urgencia||"normal")?"selected":""}>${PRIOR[k][0]} ${PRIOR[k][1]}</option>`).join("")}</select>` : pr[0] + " " + pr[1])}
           <p style="white-space:pre-wrap;margin-top:8px">${esc(t.descripcion)}</p></div>
         <div class="bloque"><h3>Contacto</h3>
@@ -619,6 +630,17 @@
       };
     }
 
+    // Empresa que nos encarga el trabajo (Álamo, Armengol…)
+    const sEF = el.querySelector("#selEmpF");
+    if(sEF) sEF.onchange = async () => {
+      const nuevo = sEF.value || null, nom = k => k && window.DHS_EMP.lista().find(x => x[0] === k) ? window.DHS_EMP.lista().find(x => x[0] === k)[1].nombre : "directo";
+      try{
+        await ref.update({encargo:nuevo, modificado:firma()});
+        await nota({tipo:"cambio", texto:"De parte de: " + nom(t.encargo) + " → " + nom(nuevo)});
+        if(nuevo && t.comunidadId) try{ await db.collection("dhs_comunidades").doc(t.comunidadId).set({empresaId:nuevo, modificado:firma()}, {merge:true}); }catch(e){}
+        ficha(el, id);
+      }catch(e){ sEF.value = t.encargo || ""; alert("No se ha podido cambiar (" + (e.code||e) + ")."); }
+    };
     // Prioridad desde la ficha
     const sp = el.querySelector("#selPrio");
     if(sp) sp.onchange = async () => {
@@ -682,6 +704,7 @@
     el.innerHTML = `<div class="panel">Cargando…</div>`;
     if(!S.personalId){ el.innerHTML = `<div class="panel"><h2>Mi trabajo</h2><p class="vacio">Tu cuenta no está unida a nadie del equipo. Pide a la oficina que lo haga en Ajustes › Equipo.</p></div>`; return; }
     let docs = [];
+    if(window.DHS_EMP) await window.DHS_EMP.cargar();
     try{ (await db.collection("dhs_trabajos").where("asignados", "array-contains", S.personalId).get()).forEach(d => docs.push({id:d.id, ...d.data()})); }
     catch(e){ el.innerHTML = `<div class="panel">No se han podido leer tus intervenciones (${esc(e.code)}).</div>`; return; }
     const hoy = hoyISO(), fecha = t => ((t.citas||[])[0] || {}).fecha || "", hora = t => ((t.citas||[])[0] || {}).hora || "";
@@ -690,7 +713,7 @@
       (lista.map(t => `<a class="tarjeta-t" href="#trabajo/${t.id}">
         <div class="tt-hora">${fecha(t) ? (fecha(t) === hoy ? esc(hora(t)) : esc(fmtFecha(fecha(t))) + "<br>" + esc(hora(t))) : "—"}</div>
         <div class="tt-cuerpo"><b>${(PRIOR[t.urgencia]||PRIOR.normal)[0]} ${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] : ""} ${esc(t.direccion || t.nombre)}</b>
-          <span>${esc(t.poblacion||"")}${t.estado === "amedias" ? " · 🔧 a medias" : ""}${t.estado === "encurso" ? " · ▶️ en curso" : ""}</span>
+          <span>${window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) + " " : ""}${esc(t.poblacion||"")}${t.estado === "amedias" ? " · 🔧 a medias" : ""}${t.estado === "encurso" ? " · ▶️ en curso" : ""}</span>
           <span class="tt-desc">${esc((t.descripcion||"").slice(0,90))}</span></div></a>`).join("") || `<p class="vacio">Nada.</p>`);
     const ord = (a,b) => (fecha(a)+hora(a)).localeCompare(fecha(b)+hora(b)) || porPrioridad(a,b);
     const bloquear = window.DHS_FICHA ? await window.DHS_FICHA.debeFichar() : false;
@@ -717,6 +740,7 @@
     try{ P = await personal(); const d = await ref.get(); if(!d.exists) throw {code:"no existe"}; t = d.data(); }
     catch(e){ el.innerHTML = `<div class="panel">No se ha podido abrir (${esc(e.code)}). <a href="#mitrabajo">Volver</a></div>`; return; }
     if(t.comunidadId && S.puede("comunidades")){ try{ const C = await window.DHS_COM.datos(); c = C.coms[t.comunidadId] || null; admins = C.admins; }catch(e){} }
+    if(window.DHS_EMP) await window.DHS_EMP.cargar();
     if(t.comunidadId && S.puede("trabajos","ver")){ try{ anteriores = (await leer(t.comunidadId)).filter(x => x.id !== id && CERRADOS.includes(x.estado)).sort((a,b) => (b.fechaHecho||b.numero||"").localeCompare(a.fechaHecho||a.numero||"")).slice(0,3); }catch(e){} }
     const pr = PRIOR[t.urgencia] || PRIOR.normal, cita = (t.citas||[])[0];
     const tel = (n, v) => v ? `<a class="btn-tel" href="tel:${esc(v)}">📞 ${esc(n)}</a>` : "";
@@ -730,6 +754,7 @@
       <a href="#mitrabajo" class="volver">‹ Mi trabajo</a>
       <div class="panel ficha-trabajo">
         ${avisoEdicion(t)}
+        ${window.DHS_EMP && t.encargo ? `<p style="margin:0 0 6px">${window.DHS_EMP.chip(t.encargo)} <span class="vacio">trabajo de parte de esta empresa</span></p>` : ""}
         ${bloquear ? `<p class="fi-obliga">Antes de empezar, <b>ficha la entrada</b>.</p><div id="fiCard"></div>` : ""}
         <div class="ft-cab"><span class="ft-prio">${pr[0]} ${pr[1]}</span><span class="vacio">${esc(t.numero)}</span></div>
         <h1>${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.direccion || t.nombre)}</h1>

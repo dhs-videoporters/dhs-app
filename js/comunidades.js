@@ -23,7 +23,7 @@
   // ---------- LISTA ----------
   async function lista(el){
     el.innerHTML = `<div class="panel">Cargando…</div>`;
-    try{ await cargar(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer los datos (${esc(e.code)}).</div>`; return; }
+    try{ await cargar(); if(window.DHS_EMP) await window.DHS_EMP.cargar(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer los datos (${esc(e.code)}).</div>`; return; }
     const admins = Object.entries(CACHE.admins).filter(([k,a]) => a.activo !== false).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre));
     el.innerHTML = `
       <div class="panel">
@@ -33,7 +33,7 @@
         </div>
         <div class="filtros">
           ${["todas","comunidad","empresa","particular","sinadmin","nuevas"].map(t => `<button class="chip ${filtro.tipo===t?"on":""}" data-tipo="${t}">${{todas:"Todas",comunidad:"Comunidades",empresa:"Empresas",particular:"Particulares",sinadmin:"Sin administración",nuevas:"✱ Faltan datos"}[t]}</button>`).join("")}
-          <select id="filtroAdmin" class="sel"><option value="">Todas las administraciones</option>${admins.map(([id,a])=>`<option value="${id}" ${filtro.admin===id?"selected":""}>${esc(a.nombre)}</option>`).join("")}</select>
+          <select id="filtroAdmin" class="sel"><option value="">Todas las administraciones y empresas</option>${admins.filter(([id,a]) => a.tipo !== "empresa").map(([id,a])=>`<option value="${id}" ${filtro.admin===id?"selected":""}>${esc(a.nombre)}</option>`).join("")}${admins.some(([id,a]) => a.tipo === "empresa") ? `<optgroup label="Empresas que nos encargan trabajos">${admins.filter(([id,a]) => a.tipo === "empresa").map(([id,a])=>`<option value="${id}" ${filtro.admin===id?"selected":""}>🏗️ ${esc(a.nombre)}</option>`).join("")}</optgroup>` : ""}</select>
         </div>
         <div id="cuentaCom" class="vacio"></div>
         <div id="listaCom" class="lista"></div>
@@ -44,14 +44,14 @@
         if(c.activo === false) return false;
         if(filtro.tipo === "nuevas"){ if(!c.nueva) return false; }
         else if(filtro.tipo === "sinadmin" ? !!c.adminId : (filtro.tipo !== "todas" && c.tipo !== filtro.tipo)) return false;
-        if(filtro.admin && c.adminId !== filtro.admin) return false;
+        if(filtro.admin && c.adminId !== filtro.admin && c.empresaId !== filtro.admin) return false;
         if(q && !sinAc([c.nombre,c.direccion,c.poblacion,c.nif,nombreAdmin(c.adminId)].join(" ")).includes(q)) return false;
         return true;
       }).sort((a,b) => a[1].nombre.localeCompare(b[1].nombre));
       document.getElementById("cuentaCom").textContent = filas.length + (filas.length === 1 ? " resultado" : " resultados");
       document.getElementById("listaCom").innerHTML = filas.map(([id,c]) => `
         <a class="fila" href="#comunidad/${encodeURIComponent(id)}">
-          <div class="f-nombre">${c.nueva ? '<span class="tag aviso">✱ Faltan datos</span> ' : ""}${esc(c.nombre)}</div>
+          <div class="f-nombre">${c.nueva ? '<span class="tag aviso">✱ Faltan datos</span> ' : ""}${esc(c.nombre)}${c.empresaId && window.DHS_EMP ? " " + window.DHS_EMP.chip(c.empresaId) : ""}</div>
           <div class="f-sub">${esc([c.direccion, c.poblacion].filter(Boolean).join(" · ") || TIPOS[c.tipo] || "")}</div>
           <div class="f-tags">
             ${c.adminId ? `<span class="tag">${esc(nombreAdmin(c.adminId))}</span>` : (c.tipo==="comunidad" ? `<span class="tag aviso">Sin administración</span>` : `<span class="tag gris">${TIPOS[c.tipo]||""}</span>`)}
@@ -76,7 +76,7 @@
 
   async function ficha(el, id){
     el.innerHTML = `<div class="panel">Cargando…</div>`;
-    try{ await cargar(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer los datos (${esc(e.code)}).</div>`; return; }
+    try{ await cargar(); if(window.DHS_EMP) await window.DHS_EMP.cargar(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer los datos (${esc(e.code)}).</div>`; return; }
     const c = CACHE.coms[id];
     if(!c){ el.innerHTML = `<div class="panel">No existe esta comunidad. <a href="#comunidades">Volver</a></div>`; return; }
     const oficina = D().S.puede("comunidades","editar");
@@ -85,7 +85,7 @@
       <div class="panel cab-ficha">
         <div class="ico-ficha">${c.tipo==="particular"?"🏠":(c.tipo==="empresa"?"🏭":"🏢")}</div>
         <div class="cab-txt">
-          <h1>${esc(c.nombre)}</h1>
+          <h1>${esc(c.nombre)}${c.empresaId && window.DHS_EMP ? " " + window.DHS_EMP.chip(c.empresaId) : ""}</h1>
           <div class="vacio">${c.adminId ? "Administración: <b>"+(D().S.puede("administradores") ? '<a href="#administrador/'+encodeURIComponent(c.adminId)+'">'+esc(nombreAdmin(c.adminId))+'</a>' : esc(nombreAdmin(c.adminId)))+"</b>" : (c.tipo==="comunidad" ? '<span class="tag aviso">Sin administración</span>' : esc(TIPOS[c.tipo]))}${c.nif ? " · NIF "+esc(c.nif) : ""}</div>
         </div>
         <div class="cifras">

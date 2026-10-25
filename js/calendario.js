@@ -67,6 +67,7 @@
     let P = {}, trabajos = [], ausencias = [];
     try{
       (await db.collection("dhs_personal").get()).forEach(d => P[d.id] = d.data());
+      if(window.DHS_EMP) await window.DHS_EMP.cargar();
       if(S.puede("trabajos","ver")) trabajos = await escuchar(el);
       (await db.collection("dhs_ausencias").get()).forEach(d => ausencias.push({id:d.id, ...d.data()}));
     }catch(e){ el.innerHTML = `<div class="panel">No se ha podido leer el calendario (${esc(e.code)}).</div>`; return; }
@@ -119,7 +120,7 @@
                     return `<a class="cal-cita ${x.solapa ? "solapa" : ""} ${x.t.estado === "hecho" ? "hecha" : ""} ${x.t.estado === "amedias" ? "medias" : ""} ${x.t.estado === "encurso" ? "encurso" : ""}" data-id="${x.t.id}" data-com="${esc(x.t.comunidadId||"")}" data-ci="${x.ci}" data-k="${esc(x.k)}"
                       style="top:${top}px;height:${Math.max(alto, 18)}px;--c:${esc(p.color||"#9aa5b5")};left:calc(${x.carril / x.carriles * 100}% + 2px);right:auto;width:calc(${100 / x.carriles}% - 4px)"
                       title="${esc(x.c.hora)} · ${esc(p.nombre)} · ${esc(x.t.direccion || x.t.nombre)} — ${esc(x.t.descripcion||"")}">
-                      <b>${x.t.estado === "amedias" ? "🔧 " : ""}${x.t.estado === "encurso" ? "▶️ " : ""}${esc(x.t.direccion || x.t.nombre)}</b><span>${PRIOR[x.t.urgencia]||""}${ESPEC[x.t.especialidad]||""} ${esc(x.c.hora)}</span>${puedeMover && x.t.estado !== "hecho" ? `<i class="cal-tirador" title="Estirar para cambiar la duración"></i>` : ""}</a>`;
+                      ${x.t.encargo && window.DHS_EMP ? `<i class="cal-emp" style="--emp:${esc(window.DHS_EMP.color(x.t.encargo))}"></i>` : ""}<b>${x.t.estado === "amedias" ? "🔧 " : ""}${x.t.estado === "encurso" ? "▶️ " : ""}${esc(x.t.direccion || x.t.nombre)}</b>${x.t.encargo && window.DHS_EMP ? window.DHS_EMP.chip(x.t.encargo, true) : ""}<span>${PRIOR[x.t.urgencia]||""}${ESPEC[x.t.especialidad]||""} ${esc(x.c.hora)}</span>${puedeMover && x.t.estado !== "hecho" ? `<i class="cal-tirador" title="Estirar para cambiar la duración"></i>` : ""}</a>`;
                   }).join("")}
                 </div>`;
               }).join("")}
@@ -157,7 +158,7 @@
             ? `<div class="cal-tira">${[0,1,2,3,4,7,8,9,10,11].map(i => masDias(inicio, i)).map(d => { const f = iso(d), n = citas.filter(x => x.c.fecha === f).length; return `<button class="${f === diaSel ? "on" : ""} ${f === hoy ? "hoy" : ""}" data-dia="${f}"><span>${DIAS[(d.getDay()+6)%7]}</span><b>${d.getDate()}</b><i>${n ? n : ""}</i></button>`; }).join("")}</div>` + rejilla([new Date(diaSel + "T12:00")])
             : semana(inicio) + semana(masDias(inicio, 7))}</div>
           ${S.puede("trabajos","ver") ? `<aside class="cal-sinfecha"><h3>Sin fecha (${sinFecha.length})</h3>
-            ${sinFecha.map(t => `<a href="#intervencion/${t.id}" class="sf-item"><b>${PRIOR[t.urgencia]||"🟡"} ${ESPEC[t.especialidad]||""} ${esc(t.direccion || t.nombre)}</b><span>${esc((t.descripcion||"").slice(0,70))}</span></a>`).join("") || `<p class="vacio">Todo agendado.</p>`}
+            ${sinFecha.map(t => `<a href="#intervencion/${t.id}" class="sf-item"><b>${PRIOR[t.urgencia]||"🟡"} ${ESPEC[t.especialidad]||""} ${esc(t.direccion || t.nombre)}</b>${t.encargo && window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}<span>${esc((t.descripcion||"").slice(0,70))}</span></a>`).join("") || `<p class="vacio">Todo agendado.</p>`}
             <p class="vacio" style="margin-top:6px">Ábrela y pulsa "Poner cita".</p></aside>` : ""}
         </div>
       </div>`;

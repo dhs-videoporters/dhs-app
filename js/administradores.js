@@ -35,7 +35,7 @@
       el.querySelector("#listaAdm").innerHTML = filas.map(([id,a]) => {
         const sinMail = !(a.emails||[]).length;
         return `<a class="fila" href="#administrador/${encodeURIComponent(id)}">
-          <div class="f-nombre">${esc(a.nombre)}</div>
+          <div class="f-nombre">${a.tipo === "empresa" ? `<span class="emp-chip" style="--emp:${esc(a.color||"#d9822b")}">🏗️ Empresa</span> ` : ""}${esc(a.nombre)}</div>
           <div class="f-sub">${esc([(a.emails||[])[0], a.telefono, (a.personas||[]).length ? (a.personas.length + (a.personas.length===1?" persona":" personas")) : ""].filter(Boolean).join(" · ")) || "Sin datos de contacto"}</div>
           <div class="f-tags"><span class="tag gris">${nComs[id]||0} comunidades</span>${sinMail ? `<span class="tag aviso">Sin correo</span>` : ""}</div>
         </a>`; }).join("") || `<p class="vacio">No hay resultados.</p>`;
@@ -109,6 +109,8 @@
         <div class="rejilla" style="margin-top:10px">
           <div class="bloque"><h3>Datos</h3>
             ${inp("nombre","Nombre *",a.nombre)}
+            <label class="campo"><span>Tipo</span><select name="tipo"><option value="">Administración de fincas</option><option value="empresa" ${a.tipo==="empresa"?"selected":""}>🏗️ Empresa que nos encarga trabajos (Álamo, Armengol…)</option></select></label>
+            <label class="campo"><span>Color (para las empresas: así se ven sus trabajos en el calendario y las listas)</span><input type="color" name="color" value="${esc(a.color || "#d9822b")}" style="width:70px;height:34px;padding:2px"></label>
             ${inp("emails","Correos (separados por coma)",(a.emails||[]).join(", "),"text","info@administracion.es")}
             ${inp("telefono","Teléfono",a.telefono,"tel")}
             ${inp("web","Web",a.web)}
@@ -164,7 +166,7 @@
       const personas = [...caja.querySelectorAll(".persona-edit")].map(div => {
         const p = {}; div.querySelectorAll("input").forEach(i => p[i.dataset.k] = i.value.trim()); return p;
       }).filter(p => Object.values(p).some(Boolean));
-      await guardar({nombre, emails, telefono:f.telefono.trim(), web:f.web.trim(), direccion:f.direccion.trim(), alias:lista(f.alias), notas:f.notas, personas}, id ? "cambio" : "alta");
+      await guardar({nombre, tipo:f.tipo || "", color:f.tipo === "empresa" ? f.color : "", emails, telefono:f.telefono.trim(), web:f.web.trim(), direccion:f.direccion.trim(), alias:lista(f.alias), notas:f.notas, personas}, id ? "cambio" : "alta");
     };
     if(id) el.querySelector("#btnBaja").onclick = async () => {
       if(!confirm("¿Dar de baja " + a.nombre + "? No se borra: deja de salir en la lista y en los desplegables.")) return;
