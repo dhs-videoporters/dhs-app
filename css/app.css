@@ -348,3 +348,6 @@ a.fila-eq:hover{background:#f6f8fb}
 .eco-prev{margin-top:10px;font-size:14px;background:#f6f9fd;border-radius:8px;padding:8px 10px}
 .eco-hist{border:1px solid var(--linea);border-radius:10px;padding:10px 12px;background:#fafbfc}.eco-hist summary{cursor:pointer;color:var(--gris);font-size:14px}
 .tabla-imp td{vertical-align:top;font-size:13px}.tabla-imp .cCom{width:220px;max-width:100%}.tabla-imp tr.imp-igual{opacity:.55}
+.preg-fondo{position:fixed;inset:0;background:rgba(20,30,45,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
+.preg-caja{background:#fff;border-radius:12px;max-width:440px;width:100%;padding:18px 18px 14px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.preg-caja p{margin:0 0 14px;font-size:15px;line-height:1.45;white-space:pre-line}.preg-bot{display:flex;gap:8px;justify-content:flex-end}

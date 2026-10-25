@@ -156,9 +156,9 @@
         const sinDestino = sel.filter(x => !x.k && !x.elegida && !x.nueva);
         if(sinDestino.length) return m(sinDestino.length + " marcada(s) no tienen comunidad: elige una o marca «crear como comunidad nueva».");
         const malos = sel.filter(x => x.iban && !x.ok);
-        if(malos.length && !confirm(malos.length + " cuenta(s) no son válidas. ¿Guardarlas igualmente, marcadas como «IBAN no válido»?")) return;
+        if(malos.length && !await DHS_PREGUNTA(malos.length + " cuenta(s) no son válidas. ¿Guardarlas igualmente, marcadas como «IBAN no válido»?")) return;
         if(!sel.length) return m("No hay nada marcado.");
-        if(!confirm("Se van a guardar " + sel.length + " filas" + (sel.filter(x => x.nueva).length ? " (" + sel.filter(x => x.nueva).length + " comunidades nuevas)" : "") + ". ¿Continuar?")) return;
+        if(!await DHS_PREGUNTA("Se van a guardar " + sel.length + " filas" + (sel.filter(x => x.nueva).length ? " (" + sel.filter(x => x.nueva).length + " comunidades nuevas)" : "") + ". ¿Continuar?")) return;
         res.querySelector("#bImp").disabled = true; m("Guardando…");
         const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp(), firma = {por:yo, en};
         const origen = "importado: " + (f.files[0].name || "archivo").slice(0, 60);

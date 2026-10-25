@@ -44,3 +44,22 @@
   }
   window.DHS_XLS = { descargar, leer, campo };
 })();
+
+// Pregunta de confirmación dentro de la página (en vez de la ventanita del navegador): tapa toda la pantalla,
+// así un clic de más no cae en el menú de detrás. Devuelve una promesa con true / false.
+window.DHS_PREGUNTA = function(texto, si, no){
+  return new Promise(ok => {
+    const fondo = document.createElement("div");
+    fondo.className = "preg-fondo";
+    fondo.innerHTML = `<div class="preg-caja" role="dialog" aria-modal="true"><p></p><div class="preg-bot"><button class="btn sec" data-r="0"></button><button class="btn" data-r="1"></button></div></div>`;
+    fondo.querySelector("p").textContent = texto;
+    fondo.querySelector('[data-r="1"]').textContent = si || "Aceptar";
+    fondo.querySelector('[data-r="0"]').textContent = no || "Cancelar";
+    const fin = r => { document.removeEventListener("keydown", tecla, true); fondo.remove(); ok(r); };
+    const tecla = e => { if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); fin(false); } else if(e.key === "Enter"){ e.preventDefault(); e.stopPropagation(); fin(true); } };
+    fondo.addEventListener("click", e => { e.stopPropagation(); const b = e.target.closest("[data-r]"); if(b) fin(b.dataset.r === "1"); });
+    document.addEventListener("keydown", tecla, true);
+    document.body.appendChild(fondo);
+    fondo.querySelector('[data-r="1"]').focus();
+  });
+};

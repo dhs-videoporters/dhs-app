@@ -117,7 +117,8 @@
       const box = el.querySelector("#impCat"), file = fX.files[0]; fX.value = "";
       if(!file) return;
       box.innerHTML = `<p class="vacio">Leyendo…</p>`;
-      let filas; try{ filas = await window.DHS_XLS.leer(file); }catch(e){ box.innerHTML = `<p class="ko">No se puede leer: ${esc(e.message||e)}</p>`; return; }
+      if(window.DHS_GUARDANDO_CAT){ box.innerHTML = `<p class="ko">Todavía se está guardando la subida anterior. Espera a que acabe.</p>`; return; }
+      let filas; try{ filas = await window.DHS_XLS.leer(file); C = await catalogo(true); }catch(e){ box.innerHTML = `<p class="ko">No se puede leer: ${esc(e.message||e)}</p>`; return; }
       const cf = window.DHS_XLS.campo;
       const num = v => { if(typeof v === "number") return v; let t = String(v||"").replace(/[€%\s]/g,""); if(!t) return null; if(t.includes(",") && t.includes(".")) t = t.replace(/\./g,""); t = t.replace(",","."); const n = Number(t); return isNaN(n) ? NaN : n; };
       const siNo = (v, def) => { const t = sinAc(String(v||"")).trim(); return !t ? def : ["si","s","x","1","true"].includes(t); };
@@ -185,8 +186,9 @@
       bG.onclick = async () => {
         const m = t => box.querySelector("#msgXls").textContent = t;
         const aCS = nuevos.concat(cambiaCS);
-        if(!confirm((aCS.length ? aCS.length + " productos se van a crear o cambiar también en Contasimple. " : "") + "¿Guardar?")) return;
-        bG.disabled = true;
+        if(!await DHS_PREGUNTA((aCS.length ? aCS.length + " productos se van a crear o cambiar también en Contasimple. " : "") + "¿Guardar?")) return;
+        bG.disabled = true; window.DHS_GUARDANDO_CAT = true;
+        const avisoSalir = e => { e.preventDefault(); e.returnValue = ""; }; window.addEventListener("beforeunload", avisoSalir);
         const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
         const res = {}; let fallos = [];
         const doc = (x, id) => [String(id), {csId:Number(id), nombre:x.nombre, precio:x.precio, iva:x.iva, descripcion:x.descripcion || x.nombre, codigo:x.codigo, activo:x.activo,
@@ -195,7 +197,7 @@
         try{
           // De 25 en 25: cada tanda se guarda aquí en cuanto Contasimple la acepta (si se corta, no se duplica nada al volver a subir)
           for(let i = 0; i < aCS.length; i += 25){
-            m("Contasimple: " + Math.min(i + 25, aCS.length) + " de " + aCS.length + "…");
+            m("Contasimple: " + Math.min(i + 25, aCS.length) + " de " + aCS.length + "… (no cierres esta pantalla)");
             const lote = aCS.slice(i, i+25);
             const R = await llamar("guardarProductos", {productos: lote.map(x => ({fila:x.fila, id:x.id || null, nombre:x.nombre, precio:x.precio, iva:x.iva, descripcion:x.descripcion, codigo:x.codigo, activo:x.activo}))});
             R.forEach(r => { res[r.fila] = r; if(!r.ok) fallos.push("fila " + r.fila + ": " + (/InternalCode_Duplicated/.test(r.error) ? "el código ya lo tiene otro producto en Contasimple" : r.error)); });
@@ -210,6 +212,7 @@
             ${fallos.length ? `<p class="ko">No se han podido guardar ${fallos.length}:</p><ul>${fallos.map(f => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}<p><button class="btn sec" id="bCerrarXls">Cerrar</button></p></div>`;
           box.querySelector("#bCerrarXls").onclick = () => box.innerHTML = "";
         }catch(e){ m("Se ha parado: " + (e.message||e) + ". Lo que ya estaba hecho se queda; vuelve a subir el Excel para seguir."); bG.disabled = false; }
+        finally{ window.DHS_GUARDANDO_CAT = false; window.removeEventListener("beforeunload", avisoSalir); }
       };
     };
     pintar();
@@ -330,7 +333,7 @@
       const L = lineas.filter(l => l.concepto && l.cantidad > 0);
       if(!L.length) return m("Añade al menos una línea con concepto y cantidad.");
       if(L.some(l => !l.productoId && !dir)) return m("Solo Dirección puede añadir líneas fuera de catálogo.");
-      if(!confirm("Se va a crear el presupuesto en Contasimple con el siguiente número. ¿Seguir?")) return;
+      if(!await DHS_PREGUNTA("Se va a crear el presupuesto en Contasimple con el siguiente número. ¿Seguir?")) return;
       const b = el.querySelector("#btnGuardarP"); b.disabled = true; m("Guardando en Contasimple…");
       try{
         const r = await llamar("crearPresupuesto", {cliente:{csId:com.csId||null, nif:com.nif||"", nombre:com.nombre, direccion:com.direccion||"", poblacion:com.poblacion||""},
@@ -408,7 +411,7 @@
         descripcion:"Presupuesto aceptado " + p.numero + ": " + (p.lineas||[]).map(l => (l.cantidad !== 1 ? l.cantidad + " × " : "") + l.concepto).join(", ")});
       location.hash = "nueva-intervencion/" + encodeURIComponent(comId);
     };
-    const bR = el.querySelector("#bRechaza"); if(bR) bR.onclick = () => { if(confirm("¿Marcar como rechazado?")) cambiaEstado("rechazado", "Rechazado"); };
+    const bR = el.querySelector("#bRechaza"); if(bR) bR.onclick = async () => { if(await DHS_PREGUNTA("¿Marcar como rechazado?")) cambiaEstado("rechazado", "Rechazado"); };
     const bE = el.querySelector("#bEnviar");
     if(bE) bE.onclick = async () => {
       let para = "";
@@ -422,7 +425,7 @@
         <p><button class="btn" id="okEnviar">Enviar</button></p>`;
       caja.querySelector("#okEnviar").onclick = async () => {
         const para2 = caja.querySelector("#ePara").value.trim(); if(!para2) return m("Pon el correo de destino.");
-        if(!confirm("¿Enviar el presupuesto a " + para2 + "?")) return;
+        if(!await DHS_PREGUNTA("¿Enviar el presupuesto a " + para2 + "?")) return;
         m("Enviando…");
         try{
           await llamar("enviarPresupuesto", {id:p.csId, numero:p.numero, para:para2, asunto:caja.querySelector("#eAsunto").value, texto:caja.querySelector("#eTexto").value});
@@ -452,7 +455,7 @@
           lineasF = [{concepto:(modo === "todo" ? "Resto" : pct + " % (entrada)") + " del presupuesto " + p.numero + " · " + com.nombre, cantidad:1, precio:base, descuento:0}];
         }
         const totalTxt = eur(r2(lineasF.reduce((n,l) => n + l.cantidad*l.precio*(1-(l.descuento||0)/100), 0) * 1.21));
-        if(!confirm("¿Emitir la factura en Contasimple por " + totalTxt + " (IVA incluido)?")) return;
+        if(!await DHS_PREGUNTA("¿Emitir la factura en Contasimple por " + totalTxt + " (IVA incluido)?")) return;
         m("Emitiendo la factura…");
         try{
           const r = await llamar("facturar", {clienteId:p.clienteId, presupuestoId:p.csId, lineas:lineasF, notas:"Presupuesto " + p.numero});
