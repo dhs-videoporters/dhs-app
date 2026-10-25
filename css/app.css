@@ -351,3 +351,6 @@ a.fila-eq:hover{background:#f6f8fb}
 .preg-fondo{position:fixed;inset:0;background:rgba(20,30,45,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
 .preg-caja{background:#fff;border-radius:12px;max-width:440px;width:100%;padding:18px 18px 14px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
 .preg-caja p{margin:0 0 14px;font-size:15px;line-height:1.45;white-space:pre-line}.preg-bot{display:flex;gap:8px;justify-content:flex-end}
+.cam-pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:#eef0f3;color:#5b6573}
+.cam-pill.ok{background:#dcf3e3;color:#1d7a3e}.cam-pill.warn{background:#fff3d6;color:#8a5a00}.cam-pill.bad{background:#fde2e1;color:#b42318}.cam-pill.now{background:#dbe8ff;color:#2f6fd6}
+.cam-datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:8px}.cam-datos div{border:1px solid var(--linea);border-radius:8px;padding:8px 10px}.cam-datos span{display:block;font-size:12px;color:var(--gris)}

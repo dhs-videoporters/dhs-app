@@ -85,7 +85,9 @@
         <table class="tabla-fi"><thead><tr><th>Fecha</th><th>Factura</th><th>Cliente</th><th>Importe</th></tr></thead><tbody>
           ${cobr.map(c => `<tr><td>${fch(c.fecha)}</td><td>${esc(c.numero)}</td><td>${esc(c.com ? c.com.nombre : c.cliente)}</td><td>${eur(c.importe)}</td></tr>`).join("") || `<tr><td colspan="4" class="vacio">Nada.</td></tr>`}
         </tbody></table>
+        <div id="ecoCam"></div>
       </div>`;
+    if(window.DHS_CAMS) window.DHS_CAMS.resumen(el.querySelector("#ecoCam"));
     el.querySelector("#fAdm").onchange = e => { adminF = e.target.value; vista(el); };
     el.querySelector("#btnRec").onclick = () => vista(el, true);
     const mC = el.querySelector("#mesC"); mC.onclick = e => e.stopPropagation(); mC.onchange = e => { mes = e.target.value || mes; vista(el); };

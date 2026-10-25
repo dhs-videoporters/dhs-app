@@ -67,7 +67,7 @@
 
   // ---------- FICHA ----------
   const PESTANAS = [
-    ["info","Info"],["intervenciones","Intervenciones"],["presupuestos","Economía"],["documentos","Documentos"],["galeria","Galería"]
+    ["info","Info"],["intervenciones","Intervenciones"],["presupuestos","Economía"],["camaras","📹 Cámaras"],["documentos","Documentos"],["galeria","Galería"]
   ];
   let pestanaActual = "info";
 
@@ -140,6 +140,7 @@
     intervenciones: (el, id) => D().S.puede("trabajos","ver") ? window.DHS_TRAB.deComunidad(el, id) : el.innerHTML = `<h3>Intervenciones</h3><p class="vacio">Tu perfil no puede ver las intervenciones.</p>`,
     documentos:     el => el.innerHTML = `<h3>Documentos</h3><p class="vacio">Aquí se guardarán los presupuestos en PDF, actas y contratos (fase 6).</p>`,
     presupuestos:   (el, id, c) => window.DHS_PRES.pestana(el, id, c),
+    camaras:        (el, id, c) => window.DHS_CAMS ? window.DHS_CAMS.pestana(el, id, c) : null,
     galeria:        (el, id) => window.DHS_FOTOS.galeriaComunidad(el, id)
   };
 

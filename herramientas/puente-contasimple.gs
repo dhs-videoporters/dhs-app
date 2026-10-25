@@ -136,6 +136,27 @@ const PUENTE = {
     return { clienteId: clienteId, pdf: pdf, aviso: aviso };
   },
 
+  // Instalaciones de cámaras con sus revisiones (y, solo para Cobros/Dirección, el mantenimiento: precio y años cobrados).
+  // Las claves de los grabadores NO salen de la app de cámaras.
+  camaras: function (d, u) {
+    exige_(u, 'comunidades', 'ver');
+    const I = leerCol_(PROYECTO_COBROS, 'dhs_instalaciones'), R = leerCol_(PROYECTO_COBROS, 'dhs_revisiones');
+    const verEco = puede_(u, 'cobros', 'ver'), E = verEco ? leerCol_(PROYECTO_COBROS, 'dhs_economia') : {};
+    const ALERTA = ['Incidencia', 'Renovar'];
+    return Object.keys(I).filter(k => k.charAt(0) !== '_').map(k => {
+      const i = I[k];
+      const revs = Object.keys(R).filter(r => r.indexOf(k + '_') === 0).map(r => {
+        const x = R[r], partes = r.split('_'), checks = x.checks || {};
+        return { anio: Number(partes[partes.length - 2]), periodo: partes[partes.length - 1], hecha: !!x.hecha, fecha: x.fecha || '', tecnico: x.tecnico || '',
+          incidencias: Object.keys(checks).filter(c => ALERTA.indexOf(checks[c]) >= 0) };
+      }).sort((a, b) => (b.anio - a.anio) || (a.periodo < b.periodo ? 1 : -1));
+      const out = { id: k, comunidad: i.comunidad || '', direccion: i.direccion || '', ciudad: i.ciudad || '', admin: i.admin || '', camaras: i.camaras,
+        conexion: i.conexion || '', notas: i.notas || '', contacto: i.contacto || '', telefono: i.telefono || '', revisiones: revs };
+      if (verEco && E[k]) out.economia = { precio: E[k].precio || 0, cobros: E[k].cobros || {} };
+      return out;
+    });
+  },
+
   estadoPresupuesto: function (d, u) {
     exige_(u, 'precios', 'editar');
     const ok = ['Creado', 'Enviado', 'Aceptado', 'Rechazado'];
@@ -251,6 +272,21 @@ function aplicarCobro_(f, c) {
   f.devuelto = cargos.some(x => x.estado === 'devuelto');
   f.enBanco = banco > 0;
   f.enHoja = cargos.some(x => x.estado === 'enviar');
+}
+
+// ---------- Cámaras (app de cámaras, proyecto dhs-camaras): solo lectura, a modo de información ----------
+function leerCol_(proyecto, col) {
+  const base = 'https://firestore.googleapis.com/v1/projects/' + proyecto + '/databases/(default)/documents/' + col;
+  const o = {}; let token = '';
+  do {
+    const r = UrlFetchApp.fetch(base + '?pageSize=300' + (token ? '&pageToken=' + encodeURIComponent(token) : ''),
+      { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Goog-User-Project': proyecto }, muteHttpExceptions: true });
+    if (r.getResponseCode() >= 300) throw new Error(col + ' ' + r.getResponseCode());
+    const j = JSON.parse(r.getContentText() || '{}');
+    (j.documents || []).forEach(d => { o[d.name.split('/').pop()] = aJSON_(d.fields || {}); });
+    token = j.nextPageToken || '';
+  } while (token);
+  return o;
 }
 
 // ---------- Ayudas ----------
