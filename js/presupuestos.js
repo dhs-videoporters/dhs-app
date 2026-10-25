@@ -51,7 +51,7 @@
       </div>
       <div id="impCat"></div>
       <p id="cuentaCat" class="vacio" style="font-weight:600"></p>
-      <table class="tabla-fi tabla-cat"><thead><tr><th>Código</th><th>Producto / servicio</th><th>Tipo</th><th>Precio</th><th>IVA</th><th>Grupo</th><th>Técnico</th><th title="Descuento máximo permitido. Vacío = no admite descuento">Dto. máx.</th></tr></thead><tbody id="tbCat"></tbody></table>`;
+      <table class="tabla-fi tabla-cat"><thead><tr><th>Código</th><th>Producto / servicio</th><th>Tipo</th><th>Precio sin IVA</th><th>IVA</th><th>PVP (con IVA)</th><th>Grupo</th><th>Técnico</th><th title="Descuento máximo permitido. Vacío = no admite descuento">Dto. máx.</th></tr></thead><tbody id="tbCat"></tbody></table>`;
     const pintar = () => {
       const q = sinAc(filtro.q);
       const L = Object.entries(C).filter(([k,p]) => p.activo !== false && (!q || sinAc(p.nombre + " " + (p.descripcion||"") + " " + (p.codigo||"")).includes(q))
@@ -59,10 +59,10 @@
       el.querySelector("#cuentaCat").textContent = L.length + " de " + Object.keys(C).length;
       el.querySelector("#tbCat").innerHTML = L.map(([k,p]) => `<tr data-k="${k}">
         <td>${esc(p.codigo||"")}</td><td>${esc(p.nombre)}${p.descripcion && p.descripcion !== p.nombre ? `<br><span class="vacio">${esc(p.descripcion)}</span>` : ""}</td><td>${esc(p.tipo||"")}</td>
-        <td>${eur(p.precio)}</td><td>${p.iva === IVA ? IVA + " %" : `<span class="tag aviso">${esc(p.iva)} %</span>`}</td>
+        <td>${eur(p.precio)}</td><td>${p.iva === IVA ? IVA + " %" : `<span class="tag aviso">${esc(p.iva)} %</span>`}</td><td><b>${eur(r2((Number(p.precio)||0) * (1 + (Number(p.iva ?? IVA)||0) / 100)))}</b></td>
         <td>${edita ? `<select class="selGrupo"><option value="">—</option>${GRUPOS.map(g => `<option ${p.grupo===g?"selected":""}>${g}</option>`).join("")}</select>` : esc(p.grupo||"—")}</td>
         <td>${edita ? `<input type="checkbox" class="chkTec" ${p.tecnico ? "checked" : ""}>` : (p.tecnico ? "Sí" : "")}</td>
-        <td>${edita ? `<input type="number" class="numDto" min="0" max="100" step="1" placeholder="no" value="${p.dtoMax || ""}" style="width:62px"> %` : (p.dtoMax ? "hasta " + p.dtoMax + " %" : "no")}</td></tr>`).join("") || `<tr><td colspan="8" class="vacio">${Object.keys(C).length ? "Nada con ese filtro." : "Todavía vacío: pulsa «Actualizar desde Contasimple»."}</td></tr>`;
+        <td>${edita ? `<input type="number" class="numDto" min="0" max="100" step="1" placeholder="no" value="${p.dtoMax || ""}" style="width:62px"> %` : (p.dtoMax ? "hasta " + p.dtoMax + " %" : "no")}</td></tr>`).join("") || `<tr><td colspan="9" class="vacio">${Object.keys(C).length ? "Nada con ese filtro." : "Todavía vacío: pulsa «Actualizar desde Contasimple»."}</td></tr>`;
       if(!edita) return;
       const guardar = async (k, cambio) => {
         const yo = S.usuario.email.toLowerCase();
@@ -106,10 +106,10 @@
       try{
         const filas = Object.entries(C).sort((a,b) => (a[1].codigo||"~").localeCompare(b[1].codigo||"~") || a[1].nombre.localeCompare(b[1].nombre)).map(([k,p]) => ({
           "ID Contasimple": p.csId || Number(k), "Código": p.codigo||"", "Producto / servicio": p.nombre||"", "Tipo": p.tipo||"", "Grupo": p.grupo||"",
-          "Técnico": p.tecnico ? "Sí" : "No", "Dto. máx. %": p.dtoMax || "", "Precio sin IVA": Number(p.precio)||0, "IVA %": p.iva ?? IVA, "Descripción": p.descripcion && p.descripcion !== p.nombre ? p.descripcion : "", "Activo": p.activo === false ? "No" : "Sí"}));
+          "Técnico": p.tecnico ? "Sí" : "No", "Dto. máx. %": p.dtoMax || "", "Precio sin IVA": Number(p.precio)||0, "IVA %": p.iva ?? IVA, "PVP con IVA (informativo)": r2((Number(p.precio)||0) * (1 + (Number(p.iva ?? IVA)||0) / 100)), "Descripción": p.descripcion && p.descripcion !== p.nombre ? p.descripcion : "", "Activo": p.activo === false ? "No" : "Sí"}));
         if(!filas.length) filas.push(Object.fromEntries(COLS.map(c => [c, ""])));
         await window.DHS_XLS.descargar("DHS catálogo " + new Date().toISOString().slice(0,10), filas, "Catálogo");
-        m("Descargado. Para añadir uno nuevo, pon una fila con el ID vacío. El código no se puede repetir (para agrupar, usa Grupo).");
+        m("Descargado. Para añadir uno nuevo, pon una fila con el ID vacío. El código no se puede repetir (para agrupar, usa Grupo). La columna PVP es solo informativa: el precio que manda es el «Precio sin IVA».");
       }catch(e){ m("No se ha podido: " + (e.message||e)); }
     };
     const fX = el.querySelector("#fXls");
