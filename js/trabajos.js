@@ -15,6 +15,14 @@
   const DURACIONES = [30,60,90,120,150,180,240,300,360,420,480];
   const durTxt = m => m < 60 ? m + " min" : (m % 60 ? Math.floor(m/60) + " h " + (m%60) + " min" : (m/60) + (m === 60 ? " hora" : " horas"));
   const HORAS = []; for(let h = 9; h < 18; h++){ HORAS.push(String(h).padStart(2,"0")+":00"); HORAS.push(String(h).padStart(2,"0")+":30"); }
+  // Varios días (Ángel 25/10: una instalación del 25 al 30): una cita por cada día laborable entre "Día" y "Hasta", misma hora, duración y personas
+  function citasDias(fecha, hasta, hora, duracion, personal){
+    if(!hasta || hasta <= fecha) return [{fecha, hora, duracion, personal}];
+    const L = [], d = new Date(fecha + "T12:00"), fin = new Date(hasta + "T12:00");
+    while(d <= fin && L.length < 31){ const iso = d.toISOString().slice(0,10); if(d.getDay() !== 0 && d.getDay() !== 6 || iso === fecha) L.push({fecha:iso, hora, duracion, personal}); d.setDate(d.getDate() + 1); }
+    return L;
+  }
+  const txtDias = L => L.length > 1 ? " · " + L.length + " días (" + fmtFecha(L[0].fecha) + " – " + fmtFecha(L[L.length-1].fecha) + ")" : "";
   const fmtFecha = f => f ? new Date(f + "T12:00").toLocaleDateString("es-ES", {weekday:"short", day:"numeric", month:"short"}) : "";
   // Aviso corto a la administración al quedar hecha (lo envía el Apps Script desde el Gmail de DHS)
   const casillaAviso = t => t.adminId && t.comunidadId ? `<label class="chk aviso-admin"><input type="checkbox" name="avisarAdmin" checked> 📧 Avisar a la administración de que está solucionado</label>` : "";
@@ -145,6 +153,7 @@
             <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="sinFecha"> Todavía sin fecha</label>
             <div id="bloqueCita">
               <label class="campo"><span>Día</span><input name="fecha" type="date" value="${hoy}"></label>
+              <label class="campo"><span>Hasta (si dura varios días)</span><input name="hasta" type="date"></label>
               <label class="campo"><span>Hora</span><select name="hora">${HORAS.map(h => `<option ${h==="09:00"?"selected":""}>${h}</option>`).join("")}</select></label>
             </div>
             <label class="campo"><span>Duración estimada</span><select name="duracion">${DURACIONES.map(m => `<option value="${m}" ${m===60?"selected":""}>${durTxt(m)}</option>`).join("")}</select></label>
@@ -273,7 +282,7 @@
       const {db} = D(), yo = S.usuario.email.toLowerCase();
       const firma = {por:yo, en:firebase.firestore.FieldValue.serverTimestamp()};
       const dur = Number(v("duracion")) || 60;
-      const citas = sinFecha ? [] : [{fecha:v("fecha"), hora:v("hora"), duracion:dur, personal:asignados}];
+      const citas = sinFecha ? [] : citasDias(v("fecha"), v("hasta"), v("hora"), dur, asignados);
       msg("Guardando…");
       try{
         const numero = await siguienteNumero();
@@ -539,6 +548,7 @@
           ${todo && !CERRADOS.includes(t.estado) ? `<p style="margin-top:8px"><button class="btn sec" id="btnCita">${(t.citas||[]).length ? "Cambiar cita" : "Poner cita"}</button></p>
           <form id="fCita" class="oculto" style="margin-top:8px">
             <label class="campo"><span>Día</span><input name="fecha" type="date" value="${esc(cita0.fecha || new Date().toISOString().slice(0,10))}"></label>
+            <label class="campo"><span>Hasta (si dura varios días)</span><input name="hasta" type="date" value="${(t.citas||[]).length > 1 ? esc(t.citas[t.citas.length-1].fecha) : ""}"></label>
             <label class="campo"><span>Hora</span><select name="hora">${HORAS.map(h => `<option ${h===(cita0.hora||"09:00")?"selected":""}>${h}</option>`).join("")}</select></label>
             <label class="campo"><span>Duración</span><select name="duracion">${DURACIONES.map(m => `<option value="${m}" ${m===(cita0.duracion||t.duracionEstimada||60)?"selected":""}>${durTxt(m)}</option>`).join("")}</select></label>
             <div class="campo"><span>Quién va</span><div class="personas-sel">${activos.map(([k,p]) => `<label><input type="checkbox" name="asignados" value="${k}" ${(t.asignados||[]).includes(k)?"checked":""}><i style="background:${esc(p.color)}"></i>${esc(p.nombre)}</label>`).join("")}</div></div>
@@ -677,8 +687,8 @@
         ev.preventDefault();
         const fd = new FormData(fC), as = fd.getAll("asignados");
         if(!as.length) return el.querySelector("#msgCita").textContent = "Marca quién va.";
-        const c = {fecha:fd.get("fecha"), hora:fd.get("hora"), duracion:Number(fd.get("duracion")), personal:as};
-        guardarCita([c], as, fmtFecha(c.fecha) + " " + c.hora + " · " + durTxt(c.duracion) + " · " + as.map(k => P[k] ? P[k].nombre : "").join(", "));
+        const L = citasDias(fd.get("fecha"), fd.get("hasta"), fd.get("hora"), Number(fd.get("duracion")), as), c = L[0];
+        guardarCita(L, as, fmtFecha(c.fecha) + " " + c.hora + " · " + durTxt(c.duracion) + txtDias(L) + " · " + as.map(k => P[k] ? P[k].nombre : "").join(", "));
       };
       el.querySelector("#quitaCita").onclick = () => { if(confirm("¿Quitar la cita? La intervención queda sin fecha.")) guardarCita([], t.asignados || [], "Cita quitada"); };
     }
