@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DHS App · PRUEBAS · Traspaso de Interph</title>
+<style>
+body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#eef1f5;margin:0;color:#1d2433}
+.top{background:#b45309;color:#fff;padding:10px 16px;font-weight:700}
+.card{max-width:860px;margin:24px auto;background:#fff;border-radius:10px;padding:20px 24px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+h2{margin-top:0}.ok{color:#1e8449}.ko{color:#c0392b}.muted{color:#5a6577;font-size:13px}
+label{display:block;margin:14px 0 4px;font-weight:600}
+button{padding:8px 14px;border-radius:6px;border:0;background:#1f3a5f;color:#fff;font-weight:600;cursor:pointer}
+button:disabled{background:#9aa5b5;cursor:default}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:8px}
+td,th{border-bottom:1px solid #e5e9f0;padding:4px 6px;text-align:left;vertical-align:top}
+#log{white-space:pre-wrap;font-size:13px;margin-top:12px;max-height:320px;overflow:auto;background:#f6f8fb;border-radius:6px;padding:8px}
+.barra{height:10px;background:#e5e9f0;border-radius:6px;overflow:hidden;margin-top:8px}.barra i{display:block;height:100%;background:#1e8449;width:0}
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="../js/config-pruebas.js"></script>
+</head><body>
+<div class="top">DHS App · VERSIÓN DE PRUEBAS · Traspaso de Interph</div>
+<div class="card">
+  <h2>Pasar los datos de Interph</h2>
+  <p class="muted">Solo Ángel o Joel. Los archivos se leen en este ordenador y se guardan en la base de datos de <b>pruebas</b>. Se puede repetir sin miedo: lo que ya está cargado no se duplica.</p>
+  <div id="btnGoogle"></div>
+  <div id="sesion" class="muted"></div>
+  <label>1. Datos de Interph (interph-datos.json)</label><input type="file" id="fDat" accept=".json">
+  <label>2. Excel revisado (Interph - revisión de comunidades.xlsx) <span class="muted">— si no lo eliges, se usan mis propuestas</span></label><input type="file" id="fXls" accept=".xlsx">
+  <label>3. Carpeta de fotos: Descargas › interph-backup › files › <b>uploads</b></label><input type="file" id="fFot" webkitdirectory multiple>
+  <p style="margin-top:14px"><button id="bPrev" disabled>Ver resumen</button> <button id="bCarga" disabled>Cargar en pruebas</button></p>
+  <div id="res"></div>
+  <div class="barra"><i id="barra"></i></div>
+  <div id="log"></div>
+</div>
+<script>
+firebase.initializeApp(DHS_CONFIG.firebase);
+const auth = firebase.auth(), db = firebase.firestore(), st = firebase.storage();
+const $ = id => document.getElementById(id);
+const DIRECCION = ["herrerazarzoso@gmail.com", "dhsvideoporters@gmail.com"];
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const sinAc = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+const norm = s => sinAc(s).replace(/[^a-z0-9]+/g, " ").trim();
+const slug = s => sinAc(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || "sin-nombre";
+const log = t => { $("log").textContent += t + "\n"; $("log").scrollTop = 1e9; };
+const barra = (n, de) => $("barra").style.width = (de ? Math.round(n / de * 100) : 0) + "%";
+const TS = s => { if(!s) return null; const d = new Date(String(s).replace(" ", "T")); return isNaN(d) ? null : firebase.firestore.Timestamp.fromDate(d); };
+let usuario = null, DATOS = null, DEC = null, FOTOS = {}, PLAN = null;
+
+function alEntrar(r){ auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(r.credential)).catch(e => $("sesion").textContent = "Error: " + e.code); }
+window.onload = () => { google.accounts.id.initialize({client_id:DHS_CONFIG.googleClientId, callback:alEntrar}); google.accounts.id.renderButton($("btnGoogle"), {theme:"filled_blue", size:"large", locale:"es"}); };
+auth.onAuthStateChanged(u => { usuario = u;
+  $("sesion").innerHTML = u ? (DIRECCION.includes(u.email.toLowerCase()) ? `Sesión: <b>${esc(u.email)}</b>` : `<span class="ko">${esc(u.email)} no es de Dirección.</span>`) : "Inicia sesión con la cuenta de Ángel o de DHS.";
+  listo(); });
+const listo = () => { $("bPrev").disabled = !(usuario && DIRECCION.includes(usuario.email.toLowerCase()) && DATOS); };
+
+$("fDat").onchange = async e => { try{ DATOS = JSON.parse(await e.target.files[0].text()); if(DATOS.origen !== "Interph") throw "no es el archivo de Interph"; log("Datos: " + DATOS.tareas.length + " intervenciones, " + DATOS.comunidades.length + " grupos."); }catch(err){ DATOS = null; log("⚠️ No se puede leer: " + err); } listo(); };
+$("fXls").onchange = async e => {
+  try{
+    const wb = XLSX.read(await e.target.files[0].arrayBuffer(), {type:"array"});
+    const filas = XLSX.utils.sheet_to_json(wb.Sheets["Comunidades"], {defval:""});
+    DEC = {}; filas.forEach(f => { if(f["Grupo"]) DEC[f["Grupo"]] = f; });
+    log("Excel revisado: " + Object.keys(DEC).length + " filas.");
+  }catch(err){ DEC = null; log("⚠️ No se puede leer el Excel: " + err); }
+};
+$("fFot").onchange = e => { FOTOS = {}; [...e.target.files].forEach(f => FOTOS[f.name] = f); log("Fotos en la carpeta: " + Object.keys(FOTOS).length); };
+
+// ---------- Plan: qué se une, qué se crea ----------
+$("bPrev").onclick = async () => {
+  $("bPrev").disabled = true; $("res").innerHTML = "Leyendo la base de datos de pruebas…";
+  const coms = {}, admins = {}, ya = new Set();
+  (await db.collection("dhs_comunidades").get()).forEach(d => coms[d.id] = d.data());
+  (await db.collection("dhs_admins").get()).forEach(d => admins[d.id] = d.data());
+  (await db.collection("dhs_trabajos").where("importado.origen", "==", "interph").get()).forEach(d => ya.add(d.id));
+  const porNombre = {}, porDir = {};
+  Object.entries(coms).forEach(([k,c]) => { porNombre[norm(c.nombre)] = k; if(c.direccion) porDir[norm(c.direccion) + "|" + norm(c.poblacion)] = porDir[norm(c.direccion) + "|" + norm(c.poblacion)] || k; });
+  const admPor = {}; Object.entries(admins).forEach(([k,a]) => { [a.nombre, ...(a.alias||[])].forEach(n => admPor[norm(n)] = k); });
+  const nuevasAdm = {}, nuevasCom = {};
+  const adminId = (nombre, empresa) => {
+    const n = String(nombre || "").replace(/\s*\(nueva\)\s*$/i, "").trim(); if(!n) return null;
+    if(admPor[norm(n)]) return admPor[norm(n)];
+    const id = "a_" + slug(n); nuevasAdm[id] = {nombre:n, tipo: empresa ? "empresa" : "", color: empresa ? (norm(n).includes("armengol") ? "#d9822b" : "#2f9e5b") : "", alias:[], emails:[], personas:[], activo:true, origen:"interph"};
+    admPor[norm(n)] = id; return id;
+  };
+  const TIPO = {"comunidad":"comunidad", "particular":"particular", "empresa":"empresa"};
+  const grupos = [], sinDecidir = [], noPasar = [];
+  DATOS.comunidades.forEach(g => {
+    const x = DEC && DEC[g.grupo] || {};
+    const que = String(x["Qué hacer"] || (g.existe ? "UNIR" : (g.dudosa || g.tipo === "sin" ? "REVISAR" : "NUEVA"))).toUpperCase().trim();
+    const destino = String(x["Comunidad de la app (si se une)"] ?? (g.existe || g.dudosa) ?? "").trim();
+    const dir = String(x["Dirección"] ?? g.direccion).trim(), pob = String(x["Población"] ?? g.poblacion).trim();
+    const tipo = TIPO[norm(x["Tipo"] ?? g.tipo)] || (norm(x["Tipo"]) === "sin direccion" ? "sin" : "comunidad");
+    const adm = String(x["Administración"] ?? g.admin).trim(), emp = String(x["Empresa (de parte de)"] ?? g.empresa).trim();
+    if(que === "NO PASAR"){ noPasar.push(g); return; }
+    if(que !== "UNIR" && que !== "NUEVA"){ sinDecidir.push(g); return; }
+    let comId = null, como = "";
+    if(que === "UNIR"){
+      comId = porNombre[norm(destino)] || porDir[norm(dir) + "|" + norm(pob)] || null;
+      como = comId ? "unida a «" + coms[comId].nombre + "»" : "no encuentro «" + destino + "» en la app: se crea";
+    } else comId = porDir[norm(dir) + "|" + norm(pob)] || null;   // si ya se creó en una carga anterior
+    if(!comId){
+      const nombreN = que === "UNIR" && destino ? destino : dir;
+      const clave = norm(nombreN) + "|" + norm(pob);
+      comId = (Object.entries(nuevasCom).find(([k,c]) => c._clave === clave) || [])[0];
+      if(!comId){
+        comId = "c_" + slug(nombreN + (pob ? " " + pob : "")); let n = 2; while(coms[comId] || nuevasCom[comId]) comId = "c_" + slug(nombreN + (pob ? " " + pob : "")) + "-" + (n++);
+        nuevasCom[comId] = {_clave:clave, nombre:nombreN, direccion:dir, poblacion:pob, tipo: tipo === "sin" ? "comunidad" : tipo, adminId: adminId(adm, false), empresaId: emp ? adminId(emp, true) : null,
+          nif:"", activo:true, nueva:true, origen:["interph"], creadaDesde:"Interph",
+          notas: [g.contactos.length ? "Contactos (Interph): " + g.contactos.join(", ") : "", g.telefonos.length ? "Teléfonos (Interph): " + g.telefonos.join(", ") : ""].filter(Boolean).join("\n")};
+        como = "nueva";
+      } else como = "nueva (junto con otra fila)";
+    }
+    grupos.push({g, comId, como, adm: adminId(adm, false), emp: emp ? adminId(emp, true) : null});
+  });
+  const tareasPorGrupo = {}; DATOS.tareas.forEach(t => tareasPorGrupo[t.id] = t);
+  const aPasar = grupos.flatMap(x => x.g.tareas.map(id => ({t:tareasPorGrupo[id], x})));
+  const nFotos = aPasar.reduce((n, y) => n + y.t.fotos.length, 0), hay = aPasar.reduce((n, y) => n + y.t.fotos.filter(f => FOTOS[f.archivo]).length, 0);
+  PLAN = {grupos, aPasar, nuevasAdm, nuevasCom, coms, ya};
+  $("res").innerHTML = `<table>
+    <tr><td>Comunidades que ya existen (se les añade el historial)</td><td><b>${grupos.filter(x => !nuevasCom[x.comId]).length}</b></td></tr>
+    <tr><td>Comunidades nuevas que se crean («✱ Faltan datos»)</td><td><b>${Object.keys(nuevasCom).length}</b></td></tr>
+    <tr><td>Administraciones / empresas nuevas</td><td><b>${Object.keys(nuevasAdm).length}</b> ${Object.values(nuevasAdm).map(a => esc(a.nombre) + (a.tipo ? " (empresa)" : "")).join(", ")}</td></tr>
+    <tr><td>Intervenciones que se pasan</td><td><b>${aPasar.length}</b>${ya.size ? ` <span class="muted">(${aPasar.filter(y => ya.has("ip_" + y.t.id)).length} ya estaban: no se repiten)</span>` : ""}</td></tr>
+    <tr><td>Observaciones</td><td><b>${aPasar.reduce((n, y) => n + y.t.observaciones.length, 0)}</b></td></tr>
+    <tr><td>Fotos</td><td><b>${hay}</b> de ${nFotos} ${nFotos && !hay ? `<span class="ko">— elige la carpeta uploads</span>` : ""}</td></tr>
+    <tr><td class="${sinDecidir.length ? "ko" : ""}">Sin decidir (REVISAR): no se pasan todavía</td><td><b>${sinDecidir.length}</b> grupos, ${sinDecidir.reduce((n,g) => n + g.tareas.length, 0)} intervenciones ${sinDecidir.length ? "<br><span class='muted'>" + sinDecidir.slice(0,12).map(g => esc(g.grupo + " " + g.direccion)).join(" · ") + (sinDecidir.length > 12 ? " …" : "") + "</span>" : ""}</td></tr>
+    <tr><td>Marcadas «NO PASAR»</td><td><b>${noPasar.length}</b></td></tr></table>
+    <p class="muted">Nada se ha guardado todavía. Si está bien, pulsa «Cargar en pruebas».</p>`;
+  $("bCarga").disabled = false; $("bPrev").disabled = false;
+};
+
+// ---------- Carga ----------
+const FRANJA_ESTADO = {};
+async function reducir(file, max, calidad){
+  return new Promise((ok, ko) => { const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); c.toBlob(b => b ? ok(b) : ko("no se ha podido leer"), "image/jpeg", calidad); };
+    img.onerror = () => { URL.revokeObjectURL(u); ko("no es una imagen"); }; img.src = u; });
+}
+$("bCarga").onclick = async () => {
+  if(!PLAN) return;
+  if(!confirm("Se va a cargar en PRUEBAS: " + Object.keys(PLAN.nuevasCom).length + " comunidades nuevas y " + PLAN.aPasar.length + " intervenciones con sus observaciones y fotos. ¿Seguir?")) return;
+  $("bCarga").disabled = true; $("bPrev").disabled = true;
+  const yo = usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp(), firma = {por:yo, en};
+  try{
+    // 1) Administraciones y empresas nuevas
+    let b = db.batch(), n = 0; const commit = async (forzar) => { if(n >= 400 || (forzar && n)){ await b.commit(); b = db.batch(); n = 0; } };
+    for(const [id, a] of Object.entries(PLAN.nuevasAdm)){ b.set(db.collection("dhs_admins").doc(id), {...a, modificado:firma}); n++; await commit(); }
+    await commit(true); log("✔ Administraciones/empresas nuevas: " + Object.keys(PLAN.nuevasAdm).length);
+    // 2) Comunidades nuevas
+    for(const [id, c] of Object.entries(PLAN.nuevasCom)){ const {_clave, ...d} = c; b.set(db.collection("dhs_comunidades").doc(id), {...d, modificado:firma}); n++; await commit(); }
+    await commit(true); log("✔ Comunidades nuevas: " + Object.keys(PLAN.nuevasCom).length);
+    // Empresa en comunidades que ya existían
+    for(const x of PLAN.grupos){ if(x.emp && !PLAN.nuevasCom[x.comId] && PLAN.coms[x.comId] && !PLAN.coms[x.comId].empresaId){ b.set(db.collection("dhs_comunidades").doc(x.comId), {empresaId:x.emp, modificado:firma}, {merge:true}); n++; await commit(); } }
+    await commit(true);
+    // 3) Intervenciones + observaciones
+    let hechas = 0, saltadas = 0;
+    for(const {t, x} of PLAN.aPasar){
+      const id = "ip_" + t.id;
+      if(PLAN.ya.has(id)){ saltadas++; continue; }
+      const com = PLAN.nuevasCom[x.comId] || PLAN.coms[x.comId] || {};
+      const estado = t.estado === "agendado" && !t.cita ? "nuevo" : t.estado;
+      const ref = db.collection("dhs_trabajos").doc(id);
+      const resumen = [t.resumenHecho, t.observacionesCampo && t.observacionesCampo !== t.resumenHecho ? "Observaciones (Interph): " + t.observacionesCampo : ""].filter(Boolean).join("\n");
+      b.set(ref, {numero:"IP-" + t.id, comunidadId:x.comId, nombre:com.nombre || t.direccionOriginal, direccion:com.direccion || t.direccionOriginal, poblacion:com.poblacion || t.poblacionOriginal,
+        adminId:com.adminId || x.adm || null, origen: com.tipo === "particular" ? "particular" : (com.adminId ? "administracion" : "empresa"), ...(x.emp || t.empresa ? {encargo: x.emp || null} : {}),
+        especialidad:t.especialidad, tipo:"reparacion", urgencia:"normal", estado, descripcion:t.descripcion,
+        avisa:{piso:"", nombre:t.contacto, telefono:t.telefono}, duracionEstimada: t.cita ? t.cita.duracion : 60, citas: t.cita ? [t.cita] : [], asignados: t.cita ? t.cita.personal : [],
+        hechoPor:[], tecnicoInterph:t.tecnico, material: t.material ? [{cant:1, desc:t.material}] : [], tiempoReal:null, fotos:[],
+        resumenHecho: resumen, fechaHecho: t.fechaHecho || null, fechaAviso:t.fechaAviso, fechaPrevista:t.fechaPrevista || null,
+        ...(t.presupuesto ? {importePresupuesto:t.presupuesto, refPresupuesto:t.refPresupuesto} : {}),
+        importado:{origen:"interph", id:t.id, estadoInterph:t.estadoInterph, direccionInterph:t.direccionOriginal, clienteInterph:t.clienteInterph, por:yo, en},
+        creado:{por:yo, en: TS(t.creado) || en}, modificado:firma});
+      n++;
+      t.observaciones.forEach(o => { b.set(ref.collection("notas").doc(), {tipo:"nota", texto:o.texto, autor:o.autor, origen:"interph", por:yo, en: TS(o.en) || en}); n++; });
+      if(n >= 380) await commit(true);
+      hechas++; if(hechas % 50 === 0){ log("  … " + hechas + " intervenciones"); barra(hechas, PLAN.aPasar.length); }
+    }
+    await commit(true); barra(1,1);
+    log("✔ Intervenciones: " + hechas + " nuevas" + (saltadas ? ", " + saltadas + " ya estaban" : ""));
+    // 4) Fotos (reducidas, como las que se hacen desde la app)
+    const conFotos = PLAN.aPasar.filter(y => y.t.fotos.some(f => FOTOS[f.archivo]));
+    let subidas = 0, total = conFotos.reduce((n, y) => n + y.t.fotos.filter(f => FOTOS[f.archivo]).length, 0), fallos = 0;
+    log("Subiendo " + total + " fotos (puede tardar unos minutos; no cierres esta página)…"); barra(0, total);
+    for(const {t, x} of conFotos){
+      const ref = db.collection("dhs_trabajos").doc("ip_" + t.id);
+      const actual = ((await ref.get()).data() || {}).fotos || [];
+      for(const f of t.fotos){
+        const file = FOTOS[f.archivo]; if(!file) continue;
+        if(actual.some(a => a.origen === f.archivo)){ subidas++; continue; }
+        try{
+          const [g, mi] = await Promise.all([reducir(file, 1600, 0.78), reducir(file, 400, 0.7)]);
+          const base = "fotos/comunidades/" + x.comId + "/ip_" + t.id + "/" + f.archivo.replace(/\.[^.]+$/, "");
+          const meta = {contentType:"image/jpeg", customMetadata:{por:yo, origen:"interph"}};
+          await st.ref(base + ".jpg").put(g, meta); await st.ref(base + "_mini.jpg").put(mi, meta);
+          await ref.update({fotos: firebase.firestore.FieldValue.arrayUnion({ruta:base + ".jpg", mini:base + "_mini.jpg", en: TS(f.en) ? TS(f.en).toMillis() : Date.now(), por:yo, origen:f.archivo}), modificado:{por:yo, en:firebase.firestore.FieldValue.serverTimestamp()}});
+        }catch(e){ fallos++; log("  ⚠️ " + f.archivo + ": " + (e.code || e.message || e)); }
+        subidas++; barra(subidas, total); if(subidas % 25 === 0) log("  … " + subidas + " de " + total + " fotos");
+      }
+    }
+    log("✔ Fotos: " + (subidas - fallos) + " de " + total + (fallos ? " (" + fallos + " fallos: vuelve a pulsar «Cargar» y se reintentan)" : ""));
+    await db.collection("dhs_registro").add({por:yo, en, accion:"traspaso de Interph: " + hechas + " intervenciones, " + Object.keys(PLAN.nuevasCom).length + " comunidades nuevas, " + (subidas - fallos) + " fotos", coleccion:"dhs_trabajos"});
+    log("\n✅ Terminado. Abre la app de pruebas (Ctrl+F5) y mira el historial de algunas comunidades.");
+  }catch(e){ log("⛔ Se ha parado: " + (e.code || e.message || e) + ". Lo cargado se queda; vuelve a pulsar «Ver resumen» y «Cargar» para seguir."); }
+  $("bPrev").disabled = false;
+};
+</script>
+</body></html>

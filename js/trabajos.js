@@ -525,6 +525,7 @@
         <div class="bloque"><h3>Intervención</h3>
           ${dato("De qué es", esc(especTxt(t)))}${dato("Tipo", esc(TIPOS[t.tipo]))}
           ${window.DHS_EMP && (t.encargo || (todo && window.DHS_EMP.lista().length)) ? dato("De parte de", todo ? `<select id="selEmpF">${window.DHS_EMP.opciones(t.encargo || "")}</select>` : window.DHS_EMP.chip(t.encargo)) : ""}
+          ${t.importado ? dato("Viene de Interph", "Nº " + esc(t.importado.id) + " · " + esc(t.importado.estadoInterph || "") + (t.tecnicoInterph ? " · técnico: " + esc(t.tecnicoInterph) : "") + (t.importePresupuesto ? " · presupuestado " + Number(t.importePresupuesto).toLocaleString("es-ES", {style:"currency", currency:"EUR"}) + (t.refPresupuesto ? " (" + esc(t.refPresupuesto) + ")" : "") : "") + (t.fechaAviso ? " · aviso " + esc(fmtFecha(t.fechaAviso)) : "")) : ""}
           ${dato("Prioridad", todo && !CERRADOS.includes(t.estado) ? `<select id="selPrio">${ORDEN_PRIOR.map(k => `<option value="${k}" ${k===(t.urgencia||"normal")?"selected":""}>${PRIOR[k][0]} ${PRIOR[k][1]}</option>`).join("")}</select>` : pr[0] + " " + pr[1])}
           <p style="white-space:pre-wrap;margin-top:8px">${esc(t.descripcion)}</p></div>
         <div class="bloque"><h3>Contacto</h3>
@@ -566,7 +567,7 @@
         <h3>Historial y notas</h3>
         <div class="historial">
           <div class="h-item"><b>${horaReg(t.creado && t.creado.en)}</b> · ${esc(nombreDe(t.creado && t.creado.por))} · 🆕 Creada${t.creadoPorTecnico ? " (por técnico)" : ""}</div>
-          ${notas.map(n => `<div class="h-item ${n.tipo === "estado" ? "" : "nota"}"><b>${horaReg(n.en)}</b> · ${esc(nombreDe(n.por))} · ${n.tipo === "estado" ? (ICO_EST[n.a]||"") + " " + esc(ESTADOS[n.de]||n.de) + " → <b>" + esc(ESTADOS[n.a]||n.a) + "</b>" : (n.tipo === "cita" ? "📅 " : (n.tipo === "prioridad" ? "🎯 " : "📝 "))}${n.texto ? `<div class="h-txt">${esc(n.texto)}</div>` : ""}</div>`).join("")}
+          ${notas.map(n => `<div class="h-item ${n.tipo === "estado" ? "" : "nota"}"><b>${horaReg(n.en)}</b> · ${esc(n.autor ? n.autor + " (Interph)" : nombreDe(n.por))} · ${n.tipo === "estado" ? (ICO_EST[n.a]||"") + " " + esc(ESTADOS[n.de]||n.de) + " → <b>" + esc(ESTADOS[n.a]||n.a) + "</b>" : (n.tipo === "cita" ? "📅 " : (n.tipo === "prioridad" ? "🎯 " : "📝 "))}${n.texto ? `<div class="h-txt">${esc(n.texto)}</div>` : ""}</div>`).join("")}
         </div>
         ${puedeTocar ? `<div style="margin-top:10px"><textarea id="nuevaNota" rows="2" placeholder="Añadir una nota (qué se ha visto, qué falta, a quién se ha llamado…)" style="width:100%;padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit"></textarea>
           <p style="margin-top:6px"><button class="btn sec" id="btnNota">Añadir nota</button> <span id="msgNota" class="vacio"></span></p></div>` : ""}
