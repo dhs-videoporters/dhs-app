@@ -30,7 +30,23 @@
         <div class="cab-lista">
           <h2>Comunidades</h2>
           <input id="buscaCom" class="busca" placeholder="Buscar por nombre, calle, población o NIF…" value="${esc(filtro.texto)}">
+          ${D().S.puede("comunidades","editar") ? `<button class="btn" id="btnNuevaCom">+ Nueva comunidad o cliente</button>` : ""}
         </div>
+        <form id="fNuevaCom" class="bloque oculto" style="margin:10px 0">
+          <h3>Nueva comunidad o cliente</h3>
+          <div class="fila-form">
+            <label class="campo"><span>Tipo</span><select name="tipo"><option value="comunidad">Comunidad</option><option value="particular">Particular</option><option value="empresa">Empresa</option></select></label>
+            <label class="campo" style="flex:2"><span>Dirección *</span><input name="direccion" placeholder="Calle y número (p. ej. Amposta 93)"></label>
+            <label class="campo"><span>Población</span><input name="poblacion" placeholder="Terrassa, Sabadell…"></label>
+          </div>
+          <div class="fila-form">
+            <label class="campo" style="flex:2"><span>Nombre (si es distinto de la dirección)</span><input name="nombre" placeholder="CP Amposta 93 / nombre del particular"></label>
+            <label class="campo"><span>Teléfono</span><input name="telefono" type="tel"></label>
+            <label class="campo"><span>NIF / DNI (si lo tienes)</span><input name="nif"></label>
+            <label class="campo"><span>Administración</span><select name="adminId"><option value="">— Sin administración —</option>${admins.filter(([id,a]) => a.tipo !== "empresa").map(([id,a]) => `<option value="${id}">${esc(a.nombre)}</option>`).join("")}</select></label>
+          </div>
+          <p><button class="btn" type="submit">Crear y abrir la ficha</button> <button class="btn sec" type="button" id="btnCancNC">Cancelar</button> <span id="msgNC" class="vacio"></span></p>
+        </form>
         <div class="filtros">
           ${["todas","comunidad","empresa","particular","sinadmin","nuevas"].map(t => `<button class="chip ${filtro.tipo===t?"on":""}" data-tipo="${t}">${{todas:"Todas",comunidad:"Comunidades",empresa:"Empresas",particular:"Particulares",sinadmin:"Sin administración",nuevas:"✱ Faltan datos"}[t]}</button>`).join("")}
           <select id="filtroAdmin" class="sel"><option value="">Todas las administraciones y empresas</option>${admins.filter(([id,a]) => a.tipo !== "empresa").map(([id,a])=>`<option value="${id}" ${filtro.admin===id?"selected":""}>${esc(a.nombre)}</option>`).join("")}${admins.some(([id,a]) => a.tipo === "empresa") ? `<optgroup label="Empresas que nos encargan trabajos">${admins.filter(([id,a]) => a.tipo === "empresa").map(([id,a])=>`<option value="${id}" ${filtro.admin===id?"selected":""}>🏗️ ${esc(a.nombre)}</option>`).join("")}</optgroup>` : ""}</select>
@@ -62,6 +78,31 @@
       if(window.DHS_CAMS) window.DHS_CAMS.datos().then(L => { const M = {}; L.forEach(x => M[x.id] = x);
         document.querySelectorAll("#listaCom [data-cam]").forEach(t => { const x = M[t.dataset.cam]; if(x && x.camaras != null) t.textContent = "📹 " + x.camaras + " cámaras"; }); }).catch(() => {});
     };
+    // Alta directa de una comunidad o cliente (Ángel 25/10: «si me entra una nueva, que es particular…»). Queda «✱ Faltan datos» si no tiene NIF.
+    const fNC = el.querySelector("#fNuevaCom"), bNC = el.querySelector("#btnNuevaCom");
+    if(bNC){
+      bNC.onclick = () => { fNC.classList.remove("oculto"); fNC.direccion.focus(); };
+      el.querySelector("#btnCancNC").onclick = () => fNC.classList.add("oculto");
+      fNC.onsubmit = async ev => {
+        ev.preventDefault();
+        const g = k => fNC[k].value.trim(), m = x => el.querySelector("#msgNC").textContent = x;
+        if(!g("direccion")) return m("Pon al menos la dirección.");
+        const nombre = g("nombre") || g("direccion");
+        const dup = Object.entries(CACHE.coms).find(([k,c]) => c.activo !== false && sinAc(c.nombre) === sinAc(nombre) && sinAc(c.poblacion) === sinAc(g("poblacion")));
+        if(dup && !await DHS_PREGUNTA("Ya existe «" + dup[1].nombre + "». ¿Crear otra igualmente?", "Crear otra", "No")) return;
+        const {db, S} = D(), yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
+        const slug = sinAc(nombre + (g("poblacion") ? " " + g("poblacion") : "")).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50) || "sin-nombre";
+        let cid = "c_" + slug, n = 2; while(CACHE.coms[cid]) cid = "c_" + slug + "-" + (n++);
+        const com = {nombre, direccion:g("direccion"), poblacion:g("poblacion"), tipo:fNC.tipo.value, adminId:fNC.adminId.value || null, nif:g("nif").toUpperCase(),
+                     telefono:g("telefono"), activo:true, nueva:!g("nif"), creadaDesde:"Alta en Comunidades", modificado:{por:yo, en}};
+        m("Guardando…");
+        try{
+          await db.collection("dhs_comunidades").doc(cid).set(com);
+          await db.collection("dhs_registro").add({por:yo, en, accion:"alta (comunidad nueva)", coleccion:"dhs_comunidades", docId:cid, nombre});
+          CACHE.coms[cid] = com; location.hash = "#comunidad/" + encodeURIComponent(cid);
+        }catch(e){ m("No se ha podido guardar (" + (e.code||e) + ")."); }
+      };
+    }
     el.querySelector("#buscaCom").oninput = e => { filtro.texto = e.target.value; pintar(); };
     el.querySelectorAll(".chip").forEach(b => b.onclick = () => { filtro.tipo = b.dataset.tipo; el.querySelectorAll(".chip").forEach(x=>x.classList.toggle("on", x===b)); pintar(); });
     el.querySelector("#filtroAdmin").onchange = e => { filtro.admin = e.target.value; pintar(); };
