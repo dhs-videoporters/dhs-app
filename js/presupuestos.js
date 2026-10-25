@@ -309,7 +309,8 @@
     const tb = el.querySelector("#tbL");
     const calc = l => r2(l.cantidad * l.precio * (1 - (l.descuento||0)/100));
     // Descuento: solo en los productos que lo admiten (Ajustes › Catálogo › Dto. máx.) y hasta ese máximo; las líneas libres, sin límite
-    const dtoMax = l => !l.productoId ? 100 : (Number(l.dtoMax) || 0);
+    // Dirección (Ángel, Joel) puede poner cualquier descuento, como cambiar el precio
+    const dtoMax = l => (!l.productoId || D().S.direccion) ? 100 : (Number(l.dtoMax) || 0);
     const totales = () => {
       const base = r2(lineas.reduce((n,l) => n + calc(l), 0)), iva = r2(base * IVA / 100);
       el.querySelector("#totP").innerHTML = `Base <b>${eur(base)}</b> · IVA 21 % <b>${eur(iva)}</b> · Total <b class="grande">${eur(base + iva)}</b>`;
@@ -355,7 +356,9 @@
       const b = el.querySelector("#btnGuardarP"); b.disabled = true; m("Guardando en Contasimple…");
       try{
         const notas = el.querySelector("#notasP").value.trim();
-        const notasCS = rapido ? [notas, "Presupuesto para " + (rNom || "particular") + " · Tel. " + rTel + ([rDir, rPob].filter(Boolean).length ? " · " + [rDir, rPob].filter(Boolean).join(", ") : "")].filter(Boolean).join("\n") : notas;
+        const sinNif = !rapido && !com.csId && !com.nif;   // comunidad sin NIF todavía: sale sin cliente y el nombre va en las notas
+        const notasCS = rapido ? [notas, "Presupuesto para " + (rNom || "particular") + " · Tel. " + rTel + ([rDir, rPob].filter(Boolean).length ? " · " + [rDir, rPob].filter(Boolean).join(", ") : "")].filter(Boolean).join("\n")
+          : sinNif ? [notas, "Presupuesto para " + com.nombre + ([com.direccion, com.poblacion].filter(Boolean).length ? " · " + [com.direccion, com.poblacion].filter(Boolean).join(", ") : "")].filter(Boolean).join("\n") : notas;
         const r = await llamar("crearPresupuesto", rapido ? {sinCliente:true, lineas:L, notas:notasCS}
           : {cliente:{csId:com.csId||null, nif:com.nif||"", nombre:com.nombre, direccion:com.direccion||"", poblacion:com.poblacion||""}, lineas:L, notas});
         const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();

@@ -97,10 +97,11 @@ const PUENTE = {
   // Crear presupuesto en Contasimple para una comunidad. Solo Dirección (o quien tenga "Precios: editar").
   crearPresupuesto: function (d, u) {
     exige_(u, 'precios', 'editar');
-    descuentos_(d.lineas);
+    if (!u.direccion) descuentos_(d.lineas);   // Dirección (Ángel, Joel): descuento libre en cualquier línea
     const tk = csToken_();
-    // Presupuesto rápido (particular que solo da el teléfono): sin cliente en Contasimple hasta que se asocie
-    const cliente = d.sinCliente ? null : cliente_(tk, d.cliente || {});
+    // Sin cliente en Contasimple hasta que se asocie: presupuesto rápido, o comunidad que aún no tiene NIF ni código
+    const c = d.cliente || {};
+    const cliente = (d.sinCliente || (!c.csId && !c.nif)) ? null : cliente_(tk, c);
     const lineas = lineas_(d.lineas);
     const f = formatoPresupuesto_(tk);
     const num = numero_(cs_(tk, 'get', '/accounting/estimates/nextEstimateNumber/' + f.id));
