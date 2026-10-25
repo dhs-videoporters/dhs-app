@@ -71,11 +71,14 @@ $("fFot").onchange = e => { FOTOS = {}; [...e.target.files].forEach(f => FOTOS[f
 
 // ---------- Plan: qué se une, qué se crea ----------
 $("bPrev").onclick = async () => {
-  $("bPrev").disabled = true; $("res").innerHTML = "Leyendo la base de datos de pruebas…";
+  $("bPrev").disabled = true; $("res").innerHTML = "Leyendo la base de datos de " + (window.OFICIAL ? "la versión OFICIAL" : "pruebas") + "…";
   const coms = {}, admins = {}, ya = new Set();
-  (await db.collection("dhs_comunidades").get()).forEach(d => coms[d.id] = d.data());
-  (await db.collection("dhs_admins").get()).forEach(d => admins[d.id] = d.data());
-  (await db.collection("dhs_trabajos").where("importado.origen", "==", "interph").get()).forEach(d => ya.add(d.id));
+  const leer = async (que, q, fn) => { log("Leyendo " + que + "…"); try{ (await q.get()).forEach(fn); log("  " + que + ": bien"); }catch(e){ log("⚠️ No puedo leer " + que + ": " + (e.code || "") + " " + (e.message || e)); throw e; } };
+  try{
+    await leer("comunidades", db.collection("dhs_comunidades"), d => coms[d.id] = d.data());
+    await leer("administraciones", db.collection("dhs_admins"), d => admins[d.id] = d.data());
+    await leer("intervenciones ya pasadas", db.collection("dhs_trabajos").where("importado.origen", "==", "interph"), d => ya.add(d.id));
+  }catch(e){ $("res").innerHTML = `<span class="ko">No se ha podido leer la base de datos. Mándale a Claude una captura de esta pantalla.</span>`; $("bPrev").disabled = false; return; }
   const porNombre = {}, porDir = {};
   Object.entries(coms).forEach(([k,c]) => { porNombre[norm(c.nombre)] = k; if(c.direccion) porDir[norm(c.direccion) + "|" + norm(c.poblacion)] = porDir[norm(c.direccion) + "|" + norm(c.poblacion)] || k; });
   const admPor = {}; Object.entries(admins).forEach(([k,a]) => { [a.nombre, ...(a.alias||[])].forEach(n => admPor[norm(n)] = k); });
