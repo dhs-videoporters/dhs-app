@@ -109,7 +109,7 @@
           "Técnico": p.tecnico ? "Sí" : "No", "Dto. máx. %": p.dtoMax || "", "Precio sin IVA": Number(p.precio)||0, "IVA %": p.iva ?? IVA, "Descripción": p.descripcion && p.descripcion !== p.nombre ? p.descripcion : "", "Activo": p.activo === false ? "No" : "Sí"}));
         if(!filas.length) filas.push(Object.fromEntries(COLS.map(c => [c, ""])));
         await window.DHS_XLS.descargar("DHS catálogo " + new Date().toISOString().slice(0,10), filas, "Catálogo");
-        m("Descargado. Para añadir uno nuevo, pon una fila con el ID vacío.");
+        m("Descargado. Para añadir uno nuevo, pon una fila con el ID vacío. El código no se puede repetir (para agrupar, usa Grupo).");
       }catch(e){ m("No se ha podido: " + (e.message||e)); }
     };
     const fX = el.querySelector("#fXls");
@@ -137,6 +137,14 @@
         const ant = id ? C[id] : null;
         if(id && !ant && !x.err) x.err = "Ese ID no está en el catálogo (para uno nuevo, deja el ID vacío)";
         if(!id && !x.err && porNombre[sinAc(nombre).trim()]) x.err = "Ya existe uno con ese nombre: pon su ID para cambiarlo";
+        // En Contasimple el código no se puede repetir: cada producto el suyo (para agrupar está la columna Grupo)
+        const cod = sinAc(x.codigo).trim();
+        if(cod && !x.err){
+          const otra = L.find(y => sinAc(y.codigo).trim() === cod);
+          const ajeno = Object.entries(C).find(([k,p]) => k !== String(id) && sinAc(p.codigo||"").trim() === cod && !filas.some(r2_ => String(cf(r2_, "ID Contasimple", "ID", "csId") || "").trim() === k));
+          if(otra) x.err = "Código repetido (fila " + otra.fila + "): en Contasimple cada producto necesita un código distinto";
+          else if(ajeno) x.err = "Ese código ya lo tiene «" + ajeno[1].nombre + "»";
+        }
         if(!id && !x.err && L.some(y => !y.id && sinAc(y.nombre).trim() === sinAc(nombre).trim())) x.err = "Repetido en el Excel (fila " + L.find(y => !y.id && sinAc(y.nombre).trim() === sinAc(nombre).trim()).fila + ")";
         if(!x.err){
           if(!ant){ x.nuevo = true; if(x.iva === null) x.iva = IVA; }
@@ -188,7 +196,7 @@
             m("Contasimple: " + Math.min(i + 25, aCS.length) + " de " + aCS.length + "…");
             const lote = aCS.slice(i, i+25);
             const R = await llamar("guardarProductos", {productos: lote.map(x => ({fila:x.fila, id:x.id || null, nombre:x.nombre, precio:x.precio, iva:x.iva, descripcion:x.descripcion, codigo:x.codigo, activo:x.activo}))});
-            R.forEach(r => { res[r.fila] = r; if(!r.ok) fallos.push("fila " + r.fila + ": " + r.error); });
+            R.forEach(r => { res[r.fila] = r; if(!r.ok) fallos.push("fila " + r.fila + ": " + (/InternalCode_Duplicated/.test(r.error) ? "el código ya lo tiene otro producto en Contasimple" : r.error)); });
             await escribir(lote.filter(x => res[x.fila] && res[x.fila].ok).map(x => doc(x, x.id || res[x.fila].id)));
           }
           m("Guardando aquí…");
