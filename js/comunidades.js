@@ -94,7 +94,7 @@
         const slug = sinAc(nombre + (g("poblacion") ? " " + g("poblacion") : "")).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50) || "sin-nombre";
         let cid = "c_" + slug, n = 2; while(CACHE.coms[cid]) cid = "c_" + slug + "-" + (n++);
         const com = {nombre, direccion:g("direccion"), poblacion:g("poblacion"), tipo:fNC.tipo.value, adminId:fNC.adminId.value || null, nif:g("nif").toUpperCase(),
-                     telefono:g("telefono"), activo:true, nueva:!g("nif"), creadaDesde:"Alta en Comunidades", modificado:{por:yo, en}};
+                     telefono:g("telefono"), activo:true, nueva:!g("nif"), modificado:{por:yo, en}};
         m("Guardando…");
         try{
           await db.collection("dhs_comunidades").doc(cid).set(com);
