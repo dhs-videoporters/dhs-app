@@ -26,7 +26,10 @@ function instalarAvisos() {
 }
 
 /** Cada mañana laborable (~9:45): ¿quién con citas hoy no ha fichado? ¿quién no fichó la salida ayer? */
+// Fichaje apagado de momento (Ángel 25/10): no se manda el aviso de la mañana. Poner true para activarlo.
+const FICHAJE_ACTIVO = false;
 function avisoFichajes() {
+  if (!FICHAJE_ACTIVO) return;
   const ahora = new Date(), dia = Number(Utilities.formatDate(ahora, 'Europe/Madrid', 'u'));   // 1 lunes … 7 domingo
   if (dia > 5) return;
   const f = d => Utilities.formatDate(d, 'Europe/Madrid', 'yyyy-MM-dd');

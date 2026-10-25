@@ -50,9 +50,11 @@
   // ---------- Tarjeta de fichaje en "Mi trabajo" ----------
   // ¿Tiene que fichar antes de trabajar? (plantilla, día laborable y hoy todavía nada fichado)
   let FICHADO_HOY = null;
+  // Fichaje apagado de momento (Ángel 25/10: se activará cuando la app esté probada). Se enciende con fichaje:true en la configuración.
+  const activo = () => (window.DHS_CONFIG || {}).fichaje === true;
   async function debeFichar(){
     const {db, S} = D();
-    if(!S.personalId) return false;
+    if(!activo() || !S.personalId) return false;
     const hoy = iso(new Date());
     if(FICHADO_HOY === hoy) return false;
     try{
@@ -67,7 +69,7 @@
 
   async function tarjeta(el, alFichar){
     const {db, S} = D();
-    if(!S.personalId){ el.innerHTML = ""; return; }
+    if(!activo() || !S.personalId){ el.innerHTML = ""; return; }
     const yo = S.usuario.email.toLowerCase(), hoy = iso(new Date());
     let hoyL = [];
     try{ (await db.collection("dhs_fichajes").where("email", "==", yo).get()).forEach(d => { const f = d.data(); if(f.fecha === hoy) hoyL.push(f); }); }
@@ -184,7 +186,7 @@
   // ---------- Aviso al entrar (Dirección y quien vea Ajustes) ----------
   async function avisoAlEntrar(){
     const {S} = D();
-    if(!S.puede("ajustes")) return;
+    if(!activo() || !S.puede("ajustes")) return;
     const hoy = new Date(), hoyI = iso(hoy);
     const desde = iso(new Date(hoy.getTime() - 14*86400000));
     let datos; try{ datos = await leerMes(desde, hoyI); }catch(e){ return; }
@@ -208,5 +210,5 @@
     document.body.appendChild(b);
   }
 
-  window.DHS_FICHA = { debeFichar, tarjeta, vista, avisoAlEntrar };
+  window.DHS_FICHA = { debeFichar, tarjeta, vista, avisoAlEntrar, activo };
 })();
