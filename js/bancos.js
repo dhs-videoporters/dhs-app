@@ -22,7 +22,7 @@
     let b = null; try{ const d = await db.collection("dhs_bancos").doc(comId).get(); if(d.exists) b = d.data(); }catch(e){ el.innerHTML = `<h3>🏦 Cuenta</h3><p class="vacio">No se ha podido leer (${esc(e.code)}).</p>`; return; }
     const pinta = () => {
       el.innerHTML = `<h3>🏦 Número de cuenta <span class="vacio" style="font-weight:400;font-size:12px">(solo Dirección)</span></h3>
-        ${b && b.iban ? `<p class="iban">${esc(fmt(b.iban))} ${valido(b.iban) ? "" : `<span class="tag aviso">IBAN no válido</span>`}</p>${b.titular ? `<p class="vacio">Titular: ${esc(b.titular)}</p>` : ""}<p class="vacio">${b.origen ? "Origen: " + esc(b.origen) : ""}</p>` : `<p class="vacio">Sin número de cuenta.</p>`}
+        ${b && b.iban ? `<p class="iban">${esc(fmt(b.iban))} ${valido(b.iban) ? "" : `<span class="tag aviso">IBAN no válido</span>`}</p>${b.titular ? `<p class="vacio">Titular: ${esc(b.titular)}</p>` : ""}${b.referencia ? `<p class="vacio">Referencia en el banco: ${esc(b.referencia)}</p>` : ""}${b.notas ? `<p class="vacio">Notas: ${esc(b.notas)}</p>` : ""}<p class="vacio">${b.origen ? "Origen: " + esc(b.origen) : ""}</p>` : `<p class="vacio">Sin número de cuenta.</p>`}
         ${edita() ? `<p style="margin-top:6px"><button class="btn sec mini-btn" id="btnIban">${b && b.iban ? "Cambiar" : "Añadir"}</button></p>
         <div id="fIban" class="oculto"><label class="campo"><span>IBAN</span><input id="inIban" value="${esc(b && b.iban ? fmt(b.iban) : "")}" placeholder="ES00 0000 0000 0000 0000 0000"></label>
           <label class="campo"><span>Titular (si no es la comunidad)</span><input id="inTit" value="${esc(b && b.titular || "")}"></label>
@@ -75,7 +75,7 @@
         (await db.collection("dhs_bancos").get()).forEach(d => B[d.id] = d.data());
         const filas = Object.entries(C.coms).filter(([k,c]) => c.activo !== false).sort((a,b) => (a[1].nombre||"").localeCompare(b[1].nombre||""))
           .map(([k,c]) => ({"Comunidad": c.nombre||"", "Dirección": c.direccion||"", "Población": c.poblacion||"", "Administración": c.adminId && C.admins[c.adminId] ? C.admins[c.adminId].nombre : "",
-            "NIF": c.nif||"", "IBAN": B[k] && B[k].iban ? fmt(B[k].iban) : "", "Titular": B[k] && B[k].titular || "", "Observaciones": "", "ID app": k}));
+            "NIF": c.nif||"", "IBAN": B[k] && B[k].iban ? fmt(B[k].iban) : "", "Titular": B[k] && B[k].titular || "", "Ref. banco": B[k] && B[k].referencia || "", "Revisar": "", "Observaciones": B[k] && B[k].notas || "", "ID app": k}));
         await window.DHS_XLS.descargar("DHS comunidades y cuentas " + new Date().toISOString().slice(0,10), filas, "Comunidades");
         await db.collection("dhs_registro").add({por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp(), accion:"Excel de comunidades y cuentas descargado", coleccion:"dhs_bancos"});
         m.textContent = "Descargado (" + filas.length + " comunidades).";
@@ -99,7 +99,8 @@
         const iban = limpio(cf(r, "IBAN", "Cuenta", "Numero de cuenta", "Nº de cuenta"));
         const titular = String(cf(r, "Titular") || "").trim();
         const obs = String(cf(r, "Observaciones", "Notas") || "").trim();
-        const revisar = String(cf(r, "requiere_revision", "Revisar") || "").toLowerCase() === "true";
+        const revisar = ["true","si","sí","x","1"].includes(String(cf(r, "requiere_revision", "Revisar") || "").trim().toLowerCase());
+        const ref = String(cf(r, "Ref. banco", "Referencia banco", "referencia_deudor") || "").trim();
         const idApp = String(cf(r, "ID app", "idApp") || "").trim(), csId = String(cf(r, "csId") || "");
         if(!iban && !nif) return;
         let k = null, como = "";
@@ -114,7 +115,7 @@
         const ok = !iban || valido(iban);
         const nifDistinto = k && nif && C.coms[k].nif && limpio(C.coms[k].nif) !== nif;
         const ibanDistinto = k && iban && B[k] && B[k].iban && limpio(B[k].iban) !== iban;
-        L.push({nombre, nif, iban, titular, obs, revisar, ok, k, como, sug, nifDistinto, ibanDistinto,
+        L.push({nombre, nif, iban, titular, obs, revisar, ref, ok, k, como, sug, nifDistinto, ibanDistinto,
           marcar: !!k && ok && !revisar && !nifDistinto, igual: k && B[k] && limpio(B[k].iban||"") === iban && (!nif || limpio(C.coms[k].nif||"") === nif)});
       });
       const nombres = {}; Object.entries(C.coms).forEach(([k,c]) => { let n = (c.nombre || k) + (c.poblacion ? " (" + c.poblacion + ")" : ""); while(nombres[n]) n += " ·"; nombres[n] = k; });
@@ -174,7 +175,7 @@
           } else if(x.nif && !C.coms[k].nif){
             ops.push([db.collection("dhs_comunidades").doc(k), {nif:x.nif, modificado:firma}, true]);
           }
-          if(x.iban) ops.push([db.collection("dhs_bancos").doc(k), {iban:x.iban, ...(x.titular ? {titular:x.titular} : {}), origen, modificado:firma}, true]);
+          if(x.iban) ops.push([db.collection("dhs_bancos").doc(k), {iban:x.iban, ...(x.titular ? {titular:x.titular} : {}), ...(x.ref ? {referencia:x.ref} : {}), ...(x.obs ? {notas:x.obs} : {}), origen, modificado:firma}, true]);
         }
         try{
           for(let i = 0; i < ops.length; i += 400){ const b = db.batch(); ops.slice(i, i+400).forEach(([ref, d, merge]) => merge ? b.set(ref, d, {merge:true}) : b.set(ref, d)); await b.commit(); }

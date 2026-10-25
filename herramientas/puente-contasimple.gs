@@ -64,6 +64,7 @@ const PUENTE = {
   // Crear presupuesto en Contasimple para una comunidad. Solo Dirección (o quien tenga "Precios: editar").
   crearPresupuesto: function (d, u) {
     exige_(u, 'precios', 'editar');
+    descuentos_(d.lineas);
     const tk = csToken_();
     const cliente = cliente_(tk, d.cliente || {});
     const lineas = lineas_(d.lineas);
@@ -213,6 +214,15 @@ function formatoPresupuesto_(tk) {
 }
 function numero_(r) { const v = (r && r.data !== undefined) ? r.data : r; return typeof v === 'string' ? v : String(v && (v.number || v.value) || v); }
 function redondea_(x) { return Math.round(x * 100) / 100; }
+// Descuentos: solo en productos del catálogo que lo admiten (Ajustes › Catálogo › Dto. máx.) y hasta ese máximo.
+function descuentos_(L) {
+  (L || []).forEach(l => {
+    const desc = Number(l.descuento) || 0; if (!desc || !l.productoId) return;
+    let max = 0;
+    try { max = Number(aJSON_(pedir_(BASE + '/dhs_catalogo/' + encodeURIComponent(String(l.productoId))).fields || {}).dtoMax) || 0; } catch (e) { max = 0; }
+    if (desc > max + 0.001) throw new Error('«' + l.concepto + '» ' + (max ? 'admite como máximo un ' + max + ' % de descuento.' : 'no admite descuento.'));
+  });
+}
 // Líneas: siempre IVA 21 %. Base = cantidad × precio × (1 − descuento).
 function lineas_(L) {
   if (!L || !L.length) throw new Error('El presupuesto no tiene líneas.');

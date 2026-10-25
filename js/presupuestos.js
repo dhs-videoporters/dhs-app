@@ -40,7 +40,7 @@
     const filtro = {q:"", grupo:"todos"};
     el.innerHTML = `
       <h3>Catálogo</h3>
-      <p class="vacio" style="margin:4px 0 10px">Productos y servicios de Contasimple. ${edita ? "Pulsa <b>Actualizar desde Contasimple</b> para traer los precios al día. Elige el <b>grupo</b> de cada uno y marca qué puede presupuestar un técnico (por defecto, lo de Mantenimiento)." : "Solo lectura."}</p>
+      <p class="vacio" style="margin:4px 0 10px">Productos y servicios de Contasimple. ${edita ? "Pulsa <b>Actualizar desde Contasimple</b> para traer los precios al día. Elige el <b>grupo</b> de cada uno, marca qué puede presupuestar un técnico (por defecto, lo de Mantenimiento) y en <b>Dto. máx.</b> pon hasta qué % se le puede hacer descuento (vacío = sin descuento)." : "Solo lectura."}</p>
       <div class="fi-barra">
         <input id="qCat" placeholder="Buscar…" style="flex:1;min-width:180px">
         <select id="gCat"><option value="todos">Todos los grupos</option>${GRUPOS.concat(["(sin grupo)"]).map(g => `<option>${g}</option>`).join("")}</select>
@@ -48,7 +48,7 @@
         <span id="msgCat" class="vacio"></span>
       </div>
       <p id="cuentaCat" class="vacio" style="font-weight:600"></p>
-      <table class="tabla-fi tabla-cat"><thead><tr><th>Producto / servicio</th><th>Precio</th><th>IVA</th><th>Grupo</th><th>Técnico</th></tr></thead><tbody id="tbCat"></tbody></table>`;
+      <table class="tabla-fi tabla-cat"><thead><tr><th>Producto / servicio</th><th>Precio</th><th>IVA</th><th>Grupo</th><th>Técnico</th><th title="Descuento máximo permitido. Vacío = no admite descuento">Dto. máx.</th></tr></thead><tbody id="tbCat"></tbody></table>`;
     const pintar = () => {
       const q = sinAc(filtro.q);
       const L = Object.entries(C).filter(([k,p]) => p.activo !== false && (!q || sinAc(p.nombre + " " + (p.descripcion||"")).includes(q))
@@ -58,7 +58,8 @@
         <td>${esc(p.nombre)}${p.descripcion && p.descripcion !== p.nombre ? `<br><span class="vacio">${esc(p.descripcion)}</span>` : ""}</td>
         <td>${eur(p.precio)}</td><td>${p.iva === IVA ? IVA + " %" : `<span class="tag aviso">${esc(p.iva)} %</span>`}</td>
         <td>${edita ? `<select class="selGrupo"><option value="">—</option>${GRUPOS.map(g => `<option ${p.grupo===g?"selected":""}>${g}</option>`).join("")}</select>` : esc(p.grupo||"—")}</td>
-        <td>${edita ? `<input type="checkbox" class="chkTec" ${p.tecnico ? "checked" : ""}>` : (p.tecnico ? "Sí" : "")}</td></tr>`).join("") || `<tr><td colspan="5" class="vacio">${Object.keys(C).length ? "Nada con ese filtro." : "Todavía vacío: pulsa «Actualizar desde Contasimple»."}</td></tr>`;
+        <td>${edita ? `<input type="checkbox" class="chkTec" ${p.tecnico ? "checked" : ""}>` : (p.tecnico ? "Sí" : "")}</td>
+        <td>${edita ? `<input type="number" class="numDto" min="0" max="100" step="1" placeholder="no" value="${p.dtoMax || ""}" style="width:62px"> %` : (p.dtoMax ? "hasta " + p.dtoMax + " %" : "no")}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio">${Object.keys(C).length ? "Nada con ese filtro." : "Todavía vacío: pulsa «Actualizar desde Contasimple»."}</td></tr>`;
       if(!edita) return;
       const guardar = async (k, cambio) => {
         const yo = S.usuario.email.toLowerCase();
@@ -68,6 +69,7 @@
       el.querySelectorAll(".selGrupo").forEach(s => s.onchange = () => { const k = s.closest("tr").dataset.k; const g = s.value;
         const c = {grupo:g}; if(g === "Mantenimiento" && C[k].tecnico === undefined) c.tecnico = true; guardar(k, c).then(pintar); });
       el.querySelectorAll(".chkTec").forEach(c => c.onchange = () => guardar(c.closest("tr").dataset.k, {tecnico:c.checked}));
+      el.querySelectorAll(".numDto").forEach(c => c.onchange = () => { const v = Math.min(100, Math.max(0, Math.round(Number(c.value)||0))); c.value = v || ""; guardar(c.closest("tr").dataset.k, {dtoMax:v}); });
     };
     el.querySelector("#qCat").oninput = e => { filtro.q = e.target.value; pintar(); };
     el.querySelector("#gCat").onchange = e => { filtro.grupo = e.target.value; pintar(); };
@@ -172,6 +174,8 @@
       </div>`;
     const tb = el.querySelector("#tbL");
     const calc = l => r2(l.cantidad * l.precio * (1 - (l.descuento||0)/100));
+    // Descuento: solo en los productos que lo admiten (Ajustes › Catálogo › Dto. máx.) y hasta ese máximo; las líneas libres, sin límite
+    const dtoMax = l => !l.productoId ? 100 : (Number(l.dtoMax) || 0);
     const totales = () => {
       const base = r2(lineas.reduce((n,l) => n + calc(l), 0)), iva = r2(base * IVA / 100);
       el.querySelector("#totP").innerHTML = `Base <b>${eur(base)}</b> · IVA 21 % <b>${eur(iva)}</b> · Total <b class="grande">${eur(base + iva)}</b>`;
@@ -181,14 +185,14 @@
         <td>${dir || !l.productoId ? `<input class="lC" value="${esc(l.concepto)}">` : esc(l.concepto)}</td>
         <td><input class="lQ" type="number" min="0" step="0.5" value="${l.cantidad}"></td>
         <td>${dir ? `<input class="lP" type="number" step="0.01" value="${l.precio}">` : eur(l.precio)}</td>
-        <td>${dir ? `<input class="lD" type="number" min="0" max="100" value="${l.descuento||0}">` : (l.descuento ? l.descuento + " %" : "")}</td>
+        <td>${dir && dtoMax(l) ? `<input class="lD" type="number" min="0" max="${dtoMax(l)}" value="${l.descuento||0}" title="Máximo ${dtoMax(l)} %">` : (l.descuento ? l.descuento + " %" : `<span class="vacio" title="Este producto no admite descuento (Ajustes › Catálogo)">—</span>`)}</td>
         <td>${eur(calc(l))}</td><td><button class="btn sec mini-btn lX">✕</button></td></tr>`).join("") || `<tr><td colspan="6" class="vacio">Añade líneas del catálogo${dir ? " o una línea libre" : ""}.</td></tr>`;
       totales();
       tb.querySelectorAll("tr[data-i]").forEach(tr => {
         const l = lineas[tr.dataset.i];
         // Al escribir solo se recalcula el importe y los totales (sin redibujar: no se pierde lo que se teclea)
         const on = (cls, f) => { const x = tr.querySelector(cls); if(x) x.oninput = () => { f(x.value); tr.children[4].textContent = eur(calc(l)); totales(); }; };
-        on(".lC", v => l.concepto = v); on(".lQ", v => l.cantidad = Number(v)||0); on(".lP", v => l.precio = Number(v)||0); on(".lD", v => l.descuento = Math.min(100, Math.max(0, Number(v)||0)));
+        on(".lC", v => l.concepto = v); on(".lQ", v => l.cantidad = Number(v)||0); on(".lP", v => l.precio = Number(v)||0); on(".lD", v => { l.descuento = Math.min(dtoMax(l), Math.max(0, Number(v)||0)); const x = tr.querySelector(".lD"); if(Number(x.value) > dtoMax(l)) x.value = dtoMax(l); });
         tr.querySelector(".lX").onclick = () => { lineas.splice(tr.dataset.i, 1); pintar(); };
       });
     };
@@ -200,7 +204,7 @@
       res.innerHTML = L.map(([k,p]) => `<div class="r-item" data-k="${k}"><b>${esc(p.nombre)}</b><span>${eur(p.precio)}${p.grupo ? " · " + esc(p.grupo) : ""}</span></div>`).join("") || `<div class="r-vacio">${Object.keys(C).length ? "No está en el catálogo" : "Catálogo vacío: actualízalo en Ajustes › Catálogo"}</div>`;
       res.classList.remove("oculto");
       res.querySelectorAll(".r-item").forEach(d => d.onmousedown = e => { e.preventDefault(); const p = C[d.dataset.k];
-        lineas.push({productoId:p.csId || Number(d.dataset.k), concepto:p.nombre, cantidad:1, precio:p.precio, descuento:0}); bus.value = ""; res.classList.add("oculto"); pintar(); });
+        lineas.push({productoId:p.csId || Number(d.dataset.k), concepto:p.nombre, cantidad:1, precio:p.precio, descuento:0, dtoMax:Number(p.dtoMax)||0}); bus.value = ""; res.classList.add("oculto"); pintar(); });
     };
     bus.onblur = () => setTimeout(() => res.classList.add("oculto"), 150);
     const bL = el.querySelector("#btnLibre"); if(bL) bL.onclick = () => { lineas.push({concepto:"", cantidad:1, precio:0, descuento:0}); pintar(); tb.querySelector("tr:last-child .lC").focus(); };
