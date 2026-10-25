@@ -1,5 +1,61 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DHS App</title>
-<style>body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#eef1f5;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#1d2433}</style>
-</head><body><div><h2>DHS App</h2><p>En construcción.</p></div></body></html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>DHS App </title>
+<meta name="theme-color" content="#1f3a5f">
+<link rel="icon" type="image/png" href="./img/icono-64.png">
+<link rel="apple-touch-icon" href="./img/icono-180.png">
+<meta name="apple-mobile-web-app-title" content="DHS Pruebas">
+<link rel="stylesheet" href="./css/app.css?v=33">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="./js/config-oficial.js?v=1"></script>
+<script src="./js/comunidades.js?v=14"></script>
+<script src="./js/empresas.js?v=1"></script>
+<script src="./js/administradores.js?v=3"></script>
+<script src="./js/ajustes.js?v=10"></script>
+<script src="./js/copias.js?v=3"></script>
+<script src="./js/fichajes.js?v=3"></script>
+<script src="./js/presupuestos.js?v=15"></script>
+<script src="./js/excel.js?v=2"></script>
+<script src="./js/bancos.js?v=4"></script>
+<script src="./js/camaras.js?v=2"></script>
+<script src="./js/economia.js?v=3"></script>
+<script src="./js/fotos.js?v=1"></script>
+<script src="./js/trabajos.js?v=15"></script>
+<script src="./js/calendario.js?v=8"></script>
+<script src="./js/app.js?v=16"></script>
+</head>
+<body>
+<div class="entorno oculto">VERSIÓN DE PRUEBAS · datos de prueba, no reales</div>
+
+<!-- Entrada -->
+<section id="pantallaEntrada" class="entrada">
+  <div class="caja">
+    <img src="./img/logo.png" alt="DHS Videoporters">
+    <h1>DHS App</h1>
+    <p>Trabajos, calendario y comunidades</p>
+    <div id="btnGoogle" class="btnG"></div>
+    <div id="msgEntrada" class="msg">Cargando…</div>
+    <p style="margin:12px 0 0"><button id="btnOtraCuenta" class="oculto" style="border:0;background:none;color:var(--azul);text-decoration:underline">Entrar con otra cuenta</button></p>
+  </div>
+</section>
+
+<!-- App -->
+<section id="pantallaApp" class="oculto">
+  <header class="barra">
+    <div class="marca"><img src="./img/logo.png" alt="">DHS <span>App</span></div>
+    <nav id="menu" class="menu"></nav>
+    <div class="buscador"><input id="buscaGlobal" placeholder="🔍 Buscar comunidad, calle, NIF…" autocomplete="off"><div id="resGlobal" class="res-global oculto"></div></div>
+    <div class="usuario"><span id="nombreUsuario" class="nombre"></span><button id="btnSalir">Salir</button></div>
+  </header>
+  <main id="contenido"></main>
+  <nav id="menuMovil" class="menu-movil"></nav>
+</section>
+</body>
+</html>

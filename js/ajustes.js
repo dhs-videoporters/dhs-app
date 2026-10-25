@@ -32,7 +32,7 @@
     const {db, S} = D();
     let personal = [], usuarios = {}, P = {};
     try{
-      const [p, u, pf] = await Promise.all([db.collection("dhs_personal").get(), db.collection("dhs_usuarios").get(), leerPerfiles()]);
+      const [p, u, pf] = await Promise.all([db.collection("dhs_personal").get(), db.collection(window.DHS_COL_USU).get(), leerPerfiles()]);
       p.forEach(d => personal.push({id:d.id, ...d.data()}));
       u.forEach(d => usuarios[d.id] = d.data());
       P = pf;
@@ -97,12 +97,12 @@
         const b = db.batch();
         const ref = id ? db.collection("dhs_personal").doc(id) : db.collection("dhs_personal").doc();
         b.set(ref, {...datos, email, modificado:firma, ...(id ? {} : {creado:firma})}, {merge:true});
-        if(p.email && p.email !== email) b.set(db.collection("dhs_usuarios").doc(p.email), {activo:false, modificado:firma}, {merge:true});
+        if(p.email && p.email !== email) b.set(db.collection(window.DHS_COL_USU).doc(p.email), {activo:false, modificado:firma}, {merge:true});
         if(email){
           // "rol" se mantiene por compatibilidad con la app de cámaras: admin = oficina/dirección, tecnico = resto.
           const pm = (P[perfil] && P[perfil].permisos) || {};
           const rol = perfil === "direccion" ? "direccion" : (pm.ajustes === "editar" ? "admin" : (["ver","editar"].includes(pm.comunidades) ? "tecnico" : "ninguno"));
-          b.set(db.collection("dhs_usuarios").doc(email), {nombre:datos.nombre, perfil:perfil || "", rol, personalId:ref.id, activo: !!perfil && datos.activo !== false, modificado:firma}, {merge:true});
+          b.set(db.collection(window.DHS_COL_USU).doc(email), {nombre:datos.nombre, perfil:perfil || "", rol, personalId:ref.id, activo: !!perfil && datos.activo !== false, modificado:firma}, {merge:true});
         }
         await b.commit();
         await db.collection("dhs_registro").add({por:yo, en:firma.en, accion, coleccion:"dhs_personal", docId:ref.id, nombre:datos.nombre, acceso: perfil ? (perfil === "direccion" ? "Dirección" : (P[perfil]||{}).nombre) : "sin acceso"});
@@ -184,7 +184,7 @@
     };
     el.querySelectorAll("[data-borrar]").forEach(b => b.onclick = async () => {
       const id = b.dataset.borrar;
-      const enUso = (await D().db.collection("dhs_usuarios").where("perfil","==",id).get()).docs.filter(d => d.data().activo !== false).length;
+      const enUso = (await D().db.collection(window.DHS_COL_USU).where("perfil","==",id).get()).docs.filter(d => d.data().activo !== false).length;
       if(enUso) return msg("No se puede eliminar: lo usan " + enUso + (enUso===1?" persona.":" personas.") + " Cámbiales antes el perfil.");
       if(!confirm("¿Eliminar el perfil " + P[id].nombre + "?")) return;
       try{ await D().db.collection("dhs_perfiles").doc(id).delete(); perfiles(el); }catch(e){ msg("No se ha podido eliminar (" + (e.code||e) + ")."); }

@@ -58,7 +58,7 @@
     const email = u.email.toLowerCase();
     if(DIRECCION.includes(email)) return {nombre: email.startsWith("herrera") ? "Ángel" : "Joel", direccion:true, perfil:"direccion", permisos:{}};
     try{
-      const d = await db.collection("dhs_usuarios").doc(email).get();
+      const d = await db.collection(window.DHS_COL_USU).doc(email).get();
       if(!d.exists) return null;
       const f = d.data();
       if(f.activo === false) return null;

@@ -17,21 +17,22 @@ td,th{border-bottom:1px solid #e5e9f0;padding:4px 6px;text-align:left}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="../js/config-pruebas.js"></script>
+<script>window.OFICIAL = /[?&]oficial=1/.test(location.search); document.write('<script src="../js/config-' + (window.OFICIAL ? 'oficial' : 'pruebas') + '.js?v=2"><\/script>');</script>
 </head><body>
-<div class="top">DHS App · VERSIÓN DE PRUEBAS · Carga de la lista maestra</div>
+<div class="top" id="topBar">DHS App · VERSIÓN DE PRUEBAS · Carga de la lista maestra</div>
 <div class="card">
   <h2>Carga de administraciones y comunidades</h2>
-  <p class="muted">Solo para Ángel o Joel. Los archivos se leen en este ordenador y se guardan en la base de datos de <b>pruebas</b>; no se suben a ningún otro sitio.</p>
+  <p class="muted">Solo para Ángel o Joel. Los archivos se leen en este ordenador y se guardan en la base de datos de <b id="dondeBD">pruebas</b>; no se suben a ningún otro sitio.</p>
   <div id="btnGoogle"></div>
   <div id="sesion" class="muted"></div>
   <label>1. Copia de Cobros (dhs-cobros-copia-….json)</label><input type="file" id="fCob" accept=".json">
   <label>2. Copia de Cámaras (dhs-camaras-copia-….json)</label><input type="file" id="fCam" accept=".json">
-  <p><button id="bPrev" disabled>Ver resumen</button> <button id="bCarga" disabled>Cargar en pruebas</button></p>
+  <p><button id="bPrev" disabled>Ver resumen</button> <button id="bCarga" disabled>Cargar</button></p>
   <div id="res"></div>
   <div id="log"></div>
 </div>
 <script>
+if(window.OFICIAL){ const t = document.getElementById("topBar"); t.textContent = t.textContent.replace("VERSIÓN DE PRUEBAS", "VERSIÓN OFICIAL"); t.style.background = "#1f3a5f"; document.title = document.title.replace("PRUEBAS", "OFICIAL"); const b = document.getElementById("dondeBD"); if(b) b.textContent = "la versión OFICIAL"; }
 firebase.initializeApp(DHS_CONFIG.firebase);
 const auth=firebase.auth(), db=firebase.firestore();
 const $=id=>document.getElementById(id);

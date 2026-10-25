@@ -13,3 +13,4 @@ window.DHS_CONFIG = {
   puenteUrl:"https://script.google.com/macros/s/AKfycbxt95UOhBi3SGu8lnjC0OZkkgWUpnnKUKVt1em6bymdprECRnznCWJGG7eIlL6Z9qjk/exec",
   googleClientId: "564284457863-brbfrs1kq8limfe0cdpa2m8jtvu0me1h.apps.googleusercontent.com"
 };
+window.DHS_COL_USU = "dhs_usuarios";

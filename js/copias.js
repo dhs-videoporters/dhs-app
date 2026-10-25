@@ -4,13 +4,13 @@
   const D = () => window.DHS;
   // Colecciones de la app y sus subcolecciones.
   const COLECCIONES = [
-    ["dhs_admins"], ["dhs_comunidades", "contactos"], ["dhs_personal"], ["dhs_usuarios"], ["dhs_perfiles"],
+    ["dhs_admins"], ["dhs_comunidades", "contactos"], ["dhs_personal"], [window.DHS_COL_USU], ["dhs_perfiles"],
     ["dhs_ausencias"], ["dhs_trabajos", "notas"], ["dhs_contadores"], ["dhs_fichajes"], ["dhs_catalogo"], ["dhs_presupuestos"], ["dhs_bancos"], ["dhs_registro"]
   ];
-  const NOMBRES = {dhs_admins:"Administraciones", dhs_comunidades:"Comunidades", dhs_personal:"Equipo", dhs_usuarios:"Accesos", dhs_perfiles:"Perfiles",
+  const NOMBRES = {dhs_admins:"Administraciones", dhs_comunidades:"Comunidades", dhs_personal:"Equipo", dhs_usuarios:"Accesos", dhs_app_usuarios:"Accesos", dhs_perfiles:"Perfiles",
                    dhs_ausencias:"Ausencias", dhs_trabajos:"Intervenciones", dhs_contadores:"Numeración", dhs_fichajes:"Fichajes", dhs_catalogo:"Catálogo", dhs_presupuestos:"Presupuestos", dhs_bancos:"Números de cuenta", dhs_registro:"Registro de cambios"};
   const ACCION = "copia de seguridad";
-  const DIAS_AVISO = 8;   // la copia automática es cada viernes: si pasan más de 8 días, algo ha fallado
+  const DIAS_AVISO = 4;   // la copia automática es de lunes a viernes: si pasan más de 4 días, algo ha fallado
 
   // Fechas de Firestore <-> JSON
   const aJSON = v => {
@@ -92,12 +92,12 @@
     let ult = 0; try{ ult = await ultimaCopia(); }catch(e){}
     const dias = diasDesde(ult);
     const aviso = dias === null ? `<div class="aviso-copia">Todavía no se ha hecho ninguna copia de seguridad (ni automática ni manual).</div>`
-      : (dias > DIAS_AVISO ? `<div class="aviso-copia">La última copia es de hace <b>${dias} días</b>: la copia automática del viernes no se ha hecho. Haz una manual y revisa el programa de copias.</div>` : "");
+      : (dias > DIAS_AVISO ? `<div class="aviso-copia">La última copia es de hace <b>${dias} días</b>: la copia automática diaria no se ha hecho. Haz una manual y revisa el programa de copias.</div>` : "");
     el.innerHTML = `
       <h3>Copias de seguridad</h3>
       ${aviso}
       <p>Última copia: <b>${ult ? new Date(ult).toLocaleString("es-ES", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"}) : "nunca"}</b>${dias !== null ? " (hace " + dias + (dias===1?" día)":" días)") : ""}</p>
-      <p class="vacio" style="margin:6px 0 12px">Descarga un archivo con todo: administraciones, comunidades y vecinos, equipo, accesos, perfiles, trabajos y registro. Guárdalo en <b>Documentos › DHS › Copias</b>. La copia automática se hace <b>cada viernes</b> y se guarda en el Google Drive de DHS (carpeta «DHS · Copias app»). Si pasan más de ${DIAS_AVISO} días sin copia, la app avisa.</p>
+      <p class="vacio" style="margin:6px 0 12px">Descarga un archivo con todo: administraciones, comunidades y vecinos, equipo, accesos, perfiles, trabajos y registro. Guárdalo en <b>Documentos › DHS › Copias</b>. La copia automática se hace <b>cada día de lunes a viernes a las 20:00</b> y se guarda en el Google Drive de DHS (carpeta «DHS · Copias app»). Si pasan más de ${DIAS_AVISO} días sin copia, la app avisa.</p>
       <p><button class="btn" id="btnCopia">⬇ Descargar copia ahora</button> <span id="msgCopia" class="vacio"></span></p>
       ${S.direccion ? `
       <div class="bloque" style="margin-top:18px">

@@ -1,0 +1,223 @@
+rules_version = '2';
+// Reglas de seguridad — App DHS (intervenciones). Versión 7 (24/10/2026): v6 + catálogo, presupuestos y números de cuenta. v6: v5 (el técnico rellena al terminar qué se ha hecho, qué falta y la fecha) + fotos de la finca + estado "En curso" (el técnico pulsa Empiezo) + aviso a la administración al terminar + fichajes.
+// Proyecto OFICIAL (dhs-camaras): reglas de esta app + las de la app de cámaras y la de cobros (sin cambios para ellas).
+// En el oficial los accesos de esta app van en dhs_app_usuarios (dhs_usuarios es de la app de cámaras).
+// Norma: sin cuenta de Google autorizada no se lee ni se escribe nada.
+// Cada usuario tiene un perfil (dhs_perfiles) con un nivel por apartado: no / propios / ver / editar / todo.
+// Dirección (Ángel y Joel fijos + perfil 'direccion') lo puede todo y es la única que edita perfiles.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Quién es quién ----------
+    function conSesion() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function correo() {
+      return request.auth.token.email.lower();
+    }
+    function tieneFicha() {
+      return conSesion() && exists(/databases/$(database)/documents/dhs_app_usuarios/$(correo()));
+    }
+    function ficha() {
+      return get(/databases/$(database)/documents/dhs_app_usuarios/$(correo())).data;
+    }
+    function activa() {
+      return ficha().get('activo', true) == true;
+    }
+    function perfilId() {
+      return ficha().get('perfil', '');
+    }
+    function esDireccion() {
+      return conSesion() && (correo() in ['herrerazarzoso@gmail.com', 'dhsvideoporters@gmail.com']
+        || (tieneFicha() && activa() && perfilId() == 'direccion'));
+    }
+    function esUsuario() {
+      return esDireccion() || (tieneFicha() && activa() && perfilId() != '');
+    }
+    function permiso(apartado) {
+      return get(/databases/$(database)/documents/dhs_perfiles/$(perfilId())).data.permisos.get(apartado, 'no');
+    }
+    // Nivel del usuario en un apartado según su perfil: 0 no/propios · 1 ver · 2 editar · 3 todo
+    function nivel(apartado) {
+      return {'no': 0, 'propios': 0, 'ver': 1, 'editar': 2, 'todo': 3}.get(permiso(apartado), 0);
+    }
+    // "Solo los suyos": ve y rellena únicamente los trabajos en los que está asignado (subcontratas).
+    function soloPropios(apartado) {
+      return tieneFicha() && activa() && perfilId() != '' && permiso(apartado) == 'propios';
+    }
+    function miPersonal() {
+      return ficha().get('personalId', '');
+    }
+    function asignadoA(datos) {
+      return datos.get('asignados', []).hasAny([miPersonal()]);
+    }
+    function puede(apartado, minimo) {
+      return esDireccion() || (tieneFicha() && activa() && perfilId() != '' && nivel(apartado) >= minimo);
+    }
+    // El documento lleva la marca de quién lo cambia, y es quien dice ser.
+    function firmaBien() {
+      return request.resource.data.modificado.por == correo();
+    }
+    function soloCambia(campos) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
+    }
+
+    // ---------- Perfiles de permisos: solo Dirección ----------
+    match /dhs_perfiles/{id} {
+      allow read: if esUsuario();
+      allow write: if esDireccion();
+    }
+
+    // ---------- Usuarios (accesos) ----------
+    // Solo Dirección puede dar o quitar el perfil de Dirección.
+    match /dhs_app_usuarios/{email} {
+      allow read: if (conSesion() && email == correo()) || puede('ajustes', 1);
+      allow create: if puede('ajustes', 2) && (request.resource.data.get('perfil', '') != 'direccion' || esDireccion());
+      allow update: if puede('ajustes', 2)
+                    && ((request.resource.data.get('perfil', '') != 'direccion' && resource.data.get('perfil', '') != 'direccion') || esDireccion());
+      allow delete: if esDireccion();
+    }
+
+    // ---------- Equipo y ausencias ----------
+    match /dhs_personal/{id} {
+      allow read: if esUsuario();
+      allow write: if puede('ajustes', 2);
+    }
+    match /dhs_ausencias/{id} {
+      allow read: if puede('calendario', 1);
+      allow write: if puede('calendario', 2);
+    }
+
+    // ---------- Administradores de fincas ----------
+    match /dhs_admins/{id} {
+      allow read: if puede('administradores', 1);
+      allow create, update: if puede('administradores', 2) && firmaBien();
+      allow delete: if esDireccion();
+    }
+
+    // ---------- Comunidades / clientes ----------
+    match /dhs_comunidades/{id} {
+      allow read: if puede('comunidades', 1);
+      allow create: if puede('comunidades', 2) && firmaBien();
+      // Con "vecinos: editar" se pueden tocar también las notas de la ficha.
+      allow update: if puede('comunidades', 2) && firmaBien()
+                    || puede('vecinos', 2) && firmaBien() && soloCambia(['notas', 'modificado']);
+      allow delete: if esDireccion();
+
+      match /contactos/{c} {
+        allow read: if puede('vecinos', 1);
+        allow create, update: if puede('vecinos', 2) && firmaBien();
+        allow delete: if puede('comunidades', 2);
+      }
+      // Fotos de la finca (placa, cuarto de antenas, grabador…): las suben técnicos y oficina.
+      match /fotos/{f} {
+        allow read: if puede('comunidades', 1);
+        allow create: if (puede('trabajos', 2) || puede('comunidades', 2)) && request.resource.data.por == correo();
+        allow delete: if puede('comunidades', 2);
+      }
+    }
+
+    // ---------- Trabajos ----------
+    // editar = crear trabajos y rellenar su parte (estado, material, tiempo, fotos…); todo = además cambiar todo y borrar.
+    match /dhs_trabajos/{id} {
+      allow read: if puede('trabajos', 1) || (soloPropios('trabajos') && asignadoA(resource.data));
+      allow create: if puede('trabajos', 2) && firmaBien() && request.resource.data.creado.por == correo();
+      allow update: if puede('trabajos', 3) && firmaBien()
+                    || (puede('trabajos', 2) || (soloPropios('trabajos') && asignadoA(resource.data))) && firmaBien()
+                       && soloCambia(['estado', 'empezado', 'material', 'tiempoReal', 'hechoPor', 'resumenHecho', 'falta', 'fechaHecho', 'avisoAdmin', 'cobro', 'fotos', 'editando', 'modificado'])
+                       && request.resource.data.estado in ['nuevo', 'agendado', 'encurso', 'amedias', 'hecho'];
+      allow delete: if puede('trabajos', 3);
+
+      match /notas/{n} {
+        allow read: if puede('trabajos', 1)
+                    || (soloPropios('trabajos') && asignadoA(get(/databases/$(database)/documents/dhs_trabajos/$(id)).data));
+        allow create: if (puede('trabajos', 2)
+                          || (soloPropios('trabajos') && asignadoA(get(/databases/$(database)/documents/dhs_trabajos/$(id)).data)))
+                      && request.resource.data.por == correo();
+        allow update, delete: if puede('trabajos', 3);
+      }
+    }
+
+    // ---------- Fichajes (registro de jornada): no se modifican ni se borran ----------
+    // Cada uno ficha solo lo suyo y con la hora del servidor. Dirección añade correcciones con motivo.
+    match /dhs_fichajes/{id} {
+      allow read: if (conSesion() && resource.data.email == correo()) || puede('ajustes', 1);
+      allow create: if (esUsuario() && request.resource.data.email == correo()
+                        && request.resource.data.personalId == miPersonal() && miPersonal() != ''
+                        && request.resource.data.tipo in ['entrada', 'pausa', 'vuelta', 'salida']
+                        && request.resource.data.en == request.time)
+                    || (esDireccion() && request.resource.data.tipo == 'correccion'
+                        && request.resource.data.por == correo() && request.resource.data.motivo is string
+                        && request.resource.data.motivo.size() > 3);
+      allow update, delete: if false;
+    }
+
+    // ---------- Catálogo (de Contasimple) ----------
+    match /dhs_catalogo/{id} {
+      allow read: if esUsuario();
+      allow write: if puede('precios', 2);
+    }
+    // ---------- Presupuestos (copia de lo creado en Contasimple) ----------
+    match /dhs_presupuestos/{id} {
+      allow read: if puede('precios', 2) || puede('cobros', 1);
+      allow create, update: if puede('precios', 2) && firmaBien();
+      allow delete: if esDireccion();
+    }
+    // ---------- Números de cuenta: solo Cobros (Dirección) ----------
+    match /dhs_bancos/{id} {
+      allow read: if puede('cobros', 1);
+      allow write: if puede('cobros', 2) && firmaBien();
+    }
+
+    // ---------- Numeración (2026-0001, P2026-0001) ----------
+    match /dhs_contadores/{id} {
+      allow read: if esUsuario();
+      allow create: if esUsuario() && request.resource.data.valor == 1;
+      allow update: if esUsuario() && request.resource.data.valor == resource.data.valor + 1;
+    }
+
+    // ---------- Registro de cambios: se escribe, no se toca ----------
+    match /dhs_registro/{id} {
+      allow read: if puede('ajustes', 1);
+      allow create: if esUsuario() && request.resource.data.por == correo();
+    }
+
+    // ================= App de CÁMARAS (igual que antes; sus accesos en dhs_usuarios con "rol") =================
+    function camCorreo() {
+      return request.auth.token.email;
+    }
+    function camRol() {
+      return exists(/databases/$(database)/documents/dhs_usuarios/$(camCorreo()))
+        ? get(/databases/$(database)/documents/dhs_usuarios/$(camCorreo())).data.rol
+        : '';
+    }
+    function camAdmin() {
+      return conSesion() && (camCorreo() == 'dhsvideoporters@gmail.com' || camRol() == 'admin');
+    }
+    function camTecnico() {
+      return conSesion() && camRol() == 'tecnico';
+    }
+    match /dhs_usuarios/{email} {
+      allow read: if camAdmin() || (conSesion() && email == camCorreo());
+      allow write: if camAdmin();
+    }
+    match /dhs_instalaciones/{id} {
+      allow read: if camAdmin() || camTecnico();
+      allow write: if camAdmin();
+    }
+    match /dhs_economia/{id} {
+      allow read, write: if camAdmin();
+    }
+    match /dhs_revisiones/{id} {
+      allow read, create, update: if camAdmin() || camTecnico();
+      allow delete: if camAdmin();
+    }
+
+    // ================= App de COBROS (igual que antes) =================
+    match /dhs_cobros/{id} {
+      allow read, write: if conSesion() && camCorreo() == 'dhsvideoporters@gmail.com';
+    }
+
+    // Todo lo demás: cerrado.
+  }
+}

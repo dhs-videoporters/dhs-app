@@ -20,23 +20,24 @@ td,th{border-bottom:1px solid #e5e9f0;padding:4px 6px;text-align:left;vertical-a
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="../js/config-pruebas.js"></script>
+<script>window.OFICIAL = /[?&]oficial=1/.test(location.search); document.write('<script src="../js/config-' + (window.OFICIAL ? 'oficial' : 'pruebas') + '.js?v=2"><\/script>');</script>
 </head><body>
-<div class="top">DHS App · VERSIÓN DE PRUEBAS · Traspaso de Interph</div>
+<div class="top" id="topBar">DHS App · VERSIÓN DE PRUEBAS · Traspaso de Interph</div>
 <div class="card">
   <h2>Pasar los datos de Interph</h2>
-  <p class="muted">Solo Ángel o Joel. Los archivos se leen en este ordenador y se guardan en la base de datos de <b>pruebas</b>. Se puede repetir sin miedo: lo que ya está cargado no se duplica.</p>
+  <p class="muted">Solo Ángel o Joel. Los archivos se leen en este ordenador y se guardan en la base de datos de <b id="dondeBD">pruebas</b>. Se puede repetir sin miedo: lo que ya está cargado no se duplica.</p>
   <div id="btnGoogle"></div>
   <div id="sesion" class="muted"></div>
   <label>1. Datos de Interph (interph-datos.json)</label><input type="file" id="fDat" accept=".json">
   <label>2. Excel revisado <span class="muted">— opcional: si no lo eliges, se usan las decisiones de Claude</span></label><input type="file" id="fXls" accept=".xlsx">
   <label>3. Carpeta de fotos: Descargas › interph-backup › files › <b>uploads</b></label><input type="file" id="fFot" webkitdirectory multiple>
-  <p style="margin-top:14px"><button id="bPrev" disabled>Ver resumen</button> <button id="bCarga" disabled>Cargar en pruebas</button></p>
+  <p style="margin-top:14px"><button id="bPrev" disabled>Ver resumen</button> <button id="bCarga" disabled>Cargar</button></p>
   <div id="res"></div>
   <div class="barra"><i id="barra"></i></div>
   <div id="log"></div>
 </div>
 <script>
+if(window.OFICIAL){ const t = document.getElementById("topBar"); t.textContent = t.textContent.replace("VERSIÓN DE PRUEBAS", "VERSIÓN OFICIAL"); t.style.background = "#1f3a5f"; document.title = document.title.replace("PRUEBAS", "OFICIAL"); const b = document.getElementById("dondeBD"); if(b) b.textContent = "la versión OFICIAL"; }
 firebase.initializeApp(DHS_CONFIG.firebase);
 const auth = firebase.auth(), db = firebase.firestore(), st = firebase.storage();
 const $ = id => document.getElementById(id);
@@ -128,7 +129,7 @@ $("bPrev").onclick = async () => {
     <tr><td>Fotos</td><td><b>${hay}</b> de ${nFotos} ${nFotos && !hay ? `<span class="ko">— elige la carpeta uploads</span>` : ""}</td></tr>
     <tr><td class="${sinDecidir.length ? "ko" : ""}">Sin decidir (REVISAR): no se pasan todavía</td><td><b>${sinDecidir.length}</b> grupos, ${sinDecidir.reduce((n,g) => n + g.tareas.length, 0)} intervenciones ${sinDecidir.length ? "<br><span class='muted'>" + sinDecidir.slice(0,12).map(g => esc(g.grupo + " " + g.direccion)).join(" · ") + (sinDecidir.length > 12 ? " …" : "") + "</span>" : ""}</td></tr>
     <tr><td>Marcadas «NO PASAR»</td><td><b>${noPasar.length}</b></td></tr></table>
-    <p class="muted">Nada se ha guardado todavía. Si está bien, pulsa «Cargar en pruebas».</p>`;
+    <p class="muted">Nada se ha guardado todavía. Si está bien, pulsa «Cargar».</p>`;
   $("bCarga").disabled = false; $("bPrev").disabled = false;
 };
 

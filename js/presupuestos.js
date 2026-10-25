@@ -26,7 +26,7 @@
     const url = (window.DHS_CONFIG || {}).puenteUrl;
     if(!url) throw new Error("Falta conectar el puente con Contasimple (puenteUrl).");
     const idToken = await D().auth.currentUser.getIdToken();
-    const r = await fetch(url, {method:"POST", body:JSON.stringify({idToken, accion, datos})});   // texto plano: sin "preflight"
+    const r = await fetch(url, {method:"POST", body:JSON.stringify({idToken, accion, datos, entorno:(window.DHS_CONFIG||{}).entorno || "pruebas"})});   // texto plano: sin "preflight"
     const j = await r.json().catch(() => ({ok:false, error:"Respuesta no válida del puente (" + r.status + ")"}));
     if(!j.ok) throw new Error(j.error || "Error del puente");
     return j.datos;

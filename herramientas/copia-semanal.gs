@@ -1,5 +1,5 @@
 /**
- * DHS App — Copia de seguridad automática semanal (cada viernes).
+ * DHS App — Copia de seguridad automática diaria (de lunes a viernes, a las 20:00).
  * Se instala UNA vez en script.google.com con la cuenta dhsvideoporters@gmail.com.
  * Guarda una copia completa de la base de datos (Firestore) en Google Drive y avisa por correo si falla.
  *
@@ -7,26 +7,27 @@
  */
 
 // ---- Ajustes ----
-const PROYECTO = 'dhs-pruebas';          // al pasar a oficial: 'dhs-camaras'
-const ENTORNO = 'pruebas';               // al pasar a oficial: 'oficial'
+const PROYECTO = 'dhs-camaras';          // OFICIAL desde el 25/10/2026 (antes 'dhs-pruebas')
+const ENTORNO = 'oficial';               // 'pruebas' / 'oficial'
 const CARPETA = 'DHS · Copias app';      // carpeta de Google Drive donde se guardan
 const SEMANAS_A_GUARDAR = 12;            // las copias más antiguas se borran
 const AVISAR_A = 'dhsvideoporters@gmail.com';
-const HORA = 20;                         // viernes a partir de las 20:00
+const HORA = 20;                         // de lunes a viernes a partir de las 20:00
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROYECTO + '/databases/(default)/documents';
 
-/** Ejecutar una sola vez: programa la copia de cada viernes y hace una copia de prueba. */
+/** Ejecutar una sola vez: programa la copia de cada día laborable y hace una copia de prueba. */
 function instalar() {
   ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'copiaSemanal') ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('copiaSemanal').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(HORA).create();
+  [ScriptApp.WeekDay.MONDAY, ScriptApp.WeekDay.TUESDAY, ScriptApp.WeekDay.WEDNESDAY, ScriptApp.WeekDay.THURSDAY, ScriptApp.WeekDay.FRIDAY]
+    .forEach(d => ScriptApp.newTrigger('copiaSemanal').timeBased().onWeekDay(d).atHour(HORA).create());
   copiaSemanal();
 }
 
-/** Hace la copia completa. Se ejecuta sola cada viernes. */
+/** Hace la copia completa (de toda la base oficial: app, cámaras y cobros). Se ejecuta sola de lunes a viernes. */
 function copiaSemanal() {
   try {
-    const copia = { app: 'dhs-app', entorno: ENTORNO, fecha: new Date().toISOString(), por: 'copia automática (viernes)', datos: {} };
+    const copia = { app: 'dhs-app', entorno: ENTORNO, fecha: new Date().toISOString(), por: 'copia automática (diaria)', datos: {} };
     let total = 0;
     listarColecciones_('').forEach(col => {
       copia.datos[col] = {};
@@ -47,7 +48,7 @@ function copiaSemanal() {
     apuntarEnRegistro_(total);
     Logger.log('Copia hecha: ' + nombre + ' (' + total + ' documentos)');
   } catch (e) {
-    MailApp.sendEmail(AVISAR_A, '⚠ DHS App: ha fallado la copia de seguridad del viernes',
+    MailApp.sendEmail(AVISAR_A, '⚠ DHS App: ha fallado la copia de seguridad de hoy',
       'No se ha podido hacer la copia automática de ' + PROYECTO + '.\n\nError: ' + e + '\n\nHaz una copia manual desde la app (Ajustes › Copias) y avisa a Claude.');
     throw e;
   }
@@ -107,7 +108,7 @@ function limpiar_(carpeta) {
 function apuntarEnRegistro_(total) {
   pedir_(BASE + '/dhs_registro', { method: 'post', payload: JSON.stringify({ fields: {
     accion: { stringValue: 'copia de seguridad' }, coleccion: { stringValue: 'todas' },
-    por: { stringValue: 'copia automática (viernes)' }, n: { integerValue: String(total) },
+    por: { stringValue: 'copia automática (diaria)' }, n: { integerValue: String(total) },
     en: { timestampValue: new Date().toISOString() }
   } }) });
 }

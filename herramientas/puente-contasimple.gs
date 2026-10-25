@@ -6,7 +6,13 @@
 //   3) solo entonces habla con Contasimple con la clave CS_KEY (que nunca sale de aquí).
 // Necesita las funciones csToken_() y cs_() (bloque "Contasimple (DHS App)") y PROYECTO/BASE/pedir_ (copia semanal).
 // =====================================================================
-const FIREBASE_API_KEY = 'AIzaSyA8RF2qbRo5b89OHkTClQLMZxzeHqXdKNc';   // clave pública de la app web (pruebas)
+// Dos entornos: la app de pruebas (dhs-pruebas) y la oficial (dhs-camaras). La app dice en cada llamada cuál es.
+const ENTORNOS_ = {
+  pruebas: { proyecto: 'dhs-pruebas', apiKey: 'AIzaSyA8RF2qbRo5b89OHkTClQLMZxzeHqXdKNc', usuarios: 'dhs_usuarios' },
+  oficial: { proyecto: 'dhs-camaras', apiKey: 'AIzaSyDqcZncea3Wo9HE4x3KZuVt2Veha3CPCdE', usuarios: 'dhs_app_usuarios' }
+};
+let ENT_ = ENTORNOS_.pruebas;
+function baseEnt_() { return 'https://firestore.googleapis.com/v1/projects/' + ENT_.proyecto + '/databases/(default)/documents'; }
 const DIRECCION_FIJA = ['herrerazarzoso@gmail.com', 'dhsvideoporters@gmail.com'];
 const IVA = 21;
 
@@ -14,6 +20,7 @@ function doPost(e) {
   let r;
   try {
     const req = JSON.parse(e.postData.contents || '{}');
+    ENT_ = ENTORNOS_[req.entorno] || ENTORNOS_.pruebas;
     const u = usuario_(req.idToken);
     const accion = PUENTE[req.accion];
     if (!accion) throw new Error('Acción desconocida: ' + req.accion);
@@ -28,7 +35,7 @@ function doGet() { return ContentService.createTextOutput('DHS · puente con Con
 // ---------- Quién es y qué puede ----------
 function usuario_(idToken) {
   if (!idToken) throw new Error('Sin sesión.');
-  const r = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + FIREBASE_API_KEY,
+  const r = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + ENT_.apiKey,
     { method: 'post', contentType: 'application/json', payload: JSON.stringify({ idToken: idToken }), muteHttpExceptions: true });
   const j = JSON.parse(r.getContentText() || '{}');
   const us = (j.users || [])[0];
@@ -36,10 +43,10 @@ function usuario_(idToken) {
   const email = us.email.toLowerCase();
   if (DIRECCION_FIJA.indexOf(email) >= 0) return { email: email, direccion: true, permisos: {} };
   let f;
-  try { f = aJSON_(pedir_(BASE + '/dhs_usuarios/' + encodeURIComponent(email)).fields || {}); } catch (e) { throw new Error('Tu cuenta no tiene acceso a la app.'); }
+  try { f = aJSON_(pedir_(baseEnt_() + '/' + ENT_.usuarios + '/' + encodeURIComponent(email)).fields || {}); } catch (e) { throw new Error('Tu cuenta no tiene acceso a la app.'); }
   if (f.activo === false || !f.perfil) throw new Error('Tu cuenta no tiene acceso a la app.');
   if (f.perfil === 'direccion') return { email: email, direccion: true, permisos: {} };
-  const p = aJSON_(pedir_(BASE + '/dhs_perfiles/' + encodeURIComponent(f.perfil)).fields || {});
+  const p = aJSON_(pedir_(baseEnt_() + '/dhs_perfiles/' + encodeURIComponent(f.perfil)).fields || {});
   return { email: email, direccion: false, permisos: p.permisos || {}, personalId: f.personalId || '' };
 }
 const NIV_ = { no: 0, propios: 0.5, ver: 1, editar: 2, todo: 3 };
@@ -303,7 +310,7 @@ function descuentos_(L) {
   (L || []).forEach(l => {
     const desc = Number(l.descuento) || 0; if (!desc || !l.productoId) return;
     let max = 0;
-    try { max = Number(aJSON_(pedir_(BASE + '/dhs_catalogo/' + encodeURIComponent(String(l.productoId))).fields || {}).dtoMax) || 0; } catch (e) { max = 0; }
+    try { max = Number(aJSON_(pedir_(baseEnt_() + '/dhs_catalogo/' + encodeURIComponent(String(l.productoId))).fields || {}).dtoMax) || 0; } catch (e) { max = 0; }
     if (desc > max + 0.001) throw new Error('«' + l.concepto + '» ' + (max ? 'admite como máximo un ' + max + ' % de descuento.' : 'no admite descuento.'));
   });
 }
