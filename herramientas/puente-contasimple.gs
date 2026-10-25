@@ -136,12 +136,13 @@ const PUENTE = {
     return { clienteId: clienteId, pdf: pdf, aviso: aviso };
   },
 
-  // Instalaciones de cámaras con sus revisiones (y, solo para Cobros/Dirección, el mantenimiento: precio y años cobrados).
-  // Las claves de los grabadores NO salen de la app de cámaras.
+  // Instalaciones de cámaras con sus revisiones. Solo para Cobros/Dirección: el mantenimiento (precio y años cobrados).
+  // Solo para quien edita comunidades (oficina y Dirección): las claves y el correo de la finca (por si llaman por teléfono).
   camaras: function (d, u) {
     exige_(u, 'comunidades', 'ver');
     const I = leerCol_(PROYECTO_COBROS, 'dhs_instalaciones'), R = leerCol_(PROYECTO_COBROS, 'dhs_revisiones');
     const verEco = puede_(u, 'cobros', 'ver'), E = verEco ? leerCol_(PROYECTO_COBROS, 'dhs_economia') : {};
+    const verClaves = puede_(u, 'comunidades', 'editar');
     const ALERTA = ['Incidencia', 'Renovar'];
     return Object.keys(I).filter(k => k.charAt(0) !== '_').map(k => {
       const i = I[k];
@@ -152,6 +153,7 @@ const PUENTE = {
       }).sort((a, b) => (b.anio - a.anio) || (a.periodo < b.periodo ? 1 : -1));
       const out = { id: k, comunidad: i.comunidad || '', direccion: i.direccion || '', ciudad: i.ciudad || '', admin: i.admin || '', camaras: i.camaras,
         conexion: i.conexion || '', notas: i.notas || '', contacto: i.contacto || '', telefono: i.telefono || '', revisiones: revs };
+      if (verClaves) { out.claves = i.claves || ''; out.emailFinca = i.emailFinca || ''; }
       if (verEco && E[k]) out.economia = { precio: E[k].precio || 0, cobros: E[k].cobros || {} };
       return out;
     });

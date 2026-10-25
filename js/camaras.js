@@ -54,15 +54,18 @@
     el.innerHTML = `<p class="vacio">Leyendo la app de cámaras…</p>`;
     let L; try{ L = await datos(); }catch(e){ el.innerHTML = `<p class="vacio">No se ha podido leer la app de cámaras: ${esc(e.message||e)}</p>`; return; }
     const puedeUnir = S.puede("comunidades","editar");
-    let inst = com.camarasId ? L.find(x => x.id === com.camarasId) : null;
+    const idUnida = com.camarasId || (com.camaras && com.camaras.instalacionId) || null;
+    let inst = idUnida ? L.find(x => x.id === idUnida) : null;
     let sug = null;
-    if(!inst && !com.sinCamaras){
+    if(!inst && !com.sinCamaras && !(com.camaras && com.camaras.tiene === false && com.camarasRevisado)){
       let mejor = 0; L.forEach(x => { const p = Math.max(parecido(com.nombre, x.comunidad), parecido(com.direccion, x.comunidad), parecido(com.nombre, x.direccion)); if(p > mejor){ mejor = p; sug = x; } });
       if(mejor < 0.5) sug = null;
     }
     const unir = async (camId, sin) => {
       const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
-      const cambio = sin ? {sinCamaras:true, camarasId:null} : {camarasId:camId, sinCamaras:false};
+      const x = camId ? L.find(i => i.id === camId) : null;
+      const cambio = sin ? {sinCamaras:true, camarasId:null, camaras:{tiene:false, instalacionId:null, numero:null}}
+                         : {camarasId:camId, sinCamaras:false, camaras:{tiene:true, instalacionId:camId, numero:x && x.camaras != null ? x.camaras : null}};
       await db.collection("dhs_comunidades").doc(comId).set({...cambio, modificado:{por:yo, en}}, {merge:true});
       await db.collection("dhs_registro").add({por:yo, en, accion: sin ? "marcada sin cámaras" : "unida a la app de cámaras (" + camId + ")", coleccion:"dhs_comunidades", docId:comId, nombre:com.nombre});
       Object.assign(com, cambio); pestana(el, comId, com);
@@ -85,13 +88,25 @@
     }
     const y = new Date().getFullYear();
     const años = [...new Set([y, ...(inst.revisiones||[]).map(r => r.anio)])].sort((a,b) => b - a).slice(0, 4);
+    // Si el nº de cámaras ha cambiado en la app de cámaras, se pone al día en la ficha (para la cabecera y la lista)
+    if(puedeUnir && (!com.camaras || com.camaras.numero !== (inst.camaras ?? null) || com.camaras.instalacionId !== inst.id)){
+      const cam = {tiene:true, instalacionId:inst.id, numero:inst.camaras ?? null};
+      try{ await db.collection("dhs_comunidades").doc(comId).set({camaras:cam, camarasId:inst.id, modificado:{por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp()}}, {merge:true}); com.camaras = cam; com.camarasId = inst.id; }catch(e){}
+    }
     el.innerHTML = `<h3>📹 Cámaras <span class="vacio" style="font-weight:400;font-size:13px">· información de la app de cámaras (el trabajo se sigue haciendo allí)</span></h3>
       <div class="cam-datos">
         <div><span>Cámaras</span><b>${inst.camaras != null ? esc(inst.camaras) : "—"}</b></div>
         <div><span>Conexión</span><b>${esc(inst.conexion || "—")}</b></div>
         <div><span>Contacto</span><b>${esc(inst.contacto || "—")}${inst.telefono ? ` · <a href="tel:${esc(inst.telefono)}">${esc(inst.telefono)}</a>` : ""}</b></div>
+        <div><span>En la app de cámaras</span><b>${esc(inst.comunidad)}</b></div>
+        <div><span>Dirección</span><b>${esc([inst.direccion, inst.ciudad].filter(Boolean).join(", ") || "—")}</b></div>
+        <div><span>Administración</span><b>${esc(inst.admin || "—")}</b></div>
+        ${inst.emailFinca !== undefined ? `<div><span>Correo de la finca</span><b>${inst.emailFinca ? `<a href="mailto:${esc(inst.emailFinca)}">${esc(inst.emailFinca)}</a>` : "—"}</b></div>` : ""}
         ${inst.economia ? `<div><span>Mantenimiento</span><b>${eur(inst.economia.precio)} / año</b></div>` : ""}
       </div>
+      ${inst.claves !== undefined ? `<div class="bloque" style="margin-top:8px"><b>🔑 Claves del grabador</b>
+        ${inst.claves ? ` <button class="btn sec mini-btn" id="bClaves">Mostrar</button><pre id="txtClaves" class="cam-claves oculto"></pre>` : ` <span class="vacio">no hay claves guardadas</span>`}
+        <p class="vacio" style="margin:4px 0 0">Para consultarlas si llaman por teléfono. Se cambian en la app de cámaras. Queda registrado quién las mira.</p></div>` : ""}
       ${inst.notas ? `<p class="ft-nota" style="margin-top:8px">${esc(inst.notas)}</p>` : ""}
       <table class="tabla-fi" style="margin-top:10px"><thead><tr><th>Año</th><th>${PER.verano}</th><th>${PER.invierno}</th>${inst.economia ? "<th>Cobro del mantenimiento</th>" : ""}</tr></thead><tbody>
         ${años.map(a => `<tr><td><b>${a}</b></td>${["verano","invierno"].map(p => { const r = (inst.revisiones||[]).find(x => x.anio === a && x.periodo === p);
@@ -101,6 +116,12 @@
       <p style="margin-top:10px"><a class="btn sec" href="${APP_CAMARAS}" target="_blank" rel="noopener">Abrir la app de cámaras ↗</a>
         ${puedeUnir ? ` <button class="btn sec mini-btn" id="bQuitar" title="Si se unió a la instalación equivocada">Desunir</button>` : ""}</p>`;
     enlazar();
+    const bC = el.querySelector("#bClaves");
+    if(bC) bC.onclick = async () => {
+      const t = el.querySelector("#txtClaves"), ver = t.classList.contains("oculto");
+      t.textContent = ver ? inst.claves : ""; t.classList.toggle("oculto", !ver); bC.textContent = ver ? "Ocultar" : "Mostrar";
+      if(ver) try{ await db.collection("dhs_registro").add({por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp(), accion:"ha mirado las claves de cámaras", coleccion:"dhs_comunidades", docId:comId, nombre:com.nombre}); }catch(e){}
+    };
   }
 
   // Resumen para Economía (solo Dirección): mantenimientos de este año, revisiones y cobros

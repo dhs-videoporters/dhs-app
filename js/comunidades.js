@@ -55,9 +55,12 @@
           <div class="f-sub">${esc([c.direccion, c.poblacion].filter(Boolean).join(" · ") || TIPOS[c.tipo] || "")}</div>
           <div class="f-tags">
             ${c.adminId ? `<span class="tag">${esc(nombreAdmin(c.adminId))}</span>` : (c.tipo==="comunidad" ? `<span class="tag aviso">Sin administración</span>` : `<span class="tag gris">${TIPOS[c.tipo]||""}</span>`)}
-            ${c.camaras && c.camaras.tiene ? `<span class="tag azul">Cámaras</span>` : ""}
+            ${c.camaras && c.camaras.tiene ? `<span class="tag azul" data-cam="${esc(c.camaras.instalacionId || c.camarasId || "")}">📹 ${c.camaras.numero != null ? esc(c.camaras.numero) + " cámaras" : "Cámaras"}</span>` : ""}
           </div>
         </a>`).join("") || `<p class="vacio">No hay resultados.</p>`;
+      // Nº de cámaras al día desde la app de cámaras (si ya se ha leído, al momento; si no, se lee en segundo plano)
+      if(window.DHS_CAMS) window.DHS_CAMS.datos().then(L => { const M = {}; L.forEach(x => M[x.id] = x);
+        document.querySelectorAll("#listaCom [data-cam]").forEach(t => { const x = M[t.dataset.cam]; if(x && x.camaras != null) t.textContent = "📹 " + x.camaras + " cámaras"; }); }).catch(() => {});
     };
     el.querySelector("#buscaCom").oninput = e => { filtro.texto = e.target.value; pintar(); };
     el.querySelectorAll(".chip").forEach(b => b.onclick = () => { filtro.tipo = b.dataset.tipo; el.querySelectorAll(".chip").forEach(x=>x.classList.toggle("on", x===b)); pintar(); });
