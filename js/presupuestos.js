@@ -98,37 +98,57 @@
   }
 
   // ---------- Presupuestos de una comunidad (pestaña de la ficha) ----------
+  // Base económica de la comunidad: arriba lo que está vivo (presupuestos por aceptar, aceptados por hacer,
+  // facturas sin cobrar); abajo, plegado, el historial de lo ya cerrado (cobrado, rechazado, facturado).
   async function pestana(el, comId, com){
-    const {db} = D();
-    if(!puedeVerPres()){ el.innerHTML = `<h3>Presupuestos</h3><p class="vacio">Tu perfil no puede ver presupuestos.</p>`; return; }
+    const {db, S} = D();
+    if(!puedeVerPres()){ el.innerHTML = `<h3>Economía</h3><p class="vacio">Tu perfil no puede ver presupuestos.</p>`; return; }
     el.innerHTML = `<p class="vacio">Cargando…</p>`;
     let L = [];
     try{ (await db.collection("dhs_presupuestos").where("comunidadId", "==", comId).get()).forEach(d => L.push({id:d.id, ...d.data()})); }
     catch(e){ el.innerHTML = `<p class="vacio">No se han podido leer (${esc(e.code||e)}).</p>`; return; }
     L.sort((a,b) => (b.numero||"").localeCompare(a.numero||""));
-    const pend = L.filter(p => ["pendiente","enviado"].includes(p.estado)), resto = L.filter(p => !["pendiente","enviado"].includes(p.estado));
+    const verFact = !!(window.DHS_ECO && S.puede("cobros","ver"));
+    let F = [], errF = "";
+    if(verFact && com.csId){ try{ F = (await window.DHS_ECO.deComunidad(com.csId)).filter(f => !f.rectificativa); }catch(e){ errF = e.message || String(e); } }
+    const tot = p => (p.totales && p.totales.total) || 0;
+    const facturado = p => (p.facturas||[]).reduce((n,f) => n + (f.total||0), 0);
+    const porAceptar = L.filter(p => ["pendiente","enviado"].includes(p.estado));
+    const porHacer = L.filter(p => ["aceptado","parcial"].includes(p.estado) && tot(p) - facturado(p) > 0.01);
+    const cerrados = L.filter(p => !porAceptar.includes(p) && !porHacer.includes(p));
+    const sinCobrar = F.filter(f => (f.pendiente||0) > 0.01);
+    const cobradas = F.filter(f => !((f.pendiente||0) > 0.01));
+    const suma = (X, g) => r2(X.reduce((n,x) => n + (g(x)||0), 0));
+    const fch = f => f ? new Date(f + "T12:00").toLocaleDateString("es-ES") : "";
     const fila = p => { const e = ESTADOS[p.estado] || ["",p.estado]; return `<a class="fila fila-pres est-p-${esc(p.estado)}" href="#" data-id="${esc(p.id)}">
-      <div class="f-nombre">${esc(p.numero)} <span class="vacio">· ${p.fecha ? esc(new Date(p.fecha + "T12:00").toLocaleDateString("es-ES")) : ""}</span></div>
+      <div class="f-nombre">${esc(p.numero)} <span class="vacio">· ${esc(fch(p.fecha))}</span></div>
       <div class="f-sub">${esc((p.lineas||[]).map(l => l.concepto).join(", ").slice(0,120))}</div>
-      <div class="f-tags"><b>${eur(p.totales && p.totales.total)}</b> <span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span></div></a>`; };
+      <div class="f-tags"><b>${eur(tot(p))}</b> <span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span>${p.estado === "parcial" ? ` <span class="vacio">falta ${eur(tot(p) - facturado(p))}</span>` : ""}</div></a>`; };
+    const filaF = f => `<tr><td>${esc(f.numero)}</td><td>${esc(fch(f.fecha))}</td><td>${eur(f.total)}</td>
+      <td>${(f.pendiente||0) > 0.01 ? `<span class="tag est-p-pendiente">⏳ Falta ${eur(f.pendiente)}</span>${f.devuelto ? ` <span class="tag aviso">devuelto</span>` : ""}${f.enHoja ? ` <span class="tag azul">en la hoja del viernes</span>` : ""}${f.sinCobros ? ` <span class="tag gris">aún no está en cobros</span>` : ""}`
+        : `<span class="tag est-p-aceptado">✅ Cobrada${(f.pagos||[]).length && f.pagos[f.pagos.length-1].fecha ? " " + esc(fch(f.pagos[f.pagos.length-1].fecha)) : ""}</span>${f.enBanco ? ` <span class="tag azul">en el banco</span>` : ""}`}</td></tr>`;
+    const tablaF = X => `<table class="tabla-fi"><thead><tr><th>Factura</th><th>Fecha</th><th>Total</th><th>Estado</th></tr></thead><tbody>${X.map(filaF).join("")}</tbody></table>`;
+    const nHist = cerrados.length + cobradas.length;
     el.innerHTML = `
-      <div class="cab-lista"><h3>Presupuestos</h3>${puedePrecios() ? `<button class="btn" id="btnNuevoP">+ Nuevo presupuesto</button>` : ""}</div>
+      <div class="cab-lista"><h3>Economía de la comunidad</h3>${puedePrecios() ? `<button class="btn" id="btnNuevoP">+ Nuevo presupuesto</button>` : ""}</div>
       ${!com.csId && !com.nif ? `<p class="aviso-cal">Esta comunidad no tiene NIF ni código de Contasimple: complétalo en «Editar ficha» antes de presupuestar.</p>` : ""}
-      <h4 style="margin-top:10px">Pendientes (${pend.length})</h4><div class="lista">${pend.map(fila).join("") || `<p class="vacio">Ninguno.</p>`}</div>
-      <h4 style="margin-top:14px">Resueltos (${resto.length})</h4><div class="lista">${resto.map(fila).join("") || `<p class="vacio">Ninguno.</p>`}</div>
-      ${window.DHS_ECO && D().S.puede("cobros","ver") ? `<h3 style="margin-top:18px">🧾 Facturas</h3><div id="factCom"><p class="vacio">Cargando de Contasimple y cobros…</p></div>` : ""}`;
-    const fc = el.querySelector("#factCom");
-    if(fc){
-      if(!com.csId) fc.innerHTML = `<p class="vacio">Esta comunidad no está unida a un cliente de Contasimple (falta el código). Se une sola al hacerle su primer presupuesto.</p>`;
-      else window.DHS_ECO.deComunidad(com.csId).then(F => {
-        const tot = r2(F.reduce((n,f) => n + (f.total||0), 0)), pen = r2(F.filter(f => f.estado !== "Payed").reduce((n,f) => n + (f.pendiente||0), 0));
-        fc.innerHTML = F.length ? `<p class="vacio">${F.length} factura${F.length===1?"":"s"} en los últimos 13 meses · facturado <b>${eur(tot)}</b>${pen ? ` · pendiente de cobrar <b>${eur(pen)}</b>` : " · todo cobrado"}</p>
-          <table class="tabla-fi"><thead><tr><th>Factura</th><th>Fecha</th><th>Total</th><th>Estado</th></tr></thead><tbody>
-          ${F.map(f => `<tr><td>${esc(f.numero)}</td><td>${f.fecha ? new Date(f.fecha + "T12:00").toLocaleDateString("es-ES") : ""}</td><td>${eur(f.total)}</td>
-            <td>${f.estado === "Payed" ? `<span class="tag est-p-aceptado">✅ Cobrada${(f.pagos||[]).length && f.pagos[f.pagos.length-1].fecha ? " " + new Date(f.pagos[f.pagos.length-1].fecha + "T12:00").toLocaleDateString("es-ES") : ""}</span>` : `<span class="tag est-p-pendiente">⏳ Pendiente ${eur(f.pendiente)}</span>`}${f.devuelto ? ` <span class="tag aviso">devuelto</span>` : ""}</td></tr>`).join("")}
-          </tbody></table>` : `<p class="vacio">Sin facturas en los últimos 13 meses.</p>`;
-      }).catch(e => fc.innerHTML = `<p class="vacio">No se han podido leer las facturas: ${esc(e.message||e)}</p>`);
-    }
+      <div class="eco-cajas">
+        <a class="eco-caja c3" href="#" data-ir="ecA"><span>Presupuestos por aceptar</span><b>${eur(suma(porAceptar, tot))}</b><i>${porAceptar.length} presupuesto${porAceptar.length===1?"":"s"}</i></a>
+        <a class="eco-caja c1" href="#" data-ir="ecH"><span>Aceptado, pendiente de hacer</span><b>${eur(suma(porHacer, p => tot(p) - facturado(p)))}</b><i>${porHacer.length} presupuesto${porHacer.length===1?"":"s"}</i></a>
+        ${verFact ? `<a class="eco-caja c2" href="#" data-ir="ecC"><span>Hecho, pendiente de cobrar</span><b>${eur(suma(sinCobrar, f => f.pendiente))}</b><i>${sinCobrar.length} factura${sinCobrar.length===1?"":"s"}</i></a>` : ""}
+      </div>
+      <h4 id="ecA" style="margin-top:14px">⏳ Presupuestos por aceptar (${porAceptar.length})</h4><div class="lista">${porAceptar.map(fila).join("") || `<p class="vacio">Ninguno.</p>`}</div>
+      <h4 id="ecH" style="margin-top:14px">✅ Aceptados, pendientes de hacer (${porHacer.length})</h4><div class="lista">${porHacer.map(fila).join("") || `<p class="vacio">Ninguno.</p>`}</div>
+      ${verFact ? `<h4 id="ecC" style="margin-top:14px">🧾 Hecho, pendiente de cobrar (${sinCobrar.length})</h4>
+        ${!com.csId ? `<p class="vacio">Esta comunidad no está unida a un cliente de Contasimple (falta el código). Se une sola al hacerle su primer presupuesto.</p>`
+          : errF ? `<p class="vacio">No se han podido leer las facturas: ${esc(errF)}</p>`
+          : sinCobrar.length ? tablaF(sinCobrar) : `<p class="vacio">Nada pendiente de cobrar.</p>`}` : ""}
+      <details class="eco-hist" style="margin-top:18px"><summary>Historial: cobrado y cerrado (${nHist})</summary>
+        ${verFact && cobradas.length ? `<p class="vacio" style="margin-top:8px">Facturas cobradas (últimos 13 meses) · ${eur(suma(cobradas, f => f.total))}</p>${tablaF(cobradas)}` : ""}
+        ${cerrados.length ? `<p class="vacio" style="margin-top:8px">Presupuestos facturados o rechazados</p><div class="lista">${cerrados.map(fila).join("")}</div>` : ""}
+        ${!nHist ? `<p class="vacio">Todavía no hay nada cerrado.</p>` : ""}
+      </details>`;
+    el.querySelectorAll("[data-ir]").forEach(a => a.onclick = ev => { ev.preventDefault(); const x = el.querySelector("#" + a.dataset.ir); if(x) x.scrollIntoView({behavior:"smooth"}); });
     const bN = el.querySelector("#btnNuevoP"); if(bN) bN.onclick = () => editor(el, comId, com);
     el.querySelectorAll(".fila-pres").forEach(a => a.onclick = ev => { ev.preventDefault(); detalle(el, comId, com, L.find(p => p.id === a.dataset.id)); });
   }

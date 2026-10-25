@@ -67,7 +67,7 @@
 
   // ---------- FICHA ----------
   const PESTANAS = [
-    ["info","Info"],["intervenciones","Intervenciones"],["presupuestos","Presupuestos y facturas"],["documentos","Documentos"],["galeria","Galería"]
+    ["info","Info"],["intervenciones","Intervenciones"],["presupuestos","Economía"],["documentos","Documentos"],["galeria","Galería"]
   ];
   let pestanaActual = "info";
 

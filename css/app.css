@@ -346,3 +346,4 @@ a.fila-eq:hover{background:#f6f8fb}
 .eco-caja.c1{background:#effaf2;border-color:#bfe6cc}.eco-caja.c2{background:#fff6e6;border-color:#f3d39b}.eco-caja.c3{background:#eef4ff;border-color:#c5d6f5}
 .eco-caja input{font:inherit;font-size:12px;border:1px solid #cfd7e3;border-radius:5px;padding:1px 4px}
 .eco-prev{margin-top:10px;font-size:14px;background:#f6f9fd;border-radius:8px;padding:8px 10px}
+.eco-hist{border:1px solid var(--linea);border-radius:10px;padding:10px 12px;background:#fafbfc}.eco-hist summary{cursor:pointer;color:var(--gris);font-size:14px}
