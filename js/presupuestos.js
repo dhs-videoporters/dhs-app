@@ -293,8 +293,11 @@
     el.innerHTML = `
       <div class="cab-lista"><h3>${rapido ? "⚡ Presupuesto rápido" : "Nuevo presupuesto · " + esc(com.nombre)}</h3><button class="btn sec" id="btnVolverP">‹ Volver</button></div>
       <p class="vacio">${rapido ? "Para un particular que aún no ha dado la dirección: solo nombre y teléfono. Se guarda en Contasimple con el siguiente número, sin cliente; cuando lo acepte, lo asocias a su ficha." : "Se guarda en Contasimple con el siguiente número correlativo y esta comunidad como cliente."} IVA 21 %.</p>
-      ${rapido ? `<div class="bloque" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap"><label class="campo" style="flex:1;min-width:200px"><span>Nombre</span><input id="rNombre" value="${esc(com.nombre||"")}" placeholder="Ej.: Marta (vecina de Sabadell)"></label>
-        <label class="campo" style="flex:1;min-width:160px"><span>Teléfono</span><input id="rTel" type="tel" value="${esc(com.telefono||"")}" placeholder="600 000 000"></label></div>` : ""}
+      ${rapido ? `<div class="bloque" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+        <label class="campo" style="flex:1;min-width:150px"><span>Teléfono *</span><input id="rTel" type="tel" value="${esc(com.telefono||"")}" placeholder="600 000 000"></label>
+        <label class="campo" style="flex:1;min-width:180px"><span>Nombre</span><input id="rNombre" value="${esc(com.nombre||"")}" placeholder="Como se presenta: «soy Marta…»"></label>
+        <label class="campo" style="flex:2;min-width:200px"><span>Dirección (si la da)</span><input id="rDir" placeholder="Calle, número…"></label>
+        <label class="campo" style="flex:1;min-width:140px"><span>Población</span><input id="rPob" placeholder="Sabadell, Terrassa…"></label></div>` : ""}
       <div class="bloque" style="margin-top:10px">
         <label class="campo"><span>Añadir del catálogo</span><input id="busCat" placeholder="Escribe: LNB, monitor Fermax, hora de trabajo…" autocomplete="off"><div id="resCat" class="res-local oculto"></div></label>
         ${dir ? `<button class="btn sec" id="btnLibre">+ Línea libre (fuera de catálogo)</button>` : ""}
@@ -346,17 +349,18 @@
       if(!L.length) return m("Añade al menos una línea con concepto y cantidad.");
       if(L.some(l => !l.productoId && !dir)) return m("Solo Dirección puede añadir líneas fuera de catálogo.");
       const rNom = rapido ? el.querySelector("#rNombre").value.trim() : "", rTel = rapido ? el.querySelector("#rTel").value.trim() : "";
-      if(rapido && !rNom && !rTel) return m("Pon al menos el nombre o el teléfono.");
+      const rDir = rapido ? el.querySelector("#rDir").value.trim() : "", rPob = rapido ? el.querySelector("#rPob").value.trim() : "";
+      if(rapido && rTel.replace(/\D/g,"").length < 9) return m("El teléfono es obligatorio (9 cifras como mínimo).");
       if(!await DHS_PREGUNTA("Se va a crear el presupuesto en Contasimple con el siguiente número. ¿Seguir?")) return;
       const b = el.querySelector("#btnGuardarP"); b.disabled = true; m("Guardando en Contasimple…");
       try{
         const notas = el.querySelector("#notasP").value.trim();
-        const notasCS = rapido ? [notas, "Presupuesto para " + (rNom || "particular") + (rTel ? " · Tel. " + rTel : "")].filter(Boolean).join("\n") : notas;
+        const notasCS = rapido ? [notas, "Presupuesto para " + (rNom || "particular") + " · Tel. " + rTel + ([rDir, rPob].filter(Boolean).length ? " · " + [rDir, rPob].filter(Boolean).join(", ") : "")].filter(Boolean).join("\n") : notas;
         const r = await llamar("crearPresupuesto", rapido ? {sinCliente:true, lineas:L, notas:notasCS}
           : {cliente:{csId:com.csId||null, nif:com.nif||"", nombre:com.nombre, direccion:com.direccion||"", poblacion:com.poblacion||""}, lineas:L, notas});
         const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
         await db.collection("dhs_presupuestos").doc(String(r.id)).set({csId:r.id, numero:r.numero, comunidadId:comId || null, nombre:rapido ? (rNom || "Particular") : com.nombre, clienteId:r.clienteId || null,
-          ...(rapido ? {rapido:true, telefono:rTel} : {}),
+          ...(rapido ? {rapido:true, telefono:rTel, direccion:rDir, poblacion:rPob} : {}),
           fecha:new Date().toISOString().slice(0,10), lineas:L, totales:r.totales, notas:notasCS, estado:"pendiente", facturas:[],
           creado:{por:yo, en, nombre:quien({por:yo}) || S.nombre || ""}, modificado:{por:yo, en}});
         if(!rapido && !com.csId && r.clienteId){ try{ await db.collection("dhs_comunidades").doc(comId).update({csId:r.clienteId, modificado:{por:yo, en}}); com.csId = r.clienteId; }catch(e){} }
@@ -387,7 +391,7 @@
       ${p.formaPago ? `<p class="vacio">Forma de pago: ${esc(p.formaPago)}</p>` : ""}
       <div class="botones-pres">
         <button class="btn sec" id="bPdf">📄 Ver PDF</button>
-        ${edita ? `<button class="btn sec" id="bWa">💬 WhatsApp</button>` : ""}
+        <button class="btn sec" id="bDescPdf">⬇️ Descargar PDF</button>
         ${edita ? `<button class="btn sec" id="bEnviar">📧 Enviar por correo</button>` : ""}
         ${edita && (!comId || !p.clienteId) ? `<button class="btn" id="bAsociar">🔗 ${!comId ? "Asociar a una ficha" : "Unir al cliente de Contasimple"}</button>` : ""}
         ${edita && ["pendiente","enviado"].includes(p.estado) ? `<button class="btn btn-ok" id="bAcepta">✅ Aceptado</button><button class="btn sec" id="bRechaza">✖️ Rechazado</button>` : ""}
@@ -416,22 +420,15 @@
       const bin = atob(r.base64), u8 = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
       return new Blob([u8], {type:"application/pdf"});
     };
-    // WhatsApp: en el móvil se comparte el PDF directamente; en el ordenador se descarga el PDF y se abre WhatsApp con el texto
-    const bW = el.querySelector("#bWa");
-    if(bW) bW.onclick = async () => {
-      const tel0 = (p.telefono || com.telefono || "").replace(/\D/g, ""), tel = tel0.length === 9 ? "34" + tel0 : tel0;
-      const texto = "Hola" + (p.rapido && p.nombre && p.nombre !== "Particular" ? " " + p.nombre.split(" ")[0] : "") + ", te paso el presupuesto " + p.numero + " de DHS Videoporters: " + eur(p.totales.total) + " (IVA incluido). Cualquier duda me dices. Un saludo.";
-      m("Preparando el PDF…");
+    // Descargar el PDF (el mismo de Contasimple) para mandarlo por el WhatsApp de cada uno
+    el.querySelector("#bDescPdf").onclick = async () => {
+      m("Pidiendo el PDF a Contasimple…");
       try{
-        const blob = await pdfBlob(), file = new File([blob], "Presupuesto " + p.numero + ".pdf", {type:"application/pdf"});
-        if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], text:texto}); m(""); }
-        else {
-          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
-          window.open("https://wa.me/" + (tel || "") + "?text=" + encodeURIComponent(texto), "_blank");
-          m("PDF descargado: arrástralo al chat de WhatsApp que se ha abierto.");
-        }
-        if(p.estado === "pendiente"){ try{ await llamar("estadoPresupuesto", {id:p.csId, estado:"Enviado"}); await ref.update({estado:"enviado", enviadoA:"WhatsApp " + (tel0 || ""), enviadoEl:new Date().toISOString().slice(0,10), modificado:{por:yo, en:en()}}); p.estado = "enviado"; await reg("enviado por WhatsApp"); }catch(e){} }
-      }catch(e){ if(e && e.name === "AbortError") m(""); else m("No se ha podido: " + (e.message||e)); }
+        const blob = await pdfBlob(), a = document.createElement("a");
+        const quienN = (p.rapido ? (p.nombre && p.nombre !== "Particular" ? p.nombre : (p.telefono || "")) : (com.nombre || "")).replace(/[\\/:*?"<>|]/g, "").trim();
+        a.href = URL.createObjectURL(blob); a.download = "Presupuesto " + p.numero + (quienN ? " - " + quienN : "") + ".pdf";
+        document.body.appendChild(a); a.click(); a.remove(); m("Descargado.");
+      }catch(e){ m("No se ha podido: " + (e.message||e)); }
     };
     // Asociar a una ficha (comunidad o particular). Si la ficha tiene NIF, se une también al cliente de Contasimple.
     const bAs = el.querySelector("#bAsociar");
@@ -447,8 +444,8 @@
         <div id="asNuevo" class="oculto" style="margin:4px 0 8px 22px;display:grid;gap:6px;max-width:460px">
           <label class="campo"><span>Nombre y apellidos</span><input id="asNom" value="${esc(p.nombre && p.nombre !== "Particular" ? p.nombre : "")}"></label>
           <label class="campo"><span>Teléfono</span><input id="asTel" type="tel" value="${esc(p.telefono||"")}"></label>
-          <label class="campo"><span>Dirección</span><input id="asDir" placeholder="Calle, número, piso"></label>
-          <label class="campo"><span>Población</span><input id="asPob"></label>
+          <label class="campo"><span>Dirección</span><input id="asDir" placeholder="Calle, número, piso" value="${esc(p.direccion||"")}"></label>
+          <label class="campo"><span>Población</span><input id="asPob" value="${esc(p.poblacion||"")}"></label>
           <label class="campo"><span>DNI / NIF (para facturar; si aún no lo tienes, déjalo vacío)</span><input id="asNif"></label>
         </div>`}
         <p><button class="btn" id="okAs">${comId ? "Unir" : "Asociar"}</button></p>`;
@@ -595,8 +592,8 @@
       cerrados:["Cerrados", p => ["facturado","rechazado"].includes(p.estado)]
     };
     const pinta = () => {
-      const q = sinAc(filtroG.q);
-      const V = L.filter(F[filtroG.f][1]).filter(p => !q || sinAc([p.numero, p.nombre, p.telefono, quien(p.creado), p.comunidadId && C.coms[p.comunidadId] ? C.coms[p.comunidadId].nombre : "", (p.lineas||[]).map(l => l.concepto).join(" ")].join(" ")).includes(q));
+      const q = sinAc(filtroG.q), qd = filtroG.q.replace(/\D/g, "");
+      const V = L.filter(F[filtroG.f][1]).filter(p => !q || (qd.length >= 3 && String(p.telefono||"").replace(/\D/g, "").includes(qd)) || sinAc([p.numero, p.nombre, p.telefono, p.direccion, p.poblacion, quien(p.creado), p.comunidadId && C.coms[p.comunidadId] ? C.coms[p.comunidadId].nombre : "", (p.lineas||[]).map(l => l.concepto).join(" ")].join(" ")).includes(q));
       el.querySelector("#listaG").innerHTML = V.map(p => { const e = ESTADOS[p.estado] || ["",p.estado]; return `<a class="fila fila-pres est-p-${esc(p.estado)}" href="#" data-id="${esc(p.id)}">
         <div class="f-nombre">${esc(p.numero)} · ${esc(p.comunidadId && C.coms[p.comunidadId] ? C.coms[p.comunidadId].nombre : (p.nombre || "Particular"))} <span class="vacio">· ${p.fecha ? esc(new Date(p.fecha + "T12:00").toLocaleDateString("es-ES")) : ""}${p.creado ? " · por " + esc(quien(p.creado)) : ""}</span></div>
         <div class="f-sub">${!p.comunidadId ? `⚡ ${p.telefono ? "📞 " + esc(p.telefono) + " · " : ""}` : ""}${esc((p.lineas||[]).map(l => l.concepto).join(", ").slice(0,110))}</div>
@@ -611,9 +608,9 @@
     el.innerHTML = `<div class="panel">
       <div class="cab-lista"><h2>Presupuestos</h2>
         <span><button class="btn" id="bRapido">⚡ Presupuesto rápido</button> <button class="btn sec" id="bParaCom">+ Para una comunidad o cliente</button></span></div>
-      <p class="vacio">«Rápido» es para quien te pide precio por WhatsApp sin dar la dirección: solo nombre y teléfono. Si lo acepta, lo asocias a su ficha y sigue como los demás.</p>
+      <p class="vacio">«Rápido» es para quien te pide precio por WhatsApp sin dar la dirección: con el teléfono basta (nombre, dirección y población si los da). Si lo acepta, lo asocias a su ficha y sigue como los demás.</p>
       <div id="cajaCom" class="bloque oculto" style="margin:8px 0"><input id="busCom" list="dlComG" placeholder="Escribe la comunidad o el cliente y elígelo…" style="width:100%;max-width:460px"><datalist id="dlComG">${Object.keys(nombres).map(n => `<option value="${esc(n)}">`).join("")}</datalist></div>
-      <div class="fi-barra" style="margin-top:8px"><input id="qG" placeholder="Buscar: número, nombre, teléfono, comunidad, producto…" value="${esc(filtroG.q)}" style="flex:1;min-width:200px">
+      <div class="fi-barra" style="margin-top:8px"><input id="qG" placeholder="Buscar: teléfono, nombre, número, comunidad, producto…" value="${esc(filtroG.q)}" style="flex:1;min-width:200px">
         <span class="chips">${Object.entries(F).map(([k,[t]]) => `<button class="chip ${filtroG.f === k ? "on" : ""}" data-f="${k}">${t} (${L.filter(F[k][1]).length})</button>`).join("")}</span></div>
       <p id="cuentaG" class="vacio" style="font-weight:600"></p>
       <div class="lista" id="listaG"></div></div>`;
