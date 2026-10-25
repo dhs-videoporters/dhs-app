@@ -29,7 +29,7 @@ td,th{border-bottom:1px solid #e5e9f0;padding:4px 6px;text-align:left;vertical-a
   <div id="btnGoogle"></div>
   <div id="sesion" class="muted"></div>
   <label>1. Datos de Interph (interph-datos.json)</label><input type="file" id="fDat" accept=".json">
-  <label>2. Excel revisado (Interph - revisión de comunidades.xlsx) <span class="muted">— si no lo eliges, se usan mis propuestas</span></label><input type="file" id="fXls" accept=".xlsx">
+  <label>2. Excel revisado <span class="muted">— opcional: si no lo eliges, se usan las decisiones de Claude</span></label><input type="file" id="fXls" accept=".xlsx">
   <label>3. Carpeta de fotos: Descargas › interph-backup › files › <b>uploads</b></label><input type="file" id="fFot" webkitdirectory multiple>
   <p style="margin-top:14px"><button id="bPrev" disabled>Ver resumen</button> <button id="bCarga" disabled>Cargar en pruebas</button></p>
   <div id="res"></div>
@@ -89,8 +89,8 @@ $("bPrev").onclick = async () => {
   const grupos = [], sinDecidir = [], noPasar = [];
   DATOS.comunidades.forEach(g => {
     const x = DEC && DEC[g.grupo] || {};
-    const que = String(x["Qué hacer"] || (g.existe ? "UNIR" : (g.dudosa || g.tipo === "sin" ? "REVISAR" : "NUEVA"))).toUpperCase().trim();
-    const destino = String(x["Comunidad de la app (si se une)"] ?? (g.existe || g.dudosa) ?? "").trim();
+    const que = String(x["Qué hacer"] || g.decision || (g.existe ? "UNIR" : (g.dudosa || g.tipo === "sin" ? "REVISAR" : "NUEVA"))).toUpperCase().trim();
+    const destino = String(x["Comunidad de la app (si se une)"] ?? (g.decision ? g.destino : (g.existe || g.dudosa)) ?? "").trim();
     const dir = String(x["Dirección"] ?? g.direccion).trim(), pob = String(x["Población"] ?? g.poblacion).trim();
     const tipo = TIPO[norm(x["Tipo"] ?? g.tipo)] || (norm(x["Tipo"]) === "sin direccion" ? "sin" : "comunidad");
     const adm = String(x["Administración"] ?? g.admin).trim(), emp = String(x["Empresa (de parte de)"] ?? g.empresa).trim();
