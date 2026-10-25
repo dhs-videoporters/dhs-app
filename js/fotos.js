@@ -6,7 +6,7 @@
 (function(){
   const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const D = () => window.DHS;
-  const ETIQUETAS = ["Placa de calle", "Cuarto de antenas", "Grabador / cámaras", "Cuadro eléctrico", "Centralita / fuente", "Otra"];
+  const ETIQUETAS = ["Placa de calle", "Monitor / teléfono de vivienda", "Cuarto de antenas", "Grabador / cámaras", "Cuadro eléctrico", "Centralita / fuente", "Otra"];
   const AVISO_SIN_STORAGE = "Las fotos todavía no están activadas (falta activar el almacenamiento en Firebase).";
 
   const storage = () => { try{ return firebase.storage(); }catch(e){ return null; } };
@@ -111,7 +111,7 @@
     el.innerHTML = `
       <h3>Galería</h3>
       <div class="bloque" style="margin-top:8px"><h3>La finca</h3>
-        <p class="vacio">Placa de calle, cuarto de antenas, grabador, cuadro… para reconocerlo antes de ir.</p>
+        <p class="vacio">Placa de calle, monitor de vivienda, cuarto de antenas, grabador, cuadro… para reconocerlo antes de ir.</p>
         ${puedeSubir ? `<div class="sube-finca"><select id="etqFoto">${ETIQUETAS.map(e => `<option>${e}</option>`).join("")}</select><span id="hueco"></span></div>` : ""}
         <div class="minis" id="mFinca"></div><p class="msg-foto vacio" id="msgFinca"></p></div>
       ${S.puede("trabajos","ver") ? `<div class="bloque" style="margin-top:12px"><h3>De las intervenciones</h3><div class="minis" id="mTrab"></div></div>` : ""}`;
