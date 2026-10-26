@@ -174,6 +174,13 @@ const PUENTE = {
     return { id: d.id, estado: d.estado };
   },
 
+  // Borrar un presupuesto de Contasimple (solo Dirección y si no tiene factura; lo comprueba también la app)
+  borrarPresupuesto: function (d, u) {
+    if (!u.direccion) throw new Error('Solo Dirección puede borrar presupuestos.');
+    cs_(csToken_(), 'delete', '/accounting/estimates/' + Number(d.id));
+    return { id: d.id, borrado: true };
+  },
+
   // Enviar el presupuesto por correo desde Contasimple
   enviarPresupuesto: function (d, u) {
     exige_(u, 'precios', 'editar');
@@ -339,7 +346,7 @@ function sinCli_(d) {
 }
 // Cliente de Contasimple para la comunidad: el código guardado, o se busca por NIF.
 function cliente_(tk, c) {
-  if (c.csId) return Number(c.csId);
+  if (Number(c.csId) > 0) return Number(c.csId);
   if (!c.nif) throw new Error('Esta comunidad no tiene NIF ni código de Contasimple. Complétalo en su ficha.');
   const r = cs_(tk, 'get', '/entities/customers/search/nif?query=' + encodeURIComponent(c.nif) + '&exactMatch=true');
   const L = (r && r.data) || r || [];

@@ -453,6 +453,7 @@
         ${edita && comId && ["aceptado","parcial"].includes(p.estado) ? (p.intervencionId ? `<a class="btn sec" href="#intervencion/${esc(p.intervencionId)}">🛠️ Ver intervención ${esc(p.numeroIntervencion||"")}</a>` : `<button class="btn" id="bProgramar">📅 Programar intervención</button>`) : ""}
         ${dir && p.clienteId && ["aceptado","parcial"].includes(p.estado) ? `<button class="btn" id="bFacturar">🧾 Facturar…</button>` : ""}
         ${dir && ["aceptado","rechazado"].includes(p.estado) && !(p.facturas||[]).length ? `<button class="btn sec" id="bDeshacer">↩️ Volver a pendiente</button>` : ""}
+        ${dir && !(p.facturas||[]).length ? `<button class="btn sec" id="bBorrarP" style="color:#c0392b">🗑️ Borrar presupuesto</button>` : ""}
       </div>
       ${["aceptado","parcial"].includes(p.estado) && (!comId || !p.clienteId) ? `<p class="aviso-cal" style="margin-top:8px">Para ${!comId ? "programar la intervención y facturar, asócialo a su ficha" : "facturar, completa el NIF en la ficha y pulsa «Unir al cliente de Contasimple»"} (dirección${!comId ? ", teléfono" : ""} y NIF).</p>` : ""}
       <div>
@@ -569,6 +570,16 @@
       m("Guardando…");
       try{ await llamar("estadoPresupuesto", {id:p.csId, estado:csEstado}); await ref.update({estado:nuevo, ...extra, modificado:{por:yo, en:en()}}); await reg(ESTADOS[nuevo][1].toLowerCase()); Object.assign(p, {estado:nuevo}, extra); detalle(el, comId, com, p, volver); }
       catch(e){ m("No se ha podido: " + (e.message||e)); }
+    };
+    const bBo = el.querySelector("#bBorrarP");
+    if(bBo) bBo.onclick = async () => {
+      if(!await DHS_PREGUNTA("¿Borrar el presupuesto " + p.numero + " (" + eur(p.totales.total) + ")? Se borra aquí y en Contasimple y no se puede deshacer." + ((p.pagosRecibidos||[]).length ? " Tiene pagos apuntados: también se borran." : ""), "Sí, borrar", "No")) return;
+      m("Borrando…");
+      try{
+        try{ await llamar("borrarPresupuesto", {id:p.csId}); }
+        catch(e){ if(!await DHS_PREGUNTA("Contasimple no lo ha dejado borrar (" + (e.message||e).slice(0,120) + "). ¿Lo quito solo de la app?", "Quitar de la app", "No")) { m(""); return; } }
+        await ref.delete(); await reg("borrado"); vuelve();
+      }catch(e){ m("No se ha podido: " + (e.message||e)); }
     };
     const bDh = el.querySelector("#bDeshacer");
     if(bDh) bDh.onclick = async () => { if(await DHS_PREGUNTA("¿Volver a dejar " + p.numero + " como pendiente (sin aceptar)?", "Sí, pendiente", "No")) cambiaEstado("pendiente", "Creado", {formaPago:"", aceptadoEl:null}); };
