@@ -15,10 +15,13 @@ function provPedir_(proyecto, url, op) {
   return JSON.parse(r.getContentText() || '{}');
 }
 // Carpeta(s) donde están las facturas: la de cualquier PDF con nombre AAAA-MM-DD_proveedor_…
+const PROV_MESES = 4;   // se leen las facturas de los últimos 4 meses (más antiguas no)
 function provArchivos_() {
-  const it = DriveApp.searchFiles("mimeType = 'application/pdf' and trashed = false and title contains '_'");
+  const d = new Date(); d.setMonth(d.getMonth() - PROV_MESES);
+  const desde = Utilities.formatDate(d, 'Europe/Madrid', 'yyyy-MM-dd');
+  const it = DriveApp.searchFiles("mimeType = 'application/pdf' and trashed = false and modifiedDate > '" + desde + "T00:00:00'");
   const L = [];
-  while (it.hasNext() && L.length < 2000) { const f = it.next(); if (/^\d{4}-\d{2}-\d{2}_[a-z0-9]+_/i.test(f.getName())) L.push(f); }
+  while (it.hasNext() && L.length < 3000) { const f = it.next(), n = f.getName(); if (/^\d{4}-\d{2}-\d{2}_[a-z0-9]+_/i.test(n) && n.slice(0, 10) >= desde) L.push(f); }
   return L;
 }
 function provYaLeidos_(proyecto) {
