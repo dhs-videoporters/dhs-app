@@ -118,7 +118,7 @@
 
   function irA(ruta){
     const [id0, arg] = decodeURIComponent(ruta||"").split("/");
-    const ALIAS = {comunidad:"comunidades", administrador:"administradores", intervencion:"intervenciones", "nueva-intervencion":"intervenciones", trabajos:"intervenciones"};
+    const ALIAS = {comunidad:"comunidades", administrador:"administradores", intervencion:"intervenciones", "nueva-intervencion":"intervenciones", ruta:"intervenciones", trabajos:"intervenciones"};
     // La ficha de trabajo la abre el técnico (desde Mi trabajo) y también la oficina (desde la intervención).
     if(id0 === "trabajo" && arg && S.puede("trabajos","propios")){
       document.querySelectorAll("#menu a, #menuMovil a").forEach(a => a.classList.toggle("on", a.dataset.id === "mitrabajo"));
@@ -134,6 +134,7 @@
     if(id0 === "administrador" && arg && S.puede("administradores")) return window.DHS_ADM.ficha($("#contenido"), arg);
     if(id0 === "intervencion" && arg) return window.DHS_TRAB.ficha($("#contenido"), arg);
     if(id0 === "nueva-intervencion" && S.puede("trabajos","editar")) return window.DHS_TRAB.nueva($("#contenido"), arg);
+    if(id0 === "ruta" && S.puede("trabajos","todo")) return window.DHS_RUTA.vista($("#contenido"));
     if(id0 === "ajustes" && arg) return window.DHS_AJ.vista($("#contenido"), arg);
     (VISTAS[id] || (()=>{}))($("#contenido"));
   }

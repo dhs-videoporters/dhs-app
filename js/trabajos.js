@@ -8,8 +8,10 @@
   const ESPEC = {videoportero:["🔔","Videoportero"], antena:["📡","Antena / parabólica"], electricidad:["⚡","Electricidad"], camaras:["📹","Cámaras"], otros:["🔧","Otros"]};
   const TIPOS = {reparacion:"Reparación", instalacion:"Instalación", mantenimiento:"Mantenimiento", pequeno:"Cosa pequeña", presupuesto:"Visita para presupuesto"};
   // Prioridad con puntos de color. Joel la cambia tocando el punto en la lista.
-  const PRIOR = {urgente:["🔴","Urgente",0], alta:["🟠","Alta",1], normal:["🟡","Normal",2], baja:["🟢","Baja",3]};
-  const ORDEN_PRIOR = ["urgente","alta","normal","baja"];
+  // Ángel y Joel 26/10: solo Urgente y Normal (lo que antes era alta/baja cuenta como normal)
+  const PRIOR = {urgente:["🔴","Urgente",0], normal:["⚪","Normal",1]};
+  PRIOR.alta = PRIOR.normal; PRIOR.baja = PRIOR.normal;
+  const ORDEN_PRIOR = ["urgente","normal"];
   const ESTADOS = {nuevo:"Nuevo", presupuesto:"Pendiente de presupuesto", esperando:"Esperando respuesta", agendado:"Agendado", encurso:"En curso", amedias:"A medias", hecho:"Hecho", facturado:"Facturado", cobrado:"Cobrado", cancelado:"Cancelado"};
   const CERRADOS = ["hecho","facturado","cobrado","cancelado"];
   const DURACIONES = [30,60,90,120,150,180,240,300,360,420,480];
@@ -362,7 +364,7 @@
   function activarPrioridad(el, docs, repintar){
     el.querySelectorAll(".prio.cambia").forEach(b => b.onclick = async () => {
       const t = docs.find(x => x.id === b.dataset.id); if(!t) return;
-      const ant = PRIOR[t.urgencia] ? t.urgencia : "normal", nuevo = ORDEN_PRIOR[(ORDEN_PRIOR.indexOf(ant) + 1) % 4];
+      const ant = t.urgencia === "urgente" ? "urgente" : "normal", nuevo = ant === "urgente" ? "normal" : "urgente";
       const {db, S} = D(), yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
       t.urgencia = nuevo; repintar();
       try{
@@ -382,7 +384,7 @@
     catch(e){ el.innerHTML = `<div class="panel">No se han podido leer las intervenciones (${esc(e.code)}).</div>`; return; }
     el.innerHTML = `
       <div class="panel">
-        <div class="cab-lista"><h2>Intervenciones</h2>${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Nueva intervención</a>` : ""}</div>
+        <div class="cab-lista"><h2>Intervenciones</h2>${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Nueva intervención</a>` : ""}${S.puede("trabajos","todo") ? ` <a class="btn sec" href="#ruta">🚐 Hacer ruta</a>` : ""}</div>
         <div class="chips" id="chVer" style="margin-top:10px">
           ${[["pendientes","Pendientes"],["hechas","Hechas"],["todas","Todas"]].map(([k,n]) => `<button class="chip ${filtro.ver===k?"on":""}" data-k="${k}">${n}</button>`).join("")}
         </div>
@@ -536,7 +538,7 @@
           ${dato("De qué es", esc(especTxt(t)))}${dato("Tipo", esc(TIPOS[t.tipo]))}
           ${window.DHS_EMP && (t.encargo || (todo && window.DHS_EMP.lista().length)) ? dato("De parte de", todo ? `<select id="selEmpF">${window.DHS_EMP.opciones(t.encargo || "")}</select>` : window.DHS_EMP.chip(t.encargo)) : ""}
           ${t.importado ? dato("Viene de Interph", "Nº " + esc(t.importado.id) + " · " + esc(t.importado.estadoInterph || "") + (t.tecnicoInterph ? " · técnico: " + esc(t.tecnicoInterph) : "") + (t.importePresupuesto ? " · presupuestado " + Number(t.importePresupuesto).toLocaleString("es-ES", {style:"currency", currency:"EUR"}) + (t.refPresupuesto ? " (" + esc(t.refPresupuesto) + ")" : "") : "") + (t.fechaAviso ? " · aviso " + esc(fmtFecha(t.fechaAviso)) : "")) : ""}
-          ${dato("Prioridad", todo && !CERRADOS.includes(t.estado) ? `<select id="selPrio">${ORDEN_PRIOR.map(k => `<option value="${k}" ${k===(t.urgencia||"normal")?"selected":""}>${PRIOR[k][0]} ${PRIOR[k][1]}</option>`).join("")}</select>` : pr[0] + " " + pr[1])}
+          ${dato("Prioridad", todo && !CERRADOS.includes(t.estado) ? `<select id="selPrio">${ORDEN_PRIOR.map(k => `<option value="${k}" ${k===(t.urgencia === "urgente" ? "urgente" : "normal")?"selected":""}>${PRIOR[k][0]} ${PRIOR[k][1]}</option>`).join("")}</select>` : pr[0] + " " + pr[1])}
           <p style="white-space:pre-wrap;margin-top:8px">${esc(t.descripcion)}</p></div>
         <div class="bloque"><h3>Contacto</h3>
           ${dato("Avisa", esc(avisaTxt(t)))}${dato("Teléfono", t.avisa && t.avisa.telefono ? `<a href="tel:${esc(t.avisa.telefono)}">${esc(t.avisa.telefono)}</a>` : "")}
@@ -656,7 +658,7 @@
     // Prioridad desde la ficha
     const sp = el.querySelector("#selPrio");
     if(sp) sp.onchange = async () => {
-      const ant = t.urgencia || "normal", nuevo = sp.value;
+      const ant = t.urgencia === "urgente" ? "urgente" : "normal", nuevo = sp.value;
       try{
         await ref.update({urgencia:nuevo, modificado:firma()});
         await nota({tipo:"prioridad", texto:"Prioridad: " + PRIOR[ant][1] + " → " + PRIOR[nuevo][1]});

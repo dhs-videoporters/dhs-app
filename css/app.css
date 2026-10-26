@@ -377,3 +377,15 @@ h1 .emp-chip{font-size:13px}
 .pagos-cifras .falta{background:#fff3e0}.pagos-cifras .falta b{color:#b45309}
 
 .eco-caja.c-mal{background:#fdecec;border-color:#f1b5b5}.eco-caja.c-mal b{color:#c0392b}
+
+/* Ruta de visitas rápidas */
+.ruta-grid{display:grid;grid-template-columns:minmax(260px,1fr) 1.4fr;gap:12px;margin-top:10px}
+@media (max-width:800px){.ruta-grid{grid-template-columns:1fr}}
+.mapa-ruta{height:460px;border-radius:10px;border:1px solid var(--linea)}
+#listaRuta{max-height:460px;overflow:auto}
+.fila-ruta{display:flex;gap:8px;align-items:flex-start;padding:7px 4px;border-bottom:1px solid var(--linea);cursor:pointer}
+.pin-ruta{background:#9aa5b5;color:#fff;border-radius:50%;width:22px!important;height:22px!important;line-height:22px;text-align:center;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.pin-ruta.sel{background:#1f3a5f;width:26px!important;height:26px!important;line-height:26px;font-size:13px}
+.pin-ruta.urg{background:#c0392b}
+.pin-ruta.base{background:#fff;font-size:15px}
+.orden-ruta li{margin:4px 0}

@@ -7,7 +7,7 @@
   const H_INI = 9, H_FIN = 18, PX_H = 44;           // 44 px por hora
   const DIAS = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
   const ESPEC = {videoportero:"🔔", antena:"📡", electricidad:"⚡", camaras:"📹", otros:"🔧"};
-  const PRIOR = {urgente:"🔴", alta:"🟠", normal:"🟡", baja:"🟢"};
+  const PRIOR = {urgente:"🔴"};
   const CERRADOS = ["facturado","cobrado","cancelado"];   // "hecho" se sigue viendo (tachado suave)
   const MOTIVOS = ["Vacaciones","Médico","Asuntos propios","Formación","Otro"];
 
@@ -82,7 +82,7 @@
       quien.forEach(k => citas.push({t, c, k, ci}));
     }));
     const sinFecha = trabajos.filter(t => !CERRADOS.includes(t.estado) && t.estado !== "hecho" && !(t.citas||[]).length)
-      .sort((a,b) => (["urgente","alta","normal","baja"].indexOf(a.urgencia||"normal") - ["urgente","alta","normal","baja"].indexOf(b.urgencia||"normal")) || (a.numero||"").localeCompare(b.numero||""));
+      .sort((a,b) => ((a.urgencia === "urgente" ? 0 : 1) - (b.urgencia === "urgente" ? 0 : 1)) || (a.numero||"").localeCompare(b.numero||""));
 
     // Técnicos que salen: plantilla y subcontratas activos + cualquiera con citas en el periodo
     const conCita = new Set(citas.map(x => x.k));
@@ -158,7 +158,7 @@
             ? `<div class="cal-tira">${[0,1,2,3,4,7,8,9,10,11].map(i => masDias(inicio, i)).map(d => { const f = iso(d), n = citas.filter(x => x.c.fecha === f).length; return `<button class="${f === diaSel ? "on" : ""} ${f === hoy ? "hoy" : ""}" data-dia="${f}"><span>${DIAS[(d.getDay()+6)%7]}</span><b>${d.getDate()}</b><i>${n ? n : ""}</i></button>`; }).join("")}</div>` + rejilla([new Date(diaSel + "T12:00")])
             : semana(inicio) + semana(masDias(inicio, 7))}</div>
           ${S.puede("trabajos","ver") ? `<aside class="cal-sinfecha"><h3>Sin fecha (${sinFecha.length})</h3>
-            ${sinFecha.map(t => `<a href="#intervencion/${t.id}" class="sf-item"><b>${PRIOR[t.urgencia]||"🟡"} ${ESPEC[t.especialidad]||""} ${esc(t.direccion || t.nombre)}</b>${t.encargo && window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}<span>${esc((t.descripcion||"").slice(0,70))}</span></a>`).join("") || `<p class="vacio">Todo agendado.</p>`}
+            ${sinFecha.map(t => `<a href="#intervencion/${t.id}" class="sf-item"><b>${PRIOR[t.urgencia]||""} ${ESPEC[t.especialidad]||""} ${esc(t.direccion || t.nombre)}</b>${t.encargo && window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}<span>${esc((t.descripcion||"").slice(0,70))}</span></a>`).join("") || `<p class="vacio">Todo agendado.</p>`}
             <p class="vacio" style="margin-top:6px">Ábrela y pulsa "Poner cita".</p></aside>` : ""}
         </div>
       </div>`;
