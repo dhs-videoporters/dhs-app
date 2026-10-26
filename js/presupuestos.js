@@ -395,7 +395,7 @@
         const sinNif = !rapido && !com.csId && !com.nif;   // comunidad sin NIF todavía: sale sin cliente y el nombre va en las notas
         const notasCS = rapido ? [notas, "Presupuesto para " + (rNom || "particular") + " · Tel. " + rTel + ([rDir, rPob].filter(Boolean).length ? " · " + [rDir, rPob].filter(Boolean).join(", ") : "")].filter(Boolean).join("\n")
           : sinNif ? [notas, "Presupuesto para " + com.nombre + ([com.direccion, com.poblacion].filter(Boolean).length ? " · " + [com.direccion, com.poblacion].filter(Boolean).join(", ") : "")].filter(Boolean).join("\n") : notas;
-        const r = await llamar("crearPresupuesto", rapido ? {sinCliente:true, lineas:L, notas:notasCS}
+        const r = await llamar("crearPresupuesto", rapido ? {sinCliente:true, cliente:{nombre:rNom || "Particular", direccion:rDir, poblacion:rPob, telefono:rTel}, lineas:L, notas:notasCS}
           : {cliente:{csId:com.csId||null, nif:com.nif||"", nombre:com.nombre, direccion:com.direccion||"", poblacion:com.poblacion||""}, lineas:L, notas});
         const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
         await db.collection("dhs_presupuestos").doc(String(r.id)).set({csId:r.id, numero:r.numero, comunidadId:comId || null, nombre:rapido ? (rNom || "Particular") : com.nombre, clienteId:r.clienteId || null,

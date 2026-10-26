@@ -105,7 +105,7 @@ const PUENTE = {
     const f = formatoPresupuesto_(tk);
     const num = numero_(cs_(tk, 'get', '/accounting/estimates/nextEstimateNumber/' + f.id));
     const r = cs_(tk, 'post', '/accounting/estimates', {
-      targetEntityId: cliente || undefined, numberingFormatId: f.id, number: num,
+      targetEntityId: cliente || undefined, targetEntity: cliente ? undefined : sinCli_(d), numberingFormatId: f.id, number: num,
       date: Utilities.formatDate(new Date(), 'Europe/Madrid', "yyyy-MM-dd'T'00:00:00"),
       status: 'Creado', notes: d.notas || '', lines: lineas
     });
@@ -331,6 +331,11 @@ function totales_(lineas) {
   const base = redondea_(lineas.reduce((n, l) => n + l.totalTaxableAmount, 0));
   const iva = redondea_(lineas.reduce((n, l) => n + l.vatAmount, 0));
   return { base: base, iva: iva, total: redondea_(base + iva) };
+}
+// Presupuesto sin cliente dado de alta: Contasimple exige destinatario, así que van sus datos escritos (nombre, dirección, teléfono) sin crear cliente.
+function sinCli_(d) {
+  const c = d.cliente || {};
+  return { organization: c.nombre || 'Particular', nif: '', address: c.direccion || '', city: c.poblacion || '', country: 'España', phone: c.telefono || '' };
 }
 // Cliente de Contasimple para la comunidad: el código guardado, o se busca por NIF.
 function cliente_(tk, c) {
