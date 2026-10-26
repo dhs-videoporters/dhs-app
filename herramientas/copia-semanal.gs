@@ -26,6 +26,8 @@ function instalar() {
 
 /** Hace la copia completa (de toda la base oficial: app, cámaras y cobros). Se ejecuta sola de lunes a viernes. */
 function copiaSemanal() {
+  // Antes de la copia: leer las facturas de proveedores nuevas que hayan llegado a Drive (si falla, la copia sigue igual)
+  try { if (typeof leerFacturasProveedores_ === 'function') for (let i = 0; i < 5; i++) { const r = leerFacturasProveedores_(PROYECTO); if (!r.quedan || !r.leidas) break; } } catch (e) {}
   try {
     const copia = { app: 'dhs-app', entorno: ENTORNO, fecha: new Date().toISOString(), por: 'copia automática (diaria)', datos: {} };
     let total = 0;

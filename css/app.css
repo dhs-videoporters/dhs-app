@@ -404,3 +404,10 @@ h1 .emp-chip{font-size:13px}
 .cp-d.con b{display:block;font-size:11px;color:#b45309;white-space:nowrap}
 .cp-d.hoy{outline:2px solid #1f3a5f}
 .cp-d.sel{background:#1f3a5f}.cp-d.sel span,.cp-d.sel b{color:#fff}
+
+.eco-caja.c-tot{background:#1f3a5f;border-color:#1f3a5f}.eco-caja.c-tot span,.eco-caja.c-tot i,.eco-caja.c-tot b{color:#fff}
+.eco-balance{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.eco-balance>div{flex:1;min-width:180px;background:#f4f6fa;border-radius:8px;padding:8px 12px}
+.eco-balance span{display:block;font-size:12px;color:var(--gris)}.eco-balance b{font-size:20px}
+.eco-balance .menos b{color:#b45309}.eco-balance .ok b{color:#1d7a46}.eco-balance .mal b{color:#c0392b}
+.eco-balance a{font-size:12px;margin-left:6px}

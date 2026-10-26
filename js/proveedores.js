@@ -129,6 +129,7 @@
           ${editaPag ? `<button class="btn sec" id="bLeer">⟳ Leer facturas nuevas de Drive</button> <button class="btn sec" id="bBanco">🏦 Cruzar con el banco</button><input type="file" id="fBanco" accept=".pdf,.xlsx,.xls,.csv" class="oculto">` : ""}</div>
         <p class="vacio" id="msgProv">Se leen los PDF que llegan al Drive de DHS (Hipersuministros…). Domiciliadas: se dan por pagadas al vencer. Transferencias: márcalas como pagadas.</p>
         <div class="eco-cajas">
+          <div class="eco-caja c-tot"><span>Total por pagar</span><b>${eur(suma(pend))}</b><i>${pend.length} factura${pend.length===1?"":"s"} pendiente${pend.length===1?"":"s"}</i></div>
           <div class="eco-caja ${vencidas.length ? "c-mal" : "c1"}"><span>Vencidas sin pagar</span><b>${eur(suma(vencidas))}</b><i>${vencidas.length} factura${vencidas.length===1?"":"s"}</i></div>
           <div class="eco-caja c2"><span>Vence en 7 días</span><b>${eur(suma(semana))}</b><i>${semana.length} factura${semana.length===1?"":"s"}${semana.filter(f => f.forma !== "domiciliada").length ? " · " + semana.filter(f => f.forma !== "domiciliada").length + " por transferencia" : ""}</i></div>
           <div class="eco-caja c3"><span>Resto de este mes</span><b>${eur(suma(mes))}</b><i>${mes.length} factura${mes.length===1?"":"s"}</i></div>

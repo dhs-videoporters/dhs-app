@@ -23,11 +23,13 @@
     const {db, S} = D();
     if(!S.puede("cobros","ver")){ el.innerHTML = `<div class="panel">Sin permiso.</div>`; return; }
     el.innerHTML = `<div class="panel">Cargando (Contasimple y cobros)…</div>`;
-    let F, P = [], T = {}, C;
+    let F, P = [], T = {}, C, PROV = [];
     try{
       [F, C] = await Promise.all([facturas(forzar), window.DHS_COM.datos()]);
       (await db.collection("dhs_presupuestos").get()).forEach(d => P.push({id:d.id, ...d.data()}));
       (await db.collection("dhs_trabajos").get()).forEach(d => T[d.id] = d.data());
+      try{ const hh = new Date().toISOString().slice(0,10); (await db.collection("dhs_proveedores").get()).forEach(d => { const f = d.data();
+        if(f.estado !== "pagada" && !(f.forma === "domiciliada" && f.vence && f.vence < hh)) PROV.push(f); }); }catch(e){ PROV = null; }
     }catch(e){ el.innerHTML = `<div class="panel">No se ha podido cargar: ${esc(e.message||e.code||e)}</div>`; return; }
     // Cliente de Contasimple → comunidad de la app
     const porCs = {}; Object.entries(C.coms).forEach(([k,c]) => { if(c.csId) porCs[String(c.csId)] = k; });
@@ -71,6 +73,8 @@
           <a class="eco-caja c2" href="#" data-ir="pend"><span>Hecho, pendiente de cobrar</span><b>${eur(suma(pend,"pendiente"))}</b><i>${pend.length} factura${pend.length===1?"":"s"}</i></a>
           <a class="eco-caja c3" href="#" data-ir="cobr"><span>Cobrado en <input type="month" id="mesC" value="${mes}"></span><b>${eur(suma(cobr,"importe"))}</b><i>${cobr.length} cobro${cobr.length===1?"":"s"}</i></a>
         </div>
+        ${PROV ? (() => { const porPagar = r2(PROV.reduce((n,f) => n + (Number(f.total)||0), 0)), porCobrar = r2(suma(acept,"falta") + suma(pend,"pendiente"));
+          return `<div class="eco-balance"><div><span>Por cobrar (aceptado + facturado)</span><b>${eur(porCobrar)}</b></div><div class="menos"><span>Por pagar a proveedores</span><b>− ${eur(porPagar)}</b><a href="#proveedores">ver</a></div><div class="${porCobrar - porPagar >= 0 ? "ok" : "mal"}"><span>Queda</span><b>${eur(r2(porCobrar - porPagar))}</b></div></div>`; })() : ""}
         ${Object.keys(prev).length ? `<div class="eco-prev"><b>Previsión de lo aceptado:</b> ${Object.keys(prev).sort().map(k => `${esc(nomMes(k))} <b>${eur(prev[k])}</b>`).join(" · ")}</div>` : ""}
 
         <h3 id="acept" style="margin-top:16px">✅ Aceptado, pendiente de hacer</h3>
