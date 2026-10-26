@@ -404,6 +404,7 @@
           creado:{por:yo, en, nombre:quien({por:yo}) || S.nombre || ""}, modificado:{por:yo, en}});
         if(!rapido && !com.csId && r.clienteId){ try{ await db.collection("dhs_comunidades").doc(comId).update({csId:r.clienteId, modificado:{por:yo, en}}); com.csId = r.clienteId; }catch(e){} }
         await db.collection("dhs_registro").add({por:yo, en, accion:"presupuesto " + r.numero + " creado (" + eur(r.totales.total) + ")", coleccion:"dhs_presupuestos", docId:String(r.id), nombre:com.nombre});
+        if(r.aviso) await DHS_PREGUNTA("Presupuesto " + r.numero + " guardado. Aviso: " + r.aviso + " Cuando quieras, ábrelo y pulsa «Unir al cliente de Contasimple».", "Vale", "Cerrar");
         vuelve();
       }catch(e){ m("No se ha podido: " + (e.message||e)); b.disabled = false; }
     };

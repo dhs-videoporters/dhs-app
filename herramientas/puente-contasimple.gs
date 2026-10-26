@@ -104,13 +104,19 @@ const PUENTE = {
     const lineas = lineas_(d.lineas);
     const f = formatoPresupuesto_(tk);
     const num = numero_(cs_(tk, 'get', '/accounting/estimates/nextEstimateNumber/' + f.id));
-    const r = cs_(tk, 'post', '/accounting/estimates', {
-      targetEntityId: cliente || undefined, targetEntity: cliente ? undefined : sinCli_(d), numberingFormatId: f.id, number: num,
+    const cuerpo = t => ({ targetEntityId: t || undefined, numberingFormatId: f.id, number: num,
       date: Utilities.formatDate(new Date(), 'Europe/Madrid', "yyyy-MM-dd'T'00:00:00"),
-      status: 'Creado', notes: d.notas || '', lines: lineas
-    });
+      status: 'Creado', notes: d.notas || '', lines: lineas });
+    let r, cli = cliente || null, aviso = '';
+    try { r = cs_(tk, 'post', '/accounting/estimates', cuerpo(cli)); }
+    catch (e) {
+      // Si Contasimple no acepta ese cliente, se crea igualmente sin cliente (se une después con «Unir al cliente de Contasimple»)
+      if (!cli || !/TargetMissing|target entity/i.test(String(e && e.message || e))) throw e;
+      aviso = 'Contasimple no ha aceptado el cliente ' + cli + ': el presupuesto se ha creado sin cliente.'; cli = null;
+      r = cs_(tk, 'post', '/accounting/estimates', cuerpo(null));
+    }
     const est = (r && r.data) || r;
-    return { id: est.id, numero: est.number || num, clienteId: cliente, totales: totales_(lineas) };
+    return { id: est.id, numero: est.number || num, clienteId: cli, aviso: aviso, totales: totales_(lineas) };
   },
 
   // PDF del presupuesto (en base64, para verlo o descargarlo)
@@ -339,18 +345,13 @@ function totales_(lineas) {
   const iva = redondea_(lineas.reduce((n, l) => n + l.vatAmount, 0));
   return { base: base, iva: iva, total: redondea_(base + iva) };
 }
-// Presupuesto sin cliente dado de alta: Contasimple exige destinatario, así que van sus datos escritos (nombre, dirección, teléfono) sin crear cliente.
-function sinCli_(d) {
-  const c = d.cliente || {};
-  return { organization: c.nombre || 'Particular', nif: '', address: c.direccion || '', city: c.poblacion || '', country: 'España', phone: c.telefono || '' };
-}
 // Cliente de Contasimple para la comunidad: el código guardado, o se busca por NIF.
 function cliente_(tk, c) {
   if (Number(c.csId) > 0) return Number(c.csId);
   if (!c.nif) throw new Error('Esta comunidad no tiene NIF ni código de Contasimple. Complétalo en su ficha.');
   const r = cs_(tk, 'get', '/entities/customers/search/nif?query=' + encodeURIComponent(c.nif) + '&exactMatch=true');
-  const L = (r && r.data) || r || [];
-  if (L.length) return L[0].id;
+  const d0 = (r && r.data !== undefined) ? r.data : r, L = Array.isArray(d0) ? d0 : ((d0 && (d0.items || d0.data)) || []);
+  if (L.length && Number(L[0].id) > 0) return Number(L[0].id);
   const n = cs_(tk, 'post', '/entities/customers', { organization: c.nombre, nif: c.nif, address: c.direccion || '', city: c.poblacion || '', country: 'España' });
   return ((n && n.data) || n).id;
 }
