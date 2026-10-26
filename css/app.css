@@ -390,3 +390,17 @@ h1 .emp-chip{font-size:13px}
 .pin-ruta.base{background:#fff;font-size:15px}
 .orden-ruta li{margin:4px 0}
 .ruta-chk{display:block;background:#eef4ff;border:1px solid #c5d6f5;border-radius:8px;padding:8px 10px;margin-bottom:10px}
+
+/* Calendario de pagos a proveedores */
+.cal-pagos{margin-top:12px}.cal-pagos summary{cursor:pointer;font-weight:600}
+.cp-meses{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:8px}
+.cp-mes h4{margin:0 0 6px;text-transform:capitalize}
+.cp-cab,.cp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cp-cab i{font-style:normal;font-size:11px;color:var(--gris);text-align:center}
+.cp-d{min-height:42px;border:1px solid var(--linea);border-radius:6px;padding:2px 4px;font-size:11px;background:#fff}
+.cp-d.vacia{border:0;background:none}
+.cp-d span{color:var(--gris)}
+.cp-d.con{background:#fff3e0;border-color:#f3d39b;cursor:pointer}
+.cp-d.con b{display:block;font-size:11px;color:#b45309;white-space:nowrap}
+.cp-d.hoy{outline:2px solid #1f3a5f}
+.cp-d.sel{background:#1f3a5f}.cp-d.sel span,.cp-d.sel b{color:#fff}
