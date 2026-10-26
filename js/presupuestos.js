@@ -11,7 +11,17 @@
   const GRUPOS = ["Instalación","Mantenimiento","Cámaras","Otros"];
   const ESTADOS = {pendiente:["⏳","Pendiente"], enviado:["📨","Enviado"], aceptado:["✅","Aceptado"], rechazado:["✖️","Rechazado"], facturado:["🧾","Facturado"], parcial:["🧾","Facturado en parte"]};
   const r2 = x => Math.round(x * 100) / 100;
-  // Quién hizo cada presupuesto: nombre de la persona según su cuenta (se guarda al crearlo; para los antiguos, se busca por el correo)
+
+  // Pregunta con varias respuestas, dentro de la página. Devuelve la clave elegida o null si se cancela.
+  function elegir(texto, opciones){
+    return new Promise(ok => {
+      const f = document.createElement("div"); f.className = "preg-fondo";
+      f.innerHTML = `<div class="preg-caja" role="dialog" aria-modal="true"><p></p><div class="preg-bot">${opciones.map(([k,t], i) => `<button class="btn ${i ? "sec" : ""}" data-k="${esc(k)}">${esc(t)}</button>`).join("")}<button class="btn sec" data-k="">Cancelar</button></div></div>`;
+      f.querySelector("p").textContent = texto;
+      f.addEventListener("click", e => { const b = e.target.closest("[data-k]"); if(!b) return; f.remove(); ok(b.dataset.k || null); });
+      document.body.appendChild(f);
+    });
+  }  // Quién hizo cada presupuesto: nombre de la persona según su cuenta (se guarda al crearlo; para los antiguos, se busca por el correo)
   const FIJOS = {"herrerazarzoso@gmail.com":"Ángel", "dhsvideoporters@gmail.com":"Joel"};
   let QUIEN = null;
   async function cargarQuien(){
@@ -352,8 +362,30 @@
       const rNom = rapido ? el.querySelector("#rNombre").value.trim() : "", rTel = rapido ? el.querySelector("#rTel").value.trim() : "";
       const rDir = rapido ? el.querySelector("#rDir").value.trim() : "", rPob = rapido ? el.querySelector("#rPob").value.trim() : "";
       if(rapido && rTel.replace(/\D/g,"").length < 9) return m("El teléfono es obligatorio (9 cifras como mínimo).");
+      // Líneas fuera de catálogo (Ángel 26/10): preguntar si se guardan en el catálogo, con su precio, sin precio o no
+      const libres = L.filter(l => !l.productoId);
+      let alCatalogo = "no";
+      if(libres.length && dir){
+        alCatalogo = await elegir("Hay " + (libres.length === 1 ? "1 línea" : libres.length + " líneas") + " que no están en el catálogo (" + libres.map(l => "«" + l.concepto + "»").join(", ") + "). ¿Quieres guardarlas en el catálogo (aquí y en Contasimple) para la próxima vez?",
+          [["precio", "Guardar con su precio"], ["cero", "Guardar sin precio"], ["no", "No guardar"]]);
+        if(alCatalogo === null) return;
+      }
       if(!await DHS_PREGUNTA("Se va a crear el presupuesto en Contasimple con el siguiente número. ¿Seguir?")) return;
-      const b = el.querySelector("#btnGuardarP"); b.disabled = true; m("Guardando en Contasimple…");
+      const b = el.querySelector("#btnGuardarP"); b.disabled = true;
+      if(alCatalogo !== "no"){
+        m("Guardando en el catálogo…");
+        try{
+          const R = await llamar("guardarProductos", {productos: libres.map((l, i) => ({fila:i, id:null, nombre:l.concepto, precio:alCatalogo === "precio" ? Number(l.precio)||0 : 0, iva:IVA, descripcion:l.concepto, codigo:"", activo:true}))});
+          const yo0 = S.usuario.email.toLowerCase(), en0 = firebase.firestore.FieldValue.serverTimestamp(), bt = db.batch();
+          R.forEach(r => { if(!r.ok) return; const l = libres[r.fila]; l.productoId = r.id;
+            bt.set(db.collection("dhs_catalogo").doc(String(r.id)), {csId:r.id, nombre:l.concepto, precio:alCatalogo === "precio" ? Number(l.precio)||0 : 0, iva:IVA, descripcion:l.concepto, codigo:"", activo:true,
+              tipo:"producto", grupo:"Otros", tecnico:false, dtoMax:0, modificado:{por:yo0, en:en0}}, {merge:true}); });
+          await bt.commit();
+          const mal = R.filter(r => !r.ok); if(mal.length) m("Aviso: " + mal.length + " no se han podido guardar en el catálogo. Sigo con el presupuesto…");
+          try{ await catalogo(true); }catch(e){}
+        }catch(e){ m("No se han podido guardar en el catálogo (" + (e.message||e) + "). Sigo con el presupuesto…"); }
+      }
+      m("Guardando en Contasimple…");
       try{
         const notas = el.querySelector("#notasP").value.trim();
         const sinNif = !rapido && !com.csId && !com.nif;   // comunidad sin NIF todavía: sale sin cliente y el nombre va en las notas
