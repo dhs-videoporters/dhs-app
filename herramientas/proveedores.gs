@@ -16,12 +16,19 @@ function provPedir_(proyecto, url, op) {
 }
 // Carpeta(s) donde están las facturas: la de cualquier PDF con nombre AAAA-MM-DD_proveedor_…
 const PROV_MESES = 4;   // se leen las facturas de los últimos 4 meses (más antiguas no)
+const PROV_CARPETA = 'DHS/Administracion/Facturas';   // donde las deja el script «DHS - Facturas a Drive» (desde Gmail, por trimestres)
 function provArchivos_() {
   const d = new Date(); d.setMonth(d.getMonth() - PROV_MESES);
   const desde = Utilities.formatDate(d, 'Europe/Madrid', 'yyyy-MM-dd');
-  const it = DriveApp.searchFiles("mimeType = 'application/pdf' and trashed = false and modifiedDate > '" + desde + "T00:00:00'");
+  let c = DriveApp.getRootFolder();
+  for (const nombre of PROV_CARPETA.split('/')) { const it = c.getFoldersByName(nombre); if (!it.hasNext()) return []; c = it.next(); }
   const L = [];
-  while (it.hasNext() && L.length < 3000) { const f = it.next(), n = f.getName(); if (/^\d{4}-\d{2}-\d{2}_[a-z0-9]+_/i.test(n) && n.slice(0, 10) >= desde) L.push(f); }
+  const recorrer = carpeta => {
+    const fs = carpeta.getFiles();
+    while (fs.hasNext()) { const f = fs.next(), n = f.getName(); if (!f.isTrashed() && /\.pdf$/i.test(n) && /^\d{4}-\d{2}-\d{2}_/.test(n) && n.slice(0, 10) >= desde) L.push(f); }
+    const sub = carpeta.getFolders(); while (sub.hasNext()) recorrer(sub.next());
+  };
+  recorrer(c);
   return L;
 }
 function provYaLeidos_(proyecto) {
