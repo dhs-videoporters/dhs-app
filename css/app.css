@@ -375,3 +375,5 @@ h1 .emp-chip{font-size:13px}
 .pagos-cifras b{font-size:20px}
 .pagos-cifras .ok{background:#e7f6ee}.pagos-cifras .ok b{color:#1d7a46}
 .pagos-cifras .falta{background:#fff3e0}.pagos-cifras .falta b{color:#b45309}
+
+.eco-caja.c-mal{background:#fdecec;border-color:#f1b5b5}.eco-caja.c-mal b{color:#c0392b}

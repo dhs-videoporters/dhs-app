@@ -164,6 +164,11 @@ service cloud.firestore {
       allow delete: if esDireccion();
     }
     // ---------- Números de cuenta: solo Cobros (Dirección) ----------
+    // ---------- Facturas de proveedores (material): solo Cobros (Dirección). Las escribe el puente al leer los PDF de Drive. ----------
+    match /dhs_proveedores/{id} {
+      allow read: if puede('cobros', 1);
+      allow write: if puede('cobros', 2) && firmaBien();
+    }
     match /dhs_bancos/{id} {
       allow read: if puede('cobros', 1);
       allow write: if puede('cobros', 2) && firmaBien();

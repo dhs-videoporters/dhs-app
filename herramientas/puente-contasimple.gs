@@ -187,6 +187,12 @@ const PUENTE = {
     return { id: d.id, borrado: true };
   },
 
+  // Facturas de proveedores: lee los PDF nuevos de Drive y los guarda (ver proveedores.gs)
+  leerProveedores: function (d, u) {
+    exige_(u, 'cobros', 'editar');
+    return leerFacturasProveedores_(ENT_.proyecto);
+  },
+
   // Enviar el presupuesto por correo desde Contasimple
   enviarPresupuesto: function (d, u) {
     exige_(u, 'precios', 'editar');
