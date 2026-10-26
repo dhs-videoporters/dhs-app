@@ -11,6 +11,8 @@
   const GRUPOS = ["Instalación","Mantenimiento","Cámaras","Otros"];
   const ESTADOS = {pendiente:["⏳","Pendiente"], enviado:["📨","Enviado"], aceptado:["✅","Aceptado"], rechazado:["✖️","Rechazado"], facturado:["🧾","Facturado"], parcial:["🧾","Facturado en parte"]};
   const r2 = x => Math.round(x * 100) / 100;
+  // Pagos recibidos de un presupuesto (entrada, a cuenta…), con o sin factura todavía (Ángel 26/10)
+  const pagado = p => r2((p.pagosRecibidos||[]).reduce((n,x) => n + (Number(x.importe)||0), 0));
 
   // Pregunta con varias respuestas, dentro de la página. Devuelve la clave elegida o null si se cancela.
   function elegir(texto, opciones){
@@ -263,7 +265,7 @@
     const fila = p => { const e = ESTADOS[p.estado] || ["",p.estado]; return `<a class="fila fila-pres est-p-${esc(p.estado)}" href="#" data-id="${esc(p.id)}">
       <div class="f-nombre">${esc(p.numero)} <span class="vacio">· ${esc(fch(p.fecha))}${p.creado ? " · por " + esc(quien(p.creado)) : ""}</span></div>
       <div class="f-sub">${esc((p.lineas||[]).map(l => l.concepto).join(", ").slice(0,120))}</div>
-      <div class="f-tags"><b>${eur(tot(p))}</b> <span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span>${p.estado === "parcial" ? ` <span class="vacio">falta ${eur(tot(p) - facturado(p))}</span>` : ""}</div></a>`; };
+      <div class="f-tags"><b>${eur(tot(p))}</b> <span class="tag est-p-${esc(p.estado)}">${e[0]} ${e[1]}</span>${pagado(p) ? ` <span class="tag est-p-aceptado">💶 pagado ${eur(pagado(p))}</span> <span class="tag ${tot(p) - pagado(p) > 0.01 ? "est-p-pendiente" : "est-p-aceptado"}">${tot(p) - pagado(p) > 0.01 ? "falta " + eur(tot(p) - pagado(p)) : "todo pagado"}</span>` : (p.estado === "parcial" ? ` <span class="vacio">falta ${eur(tot(p) - facturado(p))}</span>` : "")}</div></a>`; };
     const filaF = f => `<tr><td>${esc(f.numero)}</td><td>${esc(fch(f.fecha))}</td><td>${eur(f.total)}</td>
       <td>${(f.pendiente||0) > 0.01 ? `<span class="tag est-p-pendiente">⏳ Falta ${eur(f.pendiente)}</span>${f.devuelto ? ` <span class="tag aviso">devuelto</span>` : ""}${f.enHoja ? ` <span class="tag azul">en la hoja del viernes</span>` : ""}${f.sinCobros ? ` <span class="tag gris">aún no está en cobros</span>` : ""}`
         : `<span class="tag est-p-aceptado">✅ Cobrada${(f.pagos||[]).length && f.pagos[f.pagos.length-1].fecha ? " " + esc(fch(f.pagos[f.pagos.length-1].fecha)) : ""}</span>${f.enBanco ? ` <span class="tag azul">en el banco</span>` : ""}`}</td></tr>`;
@@ -271,7 +273,7 @@
     const nHist = cerrados.length + cobradas.length;
     el.innerHTML = `
       <div class="cab-lista"><h3>Economía de la comunidad</h3>${puedePrecios() ? `<button class="btn" id="btnNuevoP">+ Nuevo presupuesto</button>` : ""}</div>
-      ${!com.csId && !com.nif ? `<p class="aviso-cal">Esta comunidad no tiene NIF ni código de Contasimple: complétalo en «Editar ficha» antes de presupuestar.</p>` : ""}
+      ${!com.csId && !com.nif ? `<p class="aviso-cal">Esta comunidad aún no tiene NIF: puedes hacerle presupuestos; para facturar, ponlo en «Editar ficha».</p>` : ""}
       <div class="eco-cajas">
         <a class="eco-caja c3" href="#" data-ir="ecA"><span>Presupuestos por aceptar</span><b>${eur(suma(porAceptar, tot))}</b><i>${porAceptar.length} presupuesto${porAceptar.length===1?"":"s"}</i></a>
         <a class="eco-caja c1" href="#" data-ir="ecH"><span>Aceptado, pendiente de hacer</span><b>${eur(suma(porHacer, p => tot(p) - facturado(p)))}</b><i>${porHacer.length} presupuesto${porHacer.length===1?"":"s"}</i></a>
@@ -423,7 +425,23 @@
       <div class="totales">Base <b>${eur(p.totales.base)}</b> · IVA 21 % <b>${eur(p.totales.iva)}</b> · Total <b class="grande">${eur(p.totales.total)}</b></div>
       ${p.notas ? `<p class="ft-nota" style="margin-top:6px">${esc(p.notas)}</p>` : ""}
       ${(p.facturas||[]).length ? `<p style="margin-top:8px">Facturas: ${(p.facturas).map(f => `<b>${esc(f.numero)}</b> (${eur(f.total)})`).join(" · ")}</p>` : ""}
-      ${p.formaPago ? `<p class="vacio">Forma de pago: ${esc(p.formaPago)}</p>` : ""}
+      ${p.formaPago ? `<p class="vacio">Forma de pago acordada: ${esc(p.formaPago)}</p>` : ""}
+      ${["aceptado","parcial","facturado"].includes(p.estado) || (p.pagosRecibidos||[]).length ? `<div class="bloque pagos-pres" style="margin-top:10px">
+        <h4>💶 Pagos del cliente</h4>
+        <div class="pagos-cifras"><div><span>Total</span><b>${eur(p.totales.total)}</b></div><div class="ok"><span>Pagado</span><b>${eur(pagado(p))}</b></div>
+          <div class="${p.totales.total - pagado(p) > 0.01 ? "falta" : "ok"}"><span>${p.totales.total - pagado(p) > 0.01 ? "Falta por pagar" : "Todo pagado"}</span><b>${eur(Math.max(0, r2(p.totales.total - pagado(p))))}</b></div></div>
+        ${(p.pagosRecibidos||[]).length ? `<table class="tabla-fi" style="margin-top:8px"><thead><tr><th>Fecha</th><th>Importe</th><th>Cómo</th><th>Nota</th><th></th></tr></thead><tbody>
+          ${(p.pagosRecibidos).map((x,i) => `<tr><td>${x.fecha ? esc(new Date(x.fecha + "T12:00").toLocaleDateString("es-ES")) : ""}</td><td><b>${eur(x.importe)}</b></td><td>${esc(x.forma||"")}</td><td>${esc(x.nota||"")}${x.por ? ` <span class="vacio">· ${esc(quien({por:x.por}))}</span>` : ""}</td><td>${dir ? `<button class="btn sec bBorraPago" data-i="${i}" title="Quitar este pago">✕</button>` : ""}</td></tr>`).join("")}
+        </tbody></table>` : `<p class="vacio">Todavía no se ha apuntado ningún pago.</p>`}
+        ${edita ? `<p style="margin-top:8px"><button class="btn" id="bPago">+ Apuntar pago</button></p>
+        <form id="fPago" class="oculto fila-form" style="margin-top:8px">
+          <label class="campo"><span>Importe (IVA incluido)</span><input name="importe" type="number" step="0.01" min="0.01" required></label>
+          <label class="campo"><span>Fecha</span><input name="fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></label>
+          <label class="campo"><span>Cómo</span><select name="forma"><option>Transferencia</option><option>Efectivo</option><option>TPV / tarjeta</option><option>Bizum</option><option>Otro</option></select></label>
+          <label class="campo" style="flex:2"><span>Nota</span><input name="nota" placeholder="Ej.: entrada del 50 %"></label>
+          <p style="width:100%"><button class="btn btn-ok" type="submit">Guardar pago</button></p>
+        </form>` : ""}
+      </div>` : ""}
       <div class="botones-pres">
         <button class="btn sec" id="bPdf">📄 Ver PDF</button>
         <button class="btn sec" id="bDescPdf">⬇️ Descargar PDF</button>
@@ -444,6 +462,25 @@
     const ref = db.collection("dhs_presupuestos").doc(p.id);
     const reg = accion => db.collection("dhs_registro").add({por:yo, en:en(), accion:"presupuesto " + p.numero + ": " + accion, coleccion:"dhs_presupuestos", docId:p.id, nombre:com.nombre});
     el.querySelector("#btnVolverP").onclick = () => vuelve();
+    // Pagos recibidos
+    const guardaPagos = async (L, accion) => {
+      try{ await ref.update({pagosRecibidos:L, modificado:{por:yo, en:en()}}); await reg(accion); p.pagosRecibidos = L; detalle(el, comId, com, p, volver); }
+      catch(e){ m("No se ha podido guardar (" + (e.code||e.message||e) + ")."); }
+    };
+    const bPago = el.querySelector("#bPago"), fPago = el.querySelector("#fPago");
+    if(bPago){
+      bPago.onclick = () => { fPago.classList.remove("oculto"); fPago.importe.focus(); };
+      fPago.onsubmit = ev => { ev.preventDefault();
+        const imp = r2(Number(fPago.importe.value)||0); if(!(imp > 0)) return m("Pon el importe.");
+        const x = {importe:imp, fecha:fPago.fecha.value, forma:fPago.forma.value, nota:fPago.nota.value.trim(), por:yo, apuntado:new Date().toISOString()};
+        guardaPagos((p.pagosRecibidos||[]).concat([x]), "pago apuntado " + eur(imp) + " (" + x.forma + ")");
+      };
+    }
+    el.querySelectorAll(".bBorraPago").forEach(b => b.onclick = async () => {
+      const i = Number(b.dataset.i), x = p.pagosRecibidos[i];
+      if(!await DHS_PREGUNTA("¿Quitar el pago de " + eur(x.importe) + " del " + x.fecha + "?", "Quitar", "No")) return;
+      guardaPagos(p.pagosRecibidos.filter((_, j) => j !== i), "pago quitado " + eur(x.importe));
+    });
     el.querySelector("#bPdf").onclick = async () => {
       m("Pidiendo el PDF a Contasimple…");
       try{

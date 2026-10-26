@@ -39,7 +39,8 @@
     const acept = P.filter(p => ["aceptado","parcial"].includes(p.estado)).map(p => {
       const fact = (p.facturas||[]).reduce((n,f) => n + (f.total||0), 0);
       const t = p.intervencionId ? T[p.intervencionId] : null, cita = t && (t.citas||[])[0];
-      return {...p, pendienteFacturar:r2((p.totales.total||0) - fact), com:C.coms[p.comunidadId], cita:cita ? cita.fecha : null, hecho: t && ["hecho","facturado","cobrado"].includes(t.estado)};
+      const pag = r2((p.pagosRecibidos||[]).reduce((n,x) => n + (Number(x.importe)||0), 0));
+      return {...p, pendienteFacturar:r2((p.totales.total||0) - fact), pagado:pag, falta:r2(Math.max(0, (p.totales.total||0) - pag)), com:C.coms[p.comunidadId], cita:cita ? cita.fecha : null, hecho: t && ["hecho","facturado","cobrado"].includes(t.estado)};
     }).filter(p => p.pendienteFacturar > 0.01 && pasaAdmin(p.com));
     // 2) Pendiente de cobrar
     const pend = F.filter(f => f.estado !== "Payed" && !f.rectificativa && (f.pendiente||0) > 0.01).map(f => ({...f, com:comDe(f.clienteId)})).filter(f => pasaAdmin(f.com))
@@ -68,9 +69,9 @@
         ${Object.keys(prev).length ? `<div class="eco-prev"><b>Previsión de lo aceptado:</b> ${Object.keys(prev).sort().map(k => `${esc(nomMes(k))} <b>${eur(prev[k])}</b>`).join(" · ")}</div>` : ""}
 
         <h3 id="acept" style="margin-top:16px">✅ Aceptado, pendiente de hacer</h3>
-        <table class="tabla-fi"><thead><tr><th>Comunidad</th><th>Presupuesto</th><th>Aceptado</th><th>Forma de pago</th><th>Intervención</th><th>Pendiente</th></tr></thead><tbody>
+        <table class="tabla-fi"><thead><tr><th>Comunidad</th><th>Presupuesto</th><th>Aceptado</th><th>Forma de pago</th><th>Intervención</th><th>Pendiente de facturar</th><th>Pagado</th><th>Falta por pagar</th></tr></thead><tbody>
           ${acept.map(p => `<tr><td><a href="#comunidad/${encodeURIComponent(p.comunidadId)}">${esc(p.nombre)}</a></td><td>${esc(p.numero)}${p.estado === "parcial" ? ` <span class="tag">entrada facturada</span>` : ""}</td><td>${fch(p.aceptadoEl)}</td><td>${esc(p.formaPago||"")}</td>
-            <td>${p.intervencionId ? (p.hecho ? "✅ hecha" : (p.cita ? "📅 " + fch(p.cita) : "sin fecha")) : `<span class="tag aviso">sin programar</span>`}</td><td><b>${eur(p.pendienteFacturar)}</b></td></tr>`).join("") || `<tr><td colspan="6" class="vacio">Nada.</td></tr>`}
+            <td>${p.intervencionId ? (p.hecho ? "✅ hecha" : (p.cita ? "📅 " + fch(p.cita) : "sin fecha")) : `<span class="tag aviso">sin programar</span>`}</td><td><b>${eur(p.pendienteFacturar)}</b></td><td>${p.pagado ? `<span class="tag est-p-aceptado">💶 ${eur(p.pagado)}</span>` : `<span class="vacio">—</span>`}</td><td><b>${eur(p.falta)}</b></td></tr>`).join("") || `<tr><td colspan="8" class="vacio">Nada.</td></tr>`}
         </tbody></table>
 
         <h3 id="pend" style="margin-top:16px">🧾 Hecho, pendiente de cobrar</h3>
