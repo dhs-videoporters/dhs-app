@@ -152,6 +152,7 @@
               <p id="avisaInfo" class="vacio" style="margin-top:4px"></p></div>
           </div>
           <div class="bloque"><h3>Cita</h3>
+            ${deCal ? "" : `<label class="chk ruta-chk"><input type="checkbox" id="paraRuta"> 🚐 <b>Visita rápida: guardar para la ruta</b> <span class="vacio">(cosa pequeña o mirar un presupuesto; cuando haya 4-5, se hacen juntas desde «Hacer ruta»)</span></label>`}
             <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="sinFecha" ${deCal ? "" : "checked"}> Todavía sin fecha <span class="vacio">(desmárcalo para poner día y hora)</span></label>
             <div id="bloqueCita" class="${deCal ? "" : "oculto"}">
               <label class="campo"><span>Día</span><input name="fecha" type="date" value="${hoy}"></label>
@@ -177,6 +178,9 @@
     };
     f.querySelectorAll('input[name=origen]').forEach(r => r.onchange = pintarOrigen); pintarOrigen();
     el.querySelector("#sinFecha").onchange = e => el.querySelector("#bloqueCita").classList.toggle("oculto", e.target.checked);
+    const pR = el.querySelector("#paraRuta");
+    if(pR) pR.onchange = () => { if(pR.checked){ const sf = el.querySelector("#sinFecha"); sf.checked = true; el.querySelector("#bloqueCita").classList.add("oculto");
+      const ti = f.querySelector('select[name=tipo]'); if(ti && !["pequeno","presupuesto"].includes(ti.value)) ti.value = "pequeno"; } };
     if(pre && pre.descripcion) f.descripcion.value = pre.descripcion;
     if(dePres){ const ti = f.querySelector('select[name=tipo]'); if(ti) ti.value = "instalacion"; }
     if(deCal){
@@ -301,6 +305,7 @@
         }
         const datos = {
           numero, ...cliente, especialidad:v("especialidad"), tipo:v("tipo"), urgencia:v("urgencia") || "normal",
+          ruta: !!(el.querySelector("#paraRuta") && el.querySelector("#paraRuta").checked) && !citas.length,
           estado: citas.length ? "agendado" : (v("tipo") === "presupuesto" ? "presupuesto" : "nuevo"),
           descripcion:v("descripcion"), avisa:avisa,
           duracionEstimada:dur, citas, asignados, hechoPor:[], material:[], tiempoReal:null, fotos:[],
@@ -384,7 +389,7 @@
     catch(e){ el.innerHTML = `<div class="panel">No se han podido leer las intervenciones (${esc(e.code)}).</div>`; return; }
     el.innerHTML = `
       <div class="panel">
-        <div class="cab-lista"><h2>Intervenciones</h2>${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Nueva intervención</a>` : ""}${S.puede("trabajos","todo") ? ` <a class="btn sec" href="#ruta">🚐 Hacer ruta</a>` : ""}</div>
+        <div class="cab-lista"><h2>Intervenciones</h2>${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Nueva intervención</a>` : ""}${S.puede("trabajos","todo") ? ` <a class="btn sec" href="#ruta">🚐 Hacer ruta${(n => n ? " (" + n + " para la ruta)" : "")(docs.filter(t => (t.ruta || ["pequeno","presupuesto"].includes(t.tipo)) && !(t.citas||[]).length && !["hecho","facturado","cobrado","cancelado","encurso"].includes(t.estado)).length)}</a>` : ""}</div>
         <div class="chips" id="chVer" style="margin-top:10px">
           ${[["pendientes","Pendientes"],["hechas","Hechas"],["todas","Todas"]].map(([k,n]) => `<button class="chip ${filtro.ver===k?"on":""}" data-k="${k}">${n}</button>`).join("")}
         </div>

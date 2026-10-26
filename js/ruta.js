@@ -62,7 +62,7 @@
       C = await window.DHS_COM.datos();
     }catch(e){ el.innerHTML = `<div class="panel">No se ha podido cargar (${esc(e.code||e)}).</div>`; return; }
     let soloRapidas = true;
-    const candidatas = () => T.filter(t => !CERRADOS.includes(t.estado) && (!soloRapidas || RAPIDAS.includes(t.tipo)) && !(t.citas||[]).length)
+    const candidatas = () => T.filter(t => !CERRADOS.includes(t.estado) && (!soloRapidas || t.ruta || RAPIDAS.includes(t.tipo)) && !(t.citas||[]).length)
       .map(t => { const c = t.comunidadId ? C.coms[t.comunidadId] : null; const dir = (c && c.direccion) || t.direccion || (c && c.nombre) || t.nombre || "", pob = (c && c.poblacion) || t.poblacion || "";
         return {t, c, dir, pob, q:textoDir(dir, pob), geo:(c && c.geo && c.geo.lat) ? c.geo : null}; })
       .sort((a,b) => (a.t.urgencia === "urgente" ? 0 : 1) - (b.t.urgencia === "urgente" ? 0 : 1) || (a.pob||"").localeCompare(b.pob||"") || a.dir.localeCompare(b.dir));
@@ -72,7 +72,7 @@
       <div class="panel">
         <div class="cab-lista"><h2>🚐 Ruta de visitas rápidas</h2><a class="btn sec" href="#intervenciones">‹ Intervenciones</a></div>
         <p class="vacio">Pendientes sin fecha. Marca las que quieras hacer (5-8 para una mañana) y pulsa <b>Ordenar ruta</b>: salen en el orden más corto desde la nave (Pau Marsal 77).</p>
-        <label class="chk"><input type="checkbox" id="chRap" checked> Solo visitas rápidas (cosa pequeña y visita para presupuesto)</label>
+        <label class="chk"><input type="checkbox" id="chRap" checked> Solo visitas rápidas (marcadas «para la ruta», cosa pequeña y visita para presupuesto)</label>
         <div class="ruta-grid">
           <div><div id="listaRuta" class="lista"></div></div>
           <div><div id="mapaRuta" class="mapa-ruta"></div><p id="msgRuta" class="vacio" style="margin-top:6px"></p></div>
@@ -166,7 +166,7 @@
         try{
           for(let i = 0; i < O.length; i++){
             const x = O[i], hora = String(Math.floor(min/60)).padStart(2,"0") + ":" + String(min%60).padStart(2,"0");
-            await db.collection("dhs_trabajos").doc(x.t.id).update({citas:[{fecha:dia, hora, duracion:dur, personal:[quien]}], asignados:[quien], estado:["nuevo","presupuesto"].includes(x.t.estado) ? "agendado" : x.t.estado, rutaOrden:i + 1, modificado:{por:yo, en:en()}});
+            await db.collection("dhs_trabajos").doc(x.t.id).update({citas:[{fecha:dia, hora, duracion:dur, personal:[quien]}], asignados:[quien], estado:["nuevo","presupuesto"].includes(x.t.estado) ? "agendado" : x.t.estado, rutaOrden:i + 1, ruta:false, modificado:{por:yo, en:en()}});
             await db.collection("dhs_trabajos").doc(x.t.id).collection("notas").add({tipo:"cita", texto:"Ruta del " + dia + ": parada " + (i + 1) + " a las " + hora + " · " + (P[quien] ? P[quien].nombre : ""), por:yo, en:en()});
             ma("Guardando " + (i + 1) + " de " + O.length + "…");
             min += dur + tray;

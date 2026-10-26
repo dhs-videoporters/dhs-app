@@ -389,3 +389,4 @@ h1 .emp-chip{font-size:13px}
 .pin-ruta.urg{background:#c0392b}
 .pin-ruta.base{background:#fff;font-size:15px}
 .orden-ruta li{margin:4px 0}
+.ruta-chk{display:block;background:#eef4ff;border:1px solid #c5d6f5;border-radius:8px;padding:8px 10px;margin-bottom:10px}
