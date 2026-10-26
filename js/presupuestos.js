@@ -256,7 +256,9 @@
     const tot = p => (p.totales && p.totales.total) || 0;
     const facturado = p => (p.facturas||[]).reduce((n,f) => n + (f.total||0), 0);
     const porAceptar = L.filter(p => ["pendiente","enviado"].includes(p.estado));
-    const porHacer = L.filter(p => ["aceptado","parcial"].includes(p.estado) && tot(p) - facturado(p) > 0.01);
+    const falta = p => r2(Math.max(0, tot(p) - Math.max(pagado(p), facturado(p))));   // lo que aún tiene que entrar
+    const porHacer = L.filter(p => ["aceptado","parcial"].includes(p.estado) && falta(p) > 0.01);
+    const antic = r2(L.filter(p => !(p.facturas||[]).length).reduce((n,p) => n + pagado(p), 0));
     const cerrados = L.filter(p => !porAceptar.includes(p) && !porHacer.includes(p));
     const sinCobrar = F.filter(f => (f.pendiente||0) > 0.01);
     const cobradas = F.filter(f => !((f.pendiente||0) > 0.01));
@@ -276,7 +278,7 @@
       ${!com.csId && !com.nif ? `<p class="aviso-cal">Esta comunidad aún no tiene NIF: puedes hacerle presupuestos; para facturar, ponlo en «Editar ficha».</p>` : ""}
       <div class="eco-cajas">
         <a class="eco-caja c3" href="#" data-ir="ecA"><span>Presupuestos por aceptar</span><b>${eur(suma(porAceptar, tot))}</b><i>${porAceptar.length} presupuesto${porAceptar.length===1?"":"s"}</i></a>
-        <a class="eco-caja c1" href="#" data-ir="ecH"><span>Aceptado, pendiente de hacer</span><b>${eur(suma(porHacer, p => tot(p) - facturado(p)))}</b><i>${porHacer.length} presupuesto${porHacer.length===1?"":"s"}</i></a>
+        <a class="eco-caja c1" href="#" data-ir="ecH"><span>Aceptado, pendiente de cobrar</span><b>${eur(suma(porHacer, falta))}</b><i>${porHacer.length} presupuesto${porHacer.length===1?"":"s"}${antic ? " · ya cobrado de anticipo " + eur(antic) : ""}</i></a>
         ${verFact ? `<a class="eco-caja c2" href="#" data-ir="ecC"><span>Hecho, pendiente de cobrar</span><b>${eur(suma(sinCobrar, f => f.pendiente))}</b><i>${sinCobrar.length} factura${sinCobrar.length===1?"":"s"}</i></a>` : ""}
       </div>
       <h4 id="ecA" style="margin-top:14px">⏳ Presupuestos por aceptar (${porAceptar.length})</h4><div class="lista">${porAceptar.map(fila).join("") || `<p class="vacio">Ninguno.</p>`}</div>

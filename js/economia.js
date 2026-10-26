@@ -40,19 +40,24 @@
       const fact = (p.facturas||[]).reduce((n,f) => n + (f.total||0), 0);
       const t = p.intervencionId ? T[p.intervencionId] : null, cita = t && (t.citas||[])[0];
       const pag = r2((p.pagosRecibidos||[]).reduce((n,x) => n + (Number(x.importe)||0), 0));
-      return {...p, pendienteFacturar:r2((p.totales.total||0) - fact), pagado:pag, falta:r2(Math.max(0, (p.totales.total||0) - pag)), com:C.coms[p.comunidadId], cita:cita ? cita.fecha : null, hecho: t && ["hecho","facturado","cobrado"].includes(t.estado)};
-    }).filter(p => p.pendienteFacturar > 0.01 && pasaAdmin(p.com));
+      return {...p, pendienteFacturar:r2((p.totales.total||0) - fact), pagado:pag, falta:r2(Math.max(0, (p.totales.total||0) - Math.max(pag, fact))), com:C.coms[p.comunidadId], cita:cita ? cita.fecha : null, hecho: t && ["hecho","facturado","cobrado"].includes(t.estado)};
+    }).filter(p => p.falta > 0.01 && pasaAdmin(p.com));
+    // Anticipos: pagos apuntados en presupuestos que aún no tienen factura (cuando se facture, el cobro ya lo trae la app de cobros y no se cuenta dos veces)
+    const anticipos = []; P.filter(p => (p.pagosRecibidos||[]).length && !(p.facturas||[]).length).forEach(p => { const com = C.coms[p.comunidadId]; if(!pasaAdmin(com)) return;
+      p.pagosRecibidos.forEach(x => anticipos.push({fecha:x.fecha, importe:Number(x.importe)||0, numero:p.numero, forma:x.forma, cliente:p.nombre, com, anticipo:true})); });
+    const antTotal = r2(anticipos.reduce((n,x) => n + x.importe, 0));
     // 2) Pendiente de cobrar
     const pend = F.filter(f => f.estado !== "Payed" && !f.rectificativa && (f.pendiente||0) > 0.01).map(f => ({...f, com:comDe(f.clienteId)})).filter(f => pasaAdmin(f.com))
       .sort((a,b) => (a.fecha||"").localeCompare(b.fecha||""));
     // 3) Cobrado en el mes
     const cobr = []; F.forEach(f => (f.pagos||[]).forEach(p => { if((p.fecha||"").slice(0,7) === mes){ const com = comDe(f.clienteId); if(pasaAdmin(com)) cobr.push({...p, numero:f.numero, cliente:f.cliente, com}); } }));
+    anticipos.filter(x => (x.fecha||"").slice(0,7) === mes).forEach(x => cobr.push(x));
     cobr.sort((a,b) => (b.fecha||"").localeCompare(a.fecha||""));
     const nSin = pend.filter(f => f.sinCobros).length, tSin = r2(pend.filter(f => f.sinCobros).reduce((n,f) => n + (f.pendiente||0), 0));
     const tBanco = r2(F.filter(f => !f.rectificativa && pasaAdmin(comDe(f.clienteId))).reduce((n,f) => n + (f.importeBanco||0), 0));
     const suma = (L, k) => r2(L.reduce((n,x) => n + (Number(x[k])||0), 0));
     // Previsión por meses de lo aceptado (según la fecha de su intervención)
-    const prev = {}; acept.forEach(p => { const k = p.cita ? p.cita.slice(0,7) : "sin fecha"; prev[k] = r2((prev[k]||0) + p.pendienteFacturar); });
+    const prev = {}; acept.forEach(p => { const k = p.cita ? p.cita.slice(0,7) : "sin fecha"; prev[k] = r2((prev[k]||0) + p.falta); });
     const nomMes = k => k === "sin fecha" ? "Sin programar" : new Date(k + "-15").toLocaleDateString("es-ES", {month:"long", year:"numeric"});
 
     el.innerHTML = `
@@ -62,16 +67,16 @@
           <button class="btn sec" id="btnRec">⟳ Actualizar</button></div>
         <p class="vacio">Pendiente de cobrar con el mismo criterio que la app de cobros (pendientes, devueltas y en la hoja del viernes; lo cargado en el banco no cuenta).${nSin ? ` Incluye ${nSin} factura${nSin===1?"":"s"} nueva${nSin===1?"":"s"} que aún no ha${nSin===1?"":"n"} pasado a cobros (${eur(tSin)}).` : ""}${tBanco ? ` En el banco, pendiente de confirmar: ${eur(tBanco)}.` : ""}</p>
         <div class="eco-cajas">
-          <a class="eco-caja c1" href="#" data-ir="acept"><span>Aceptado, pendiente de hacer</span><b>${eur(suma(acept,"pendienteFacturar"))}</b><i>${acept.length} presupuesto${acept.length===1?"":"s"}</i></a>
+          <a class="eco-caja c1" href="#" data-ir="acept"><span>Aceptado, pendiente de cobrar</span><b>${eur(suma(acept,"falta"))}</b><i>${acept.length} presupuesto${acept.length===1?"":"s"}${antTotal ? " · ya cobrado de anticipo " + eur(antTotal) : ""}</i></a>
           <a class="eco-caja c2" href="#" data-ir="pend"><span>Hecho, pendiente de cobrar</span><b>${eur(suma(pend,"pendiente"))}</b><i>${pend.length} factura${pend.length===1?"":"s"}</i></a>
           <a class="eco-caja c3" href="#" data-ir="cobr"><span>Cobrado en <input type="month" id="mesC" value="${mes}"></span><b>${eur(suma(cobr,"importe"))}</b><i>${cobr.length} cobro${cobr.length===1?"":"s"}</i></a>
         </div>
         ${Object.keys(prev).length ? `<div class="eco-prev"><b>Previsión de lo aceptado:</b> ${Object.keys(prev).sort().map(k => `${esc(nomMes(k))} <b>${eur(prev[k])}</b>`).join(" · ")}</div>` : ""}
 
         <h3 id="acept" style="margin-top:16px">✅ Aceptado, pendiente de hacer</h3>
-        <table class="tabla-fi"><thead><tr><th>Comunidad</th><th>Presupuesto</th><th>Aceptado</th><th>Forma de pago</th><th>Intervención</th><th>Pendiente de facturar</th><th>Pagado</th><th>Falta por pagar</th></tr></thead><tbody>
+        <table class="tabla-fi"><thead><tr><th>Comunidad</th><th>Presupuesto</th><th>Aceptado</th><th>Forma de pago</th><th>Intervención</th><th>Total</th><th>Anticipo cobrado</th><th>Falta por cobrar</th></tr></thead><tbody>
           ${acept.map(p => `<tr><td><a href="#comunidad/${encodeURIComponent(p.comunidadId)}">${esc(p.nombre)}</a></td><td>${esc(p.numero)}${p.estado === "parcial" ? ` <span class="tag">entrada facturada</span>` : ""}</td><td>${fch(p.aceptadoEl)}</td><td>${esc(p.formaPago||"")}</td>
-            <td>${p.intervencionId ? (p.hecho ? "✅ hecha" : (p.cita ? "📅 " + fch(p.cita) : "sin fecha")) : `<span class="tag aviso">sin programar</span>`}</td><td><b>${eur(p.pendienteFacturar)}</b></td><td>${p.pagado ? `<span class="tag est-p-aceptado">💶 ${eur(p.pagado)}</span>` : `<span class="vacio">—</span>`}</td><td><b>${eur(p.falta)}</b></td></tr>`).join("") || `<tr><td colspan="8" class="vacio">Nada.</td></tr>`}
+            <td>${p.intervencionId ? (p.hecho ? "✅ hecha" : (p.cita ? "📅 " + fch(p.cita) : "sin fecha")) : `<span class="tag aviso">sin programar</span>`}</td><td>${eur(p.totales.total)}</td><td>${p.pagado ? `<span class="tag est-p-aceptado">💶 ${eur(p.pagado)}</span>` : `<span class="vacio">—</span>`}</td><td><b>${eur(p.falta)}</b></td></tr>`).join("") || `<tr><td colspan="8" class="vacio">Nada.</td></tr>`}
         </tbody></table>
 
         <h3 id="pend" style="margin-top:16px">🧾 Hecho, pendiente de cobrar</h3>
@@ -84,7 +89,7 @@
 
         <h3 id="cobr" style="margin-top:16px">💶 Cobrado en ${esc(nomMes(mes))}</h3>
         <table class="tabla-fi"><thead><tr><th>Fecha</th><th>Factura</th><th>Cliente</th><th>Importe</th></tr></thead><tbody>
-          ${cobr.map(c => `<tr><td>${fch(c.fecha)}</td><td>${esc(c.numero)}</td><td>${esc(c.com ? c.com.nombre : c.cliente)}</td><td>${eur(c.importe)}</td></tr>`).join("") || `<tr><td colspan="4" class="vacio">Nada.</td></tr>`}
+          ${cobr.map(c => `<tr><td>${fch(c.fecha)}</td><td>${esc(c.numero)}${c.anticipo ? ` <span class="tag est-p-aceptado">anticipo${c.forma ? " · " + esc(c.forma) : ""}</span>` : ""}</td><td>${esc(c.com ? c.com.nombre : c.cliente)}</td><td>${eur(c.importe)}</td></tr>`).join("") || `<tr><td colspan="4" class="vacio">Nada.</td></tr>`}
         </tbody></table>
         <div id="ecoCam"></div>
       </div>`;
