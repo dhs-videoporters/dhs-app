@@ -150,8 +150,8 @@
               <p id="avisaInfo" class="vacio" style="margin-top:4px"></p></div>
           </div>
           <div class="bloque"><h3>Cita</h3>
-            <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="sinFecha"> Todavía sin fecha</label>
-            <div id="bloqueCita">
+            <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="sinFecha" ${deCal ? "" : "checked"}> Todavía sin fecha <span class="vacio">(desmárcalo para poner día y hora)</span></label>
+            <div id="bloqueCita" class="${deCal ? "" : "oculto"}">
               <label class="campo"><span>Día</span><input name="fecha" type="date" value="${hoy}"></label>
               <label class="campo"><span>Hasta (si dura varios días)</span><input name="hasta" type="date"></label>
               <label class="campo"><span>Hora</span><select name="hora">${HORAS.map(h => `<option ${h==="09:00"?"selected":""}>${h}</option>`).join("")}</select></label>
