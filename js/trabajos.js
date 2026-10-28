@@ -380,7 +380,7 @@
   }
 
   // ---------- LISTA (pendientes primero, por prioridad) ----------
-  const filtro = {ver:"pendientes", espec:"todas", quien:"todos", estado:"todos", texto:"", emp:"todas"};
+  const filtro = {ver:"pendientes", espec:"todas", quien:"todos", estado:"todos", texto:"", emp:"todas", fecha:"todas"};
   async function lista(el){
     const {S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
@@ -400,6 +400,7 @@
         <div class="filtros-int">
           <input id="busInt" placeholder="Buscar calle, número, descripción…" value="${esc(filtro.texto)}">
           <select id="selQuien"><option value="todos">Todo el equipo</option><option value="nadie" ${filtro.quien==="nadie"?"selected":""}>Sin asignar</option>${Object.entries(P).filter(([k,p]) => p.activo !== false).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,p]) => `<option value="${esc(k)}" ${filtro.quien===k?"selected":""}>${esc(p.nombre)}</option>`).join("")}</select>
+          <select id="selFecha"><option value="todas">Con y sin fecha</option><option value="sin" ${filtro.fecha==="sin"?"selected":""}>📅 Sin fecha (por agendar)</option><option value="con" ${filtro.fecha==="con"?"selected":""}>Con fecha</option></select>
           <select id="selEstado"><option value="todos">Todos los estados</option>${Object.entries(ESTADOS).map(([k,n]) => `<option value="${k}" ${filtro.estado===k?"selected":""}>${n}</option>`).join("")}</select>
           ${window.DHS_EMP && window.DHS_EMP.lista().length ? `<select id="selEmp"><option value="todas">De parte de cualquiera</option><option value="ninguna" ${filtro.emp==="ninguna"?"selected":""}>Directo (sin empresa)</option>${window.DHS_EMP.lista().map(([k,a]) => `<option value="${esc(k)}" ${filtro.emp===k?"selected":""}>🏗️ ${esc(a.nombre)}</option>`).join("")}</select>` : ""}
         </div>
@@ -410,6 +411,7 @@
       const vis = docs.filter(t => (filtro.ver === "todas" || (filtro.ver === "pendientes" ? !CERRADOS.includes(t.estado) : CERRADOS.includes(t.estado)))
                               && (filtro.espec === "todas" || t.especialidad === filtro.espec)
                               && (filtro.estado === "todos" || t.estado === filtro.estado)
+                              && (filtro.fecha === "todas" || (filtro.fecha === "sin" ? !(t.citas||[]).length : !!(t.citas||[]).length))
                               && (filtro.emp === "todas" || (filtro.emp === "ninguna" ? !t.encargo : t.encargo === filtro.emp))
                               && (filtro.quien === "todos" || (filtro.quien === "nadie" ? !(t.asignados||[]).length : (t.asignados||[]).includes(filtro.quien)))
                               && (!filtro.texto || sinAc([t.numero, t.nombre, t.direccion, t.poblacion, t.descripcion, avisaTxt(t)].join(" ")).includes(sinAc(filtro.texto)))).sort(porPrioridad);
@@ -421,6 +423,7 @@
     const chips = (sel, campo) => el.querySelectorAll(sel + " .chip").forEach(b => b.onclick = () => { filtro[campo] = b.dataset.k; el.querySelectorAll(sel + " .chip").forEach(x => x.classList.toggle("on", x === b)); pintar(); });
     chips("#chVer", "ver"); chips("#chEsp", "espec");
     el.querySelector("#busInt").oninput = e => { filtro.texto = e.target.value.trim(); pintar(); };
+    el.querySelector("#selFecha").onchange = e => { filtro.fecha = e.target.value; pintar(); };
     el.querySelector("#selQuien").onchange = e => { filtro.quien = e.target.value; pintar(); };
     const sE = el.querySelector("#selEmp"); if(sE) sE.onchange = e => { filtro.emp = e.target.value; pintar(); };
     el.querySelector("#selEstado").onchange = e => { filtro.estado = e.target.value; if(e.target.value !== "todos"){ filtro.ver = "todas"; el.querySelectorAll("#chVer .chip").forEach(x => x.classList.toggle("on", x.dataset.k === "todas")); } pintar(); };
