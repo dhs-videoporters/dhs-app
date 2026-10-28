@@ -583,12 +583,15 @@
       <div class="panel" style="margin-top:14px" id="bFotosInt"></div>
       <div class="panel" style="margin-top:14px">
         <h3>Historial y notas</h3>
-        <div class="historial">
-          <div class="h-item"><b>${horaReg(t.creado && t.creado.en)}</b> · ${esc(nombreDe(t.creado && t.creado.por))} · 🆕 Creada${t.creadoPorTecnico ? " (por técnico)" : ""}</div>
-          ${notas.map(n => `<div class="h-item ${n.tipo === "estado" ? "" : "nota"}"><b>${horaReg(n.en)}</b> · ${esc(n.autor ? n.autor + " (Interph)" : nombreDe(n.por))} · ${n.tipo === "estado" ? (ICO_EST[n.a]||"") + " " + esc(ESTADOS[n.de]||n.de) + " → <b>" + esc(ESTADOS[n.a]||n.a) + "</b>" : (n.tipo === "cita" ? "📅 " : (n.tipo === "prioridad" ? "🎯 " : "📝 "))}${n.texto ? `<div class="h-txt">${esc(n.texto)}</div>` : ""}</div>`).join("")}
-        </div>
-        ${puedeTocar ? `<div style="margin-top:10px"><textarea id="nuevaNota" rows="2" placeholder="Añadir una nota (qué se ha visto, qué falta, a quién se ha llamado…)" style="width:100%;padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit"></textarea>
+        ${puedeTocar ? `<div style="margin-bottom:10px"><textarea id="nuevaNota" rows="2" placeholder="Añadir una nota (qué se ha visto, qué falta, a quién se ha llamado…)" style="width:100%;padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit"></textarea>
           <p style="margin-top:6px"><button class="btn sec" id="btnNota">Añadir nota</button> <span id="msgNota" class="vacio"></span></p></div>` : ""}
+        ${(() => { // Ángel 28/10: lo último arriba; lo antiguo, plegado
+          const it = n => `<div class="h-item ${n.tipo === "estado" ? "" : "nota"}"><b>${horaReg(n.en)}</b> · ${esc(n.autor ? n.autor + " (Interph)" : nombreDe(n.por))} · ${n.tipo === "estado" ? (ICO_EST[n.a]||"") + " " + esc(ESTADOS[n.de]||n.de) + " → <b>" + esc(ESTADOS[n.a]||n.a) + "</b>" : (n.tipo === "cita" ? "📅 " : (n.tipo === "prioridad" ? "🎯 " : "📝 "))}${n.texto ? `<div class="h-txt">${esc(n.texto)}</div>` : ""}</div>`;
+          const creada = `<div class="h-item"><b>${horaReg(t.creado && t.creado.en)}</b> · ${esc(nombreDe(t.creado && t.creado.por))} · 🆕 Creada${t.creadoPorTecnico ? " (por técnico)" : ""}</div>`;
+          const rec = notas.slice().reverse(), VISTAS = 15;
+          return `<div class="historial">${rec.slice(0, VISTAS).map(it).join("")}${rec.length <= VISTAS ? creada : ""}</div>` +
+            (rec.length > VISTAS ? `<details style="margin-top:8px"><summary class="vacio" style="cursor:pointer">Ver ${rec.length - VISTAS} anteriores</summary><div class="historial">${rec.slice(VISTAS).map(it).join("")}${creada}</div></details>` : "");
+        })()}
       </div>`;
 
     window.DHS_FOTOS.bloqueTrabajo(el.querySelector("#bFotosInt"), id, t, puedeTocar);
