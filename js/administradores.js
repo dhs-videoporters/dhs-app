@@ -82,9 +82,66 @@
             ${coms.length ? coms.map(([k,c]) => `<div class="dato"><a href="#comunidad/${encodeURIComponent(k)}">${esc(c.nombre)}</a><span>${esc(c.poblacion||"")}</span></div>`).join("") : `<p class="vacio">Ninguna asignada todavía. Se asignan desde la ficha de cada comunidad.</p>`}
           </div>
         </div>
-        ${puedeEditar() ? `<p style="margin-top:14px"><button class="btn" id="btnEditar">Editar administración</button></p>` : `<p class="vacio" style="margin-top:14px">Tu perfil solo permite ver esta ficha.</p>`}
+        ${puedeEditar() ? `<p style="margin-top:14px"><button class="btn" id="btnEditar">Editar administración</button> <button class="btn sec" id="btnUnir">🔗 Es la misma que otra: unir</button></p><div id="cajaUnir"></div>` : `<p class="vacio" style="margin-top:14px">Tu perfil solo permite ver esta ficha.</p>`}
       </div>`;
-    if(puedeEditar()) el.querySelector("#btnEditar").onclick = () => editar(el, id, a);
+    if(puedeEditar()){
+      el.querySelector("#btnEditar").onclick = () => editar(el, id, a);
+      el.querySelector("#btnUnir").onclick = () => unir(el, id, a, C);
+    }
+  }
+
+  // ---------- UNIR DOS FICHAS QUE SON LA MISMA (Ángel 28/10) ----------
+  // Todo lo de esta ficha (comunidades, intervenciones, correos, personas) pasa a la que se elige; esta queda de baja
+  // y su nombre se guarda como «también escrito como» en la otra. No se borra nada.
+  function unir(el, id, a, C){
+    const caja = el.querySelector("#cajaUnir");
+    const ops = Object.entries(C.admins).filter(([k,x]) => k !== id && x.activo !== false).sort((x,y) => x[1].nombre.localeCompare(y[1].nombre));
+    caja.innerHTML = `<div class="bloque" style="margin-top:12px"><h3>Unir «${esc(a.nombre)}» con otra ficha</h3>
+      <label class="campo"><span>¿Con cuál? Se queda esa; esta se da de baja</span><select id="selUnir"><option value="">— Elegir —</option>${ops.map(([k,x]) => `<option value="${esc(k)}">${esc(x.nombre)}</option>`).join("")}</select></label>
+      <p id="resUnir" class="vacio"></p>
+      <p><button class="btn" id="okUnir" disabled>Unir</button> <button class="btn sec" id="noUnir">Cancelar</button></p></div>`;
+    const {db, S} = D();
+    let coms = [], trabs = [];
+    caja.querySelector("#noUnir").onclick = () => caja.innerHTML = "";
+    caja.querySelector("#selUnir").onchange = async ev => {
+      const dest = ev.target.value, ok = caja.querySelector("#okUnir"), res = caja.querySelector("#resUnir");
+      ok.disabled = true; if(!dest){ res.textContent = ""; return; }
+      res.textContent = "Contando…";
+      try{
+        const leer = async (col, campo) => (await db.collection(col).where(campo, "==", id).get()).docs.map(d => ({ref:d.ref, campo}));
+        coms = [...await leer("dhs_comunidades","adminId"), ...await leer("dhs_comunidades","empresaId")];
+        trabs = [...await leer("dhs_trabajos","adminId"), ...await leer("dhs_trabajos","encargo")];
+      }catch(e){ res.textContent = "No se ha podido contar (" + (e.code||e) + ")."; return; }
+      res.innerHTML = `Pasarán a <b>${esc(C.admins[dest].nombre)}</b>: ${coms.length} comunidades y ${trabs.length} intervenciones, además de correos, teléfonos y personas de contacto. «${esc(a.nombre)}» queda de baja y su nombre se guarda como otro nombre de ${esc(C.admins[dest].nombre)}.`;
+      ok.disabled = false;
+    };
+    caja.querySelector("#okUnir").onclick = async () => {
+      const dest = caja.querySelector("#selUnir").value, b = C.admins[dest]; if(!dest) return;
+      if(!await DHS_PREGUNTA("¿Unir «" + a.nombre + "» con «" + b.nombre + "»? No se puede deshacer con un botón.")) return;
+      const res = caja.querySelector("#resUnir"), email = S.usuario.email.toLowerCase();
+      const firma = {por:email, en:firebase.firestore.FieldValue.serverTimestamp()};
+      const uni = (x, y) => [...new Set([...(x||[]), ...(y||[])].filter(Boolean))];
+      const clave = p => sinAc((p.nombre||"") + "|" + (p.email||"") + "|" + (p.telefono||p.movil||""));
+      const personas = [...(b.personas||[])]; (a.personas||[]).forEach(p => { if(!personas.some(q => clave(q) === clave(p))) personas.push(p); });
+      const alias = uni(b.alias, [a.nombre, ...(a.alias||[])]).filter(x => sinAc(x) !== sinAc(b.nombre));
+      const datosB = {alias, emails:uni(b.emails, a.emails), personas, modificado:firma,
+        telefono:b.telefono || a.telefono || "", web:b.web || a.web || "", direccion:b.direccion || a.direccion || "",
+        notas:[b.notas, a.notas ? "(De " + a.nombre + ") " + a.notas : ""].filter(Boolean).join("\n")};
+      res.textContent = "Uniendo…"; caja.querySelector("#okUnir").disabled = true;
+      try{
+        const todos = [...coms, ...trabs];
+        for(let i = 0; i < todos.length; i += 400){
+          const lote = db.batch();
+          todos.slice(i, i + 400).forEach(x => lote.update(x.ref, {[x.campo]:dest, modificado:firma}));
+          await lote.commit();
+        }
+        await db.collection("dhs_admins").doc(dest).set(datosB, {merge:true});
+        await db.collection("dhs_admins").doc(id).set({activo:false, unidoCon:dest, modificado:firma}, {merge:true});
+        await db.collection("dhs_registro").add({por:email, en:firma.en, accion:"unir", coleccion:"dhs_admins", docId:id, cambios:{unidoCon:dest, comunidades:coms.length, intervenciones:trabs.length}});
+        await window.DHS_COM.recargar();
+        location.hash = "administrador/" + encodeURIComponent(dest);
+      }catch(e){ res.textContent = "No se ha podido unir (" + (e.code||e) + "). Lo que ya se haya pasado se queda en " + b.nombre + "; vuelve a pulsar Unir para terminar."; caja.querySelector("#okUnir").disabled = false; }
+    };
   }
 
   // ---------- EDICIÓN / ALTA ----------
