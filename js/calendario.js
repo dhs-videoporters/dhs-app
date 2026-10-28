@@ -8,7 +8,7 @@
   const DIAS = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
   const ESPEC = {videoportero:"🔔", antena:"📡", electricidad:"⚡", camaras:"📹", otros:"🔧"};
   const PRIOR = {urgente:"🔴"};
-  const CERRADOS = ["facturado","cobrado","cancelado"];   // "hecho" se sigue viendo (tachado suave)
+  const CERRADOS = ["esperando","facturado","cobrado","cancelado"];   // "hecho" se sigue viendo (tachado suave)
   const MOTIVOS = ["Vacaciones","Médico","Asuntos propios","Formación","Otro"];
 
   const iso = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");

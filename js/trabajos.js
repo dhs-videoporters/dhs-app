@@ -12,8 +12,8 @@
   const PRIOR = {urgente:["🔴","Urgente",0], normal:["⚪","Normal",1]};
   PRIOR.alta = PRIOR.normal; PRIOR.baja = PRIOR.normal;
   const ORDEN_PRIOR = ["urgente","normal"];
-  const ESTADOS = {nuevo:"Nuevo", presupuesto:"Pendiente de presupuesto", esperando:"Esperando respuesta", agendado:"Agendado", encurso:"En curso", amedias:"A medias", hecho:"Hecho", facturado:"Facturado", cobrado:"Cobrado", cancelado:"Cancelado"};
-  const CERRADOS = ["hecho","facturado","cobrado","cancelado"];
+  const ESTADOS = {nuevo:"Nuevo", presupuesto:"Pendiente de presupuesto", esperando:"Presupuesto entregado", agendado:"Agendado", encurso:"En curso", amedias:"A medias", hecho:"Hecho", facturado:"Facturado", cobrado:"Cobrado", cancelado:"Cancelado"};
+  const CERRADOS = ["hecho","esperando","facturado","cobrado","cancelado"];   // «Presupuesto entregado» (antes Esperando respuesta) sale de las pendientes: el seguimiento va en Presupuestos
   const DURACIONES = [30,60,90,120,150,180,240,300,360,420,480];
   const durTxt = m => m < 60 ? m + " min" : (m % 60 ? Math.floor(m/60) + " h " + (m%60) + " min" : (m/60) + (m === 60 ? " hora" : " horas"));
   const HORAS = []; for(let h = 9; h < 18; h++){ HORAS.push(String(h).padStart(2,"0")+":00"); HORAS.push(String(h).padStart(2,"0")+":30"); }
@@ -389,7 +389,7 @@
     catch(e){ el.innerHTML = `<div class="panel">No se han podido leer las intervenciones (${esc(e.code)}).</div>`; return; }
     el.innerHTML = `
       <div class="panel">
-        <div class="cab-lista"><h2>Intervenciones</h2>${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Nueva intervención</a>` : ""}${S.puede("trabajos","todo") ? ` <a class="btn sec" href="#ruta">🚐 Hacer ruta${(n => n ? " (" + n + " para la ruta)" : "")(docs.filter(t => (t.ruta || ["pequeno","presupuesto"].includes(t.tipo)) && !(t.citas||[]).length && !["hecho","facturado","cobrado","cancelado","encurso"].includes(t.estado)).length)}</a>` : ""}</div>
+        <div class="cab-lista"><h2>Intervenciones</h2>${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Nueva intervención</a>` : ""}${S.puede("trabajos","todo") ? ` <a class="btn sec" href="#ruta">🚐 Hacer ruta${(n => n ? " (" + n + " para la ruta)" : "")(docs.filter(t => (t.ruta || ["pequeno","presupuesto"].includes(t.tipo)) && !(t.citas||[]).length && !["hecho","esperando","facturado","cobrado","cancelado","encurso"].includes(t.estado)).length)}</a>` : ""}</div>
         <div class="chips" id="chVer" style="margin-top:10px">
           ${[["pendientes","Pendientes"],["hechas","Hechas"],["todas","Todas"]].map(([k,n]) => `<button class="chip ${filtro.ver===k?"on":""}" data-k="${k}">${n}</button>`).join("")}
         </div>
@@ -440,7 +440,7 @@
     el.innerHTML = `
       <div class="cab-lista"><h3>Intervenciones</h3>${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion/${encodeURIComponent(comId)}">+ Nueva intervención</a>` : ""}</div>
       <h4 style="margin-top:10px">Pendientes (${pend.length})</h4><div class="lista" id="lPend"></div>
-      <h4 style="margin-top:14px">Hechas (${hechas.length})</h4><div class="lista" id="lHech"></div>`;
+      <h4 style="margin-top:14px">Hechas y cerradas (${hechas.length})</h4><div class="lista" id="lHech"></div>`;
     const pintar = () => {
       const a = el.querySelector("#lPend"); a.innerHTML = pend.map(t => fila(t, P)).join("") || `<p class="vacio">Nada pendiente.</p>`;
       activarPrioridad(a, pend, () => { pend.sort(porPrioridad); pintar(); });
@@ -455,7 +455,7 @@
   // Con "todo" (Dirección, Oficina): además presupuesto, esperando respuesta, cancelado, facturado y cobrado.
   const EST_TECNICO = ["nuevo","agendado","encurso","amedias","hecho"];
   const EST_TODO = ["nuevo","presupuesto","esperando","agendado","encurso","amedias","hecho","facturado","cobrado","cancelado"];
-  const ICO_EST = {nuevo:"🆕", presupuesto:"📝", esperando:"⏳", agendado:"📅", encurso:"▶️", amedias:"🔧", hecho:"✅", facturado:"🧾", cobrado:"💶", cancelado:"✖️"};
+  const ICO_EST = {nuevo:"🆕", presupuesto:"📝", esperando:"📨", agendado:"📅", encurso:"▶️", amedias:"🔧", hecho:"✅", facturado:"🧾", cobrado:"💶", cancelado:"✖️"};
   const horaReg = ts => ts && ts.toDate ? ts.toDate().toLocaleString("es-ES", {day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit"}) : "ahora";
 
   // ---------- Aviso de edición simultánea (18b) ----------

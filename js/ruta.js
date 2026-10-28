@@ -8,7 +8,7 @@
   const BASE = {nombre:"Nave DHS", direccion:"Carrer de Pau Marsal 77, Terrassa", lat:null, lon:null};
   const RAPIDAS = ["pequeno", "presupuesto"];
   const TIPOS = {pequeno:"Cosa pequeña", presupuesto:"Visita para presupuesto", reparacion:"Reparación", mantenimiento:"Mantenimiento", instalacion:"Instalación"};
-  const CERRADOS = ["hecho","facturado","cobrado","cancelado","encurso"];
+  const CERRADOS = ["hecho","esperando","facturado","cobrado","cancelado","encurso"];
   let leaflet = null, GEO = {};
   try{ GEO = JSON.parse(localStorage.getItem("dhs_geo") || "{}"); }catch(e){ GEO = {}; }
   const guardaGeoLocal = () => { try{ localStorage.setItem("dhs_geo", JSON.stringify(GEO)); }catch(e){} };
