@@ -356,13 +356,53 @@
     const cita = (t.citas||[])[0], pr = PRIOR[t.urgencia] || PRIOR.normal;
     const quien = (t.asignados||[]).map(k => P[k] ? `<span class="quien"><i class="punto" style="background:${esc(P[k].color)}"></i>${esc(P[k].nombre)}</span>` : "").join("");
     const cambia = D().S.puede("trabajos","todo") && !CERRADOS.includes(t.estado);
-    return `<div class="fila fila-int">
+    return `<div class="int-bloque"><div class="fila fila-int">
       <button class="prio ${cambia ? "cambia" : ""}" data-id="${t.id}" title="Prioridad: ${pr[1]}${cambia ? " (toca para cambiar)" : ""}" ${cambia ? "" : "disabled"}>${pr[0]}</button>
       <a class="f-cuerpo" href="#intervencion/${t.id}">
         <div class="f-nombre">${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.nombre)} <span class="vacio">· ${esc(t.numero)}</span></div>
         <div class="f-sub">${CERRADOS.includes(t.estado) && t.resumenHecho ? "✅ " + (t.fechaHecho ? esc(fmtFecha(t.fechaHecho)) + " · " : "") + esc(t.resumenHecho.slice(0,110)) : esc((t.descripcion||"").slice(0,110))}${t.estado === "amedias" && t.falta ? ` <span class="tag aviso">Falta: ${esc(t.falta.slice(0,60))}</span>` : ""}</div>
-        <div class="f-tags">${window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}${quien}<span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span>${cita ? `<span class="tag gris">${esc(fmtFecha(cita.fecha))} ${esc(cita.hora)}</span>` : `<span class="tag aviso">Sin fecha</span>`}</div>
-      </a></div>`;
+        <div class="f-tags">${window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}${quien}<span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span>${cita ? `<span class="tag gris">${esc(fechasTxt(t.citas))}</span>` : `<span class="tag aviso">Sin fecha</span>`}${t._grupo ? `<span class="tag azul">🔗 ${t._grupo.length} intervenciones juntas</span>` : ""}</div>
+      </a></div>${t._grupo ? `<div class="grupo-int">${t._grupo.filter(x => x.id !== t.id).map(x => `<a href="#intervencion/${x.id}" class="vacio">${esc(x.numero)}</a>`).join(" · ")}${D().S.puede("trabajos","todo") ? ` <button class="btn sec btn-mini unir-int" data-ids="${t._grupo.map(x => x.id).join(",")}">Unir en una sola</button>` : ""}</div>` : ""}</div>`;
+  }
+  // Fechas de una intervención: un día, o «5 días: 30 oct – 5 nov»
+  const fechasTxt = citas => {
+    const L = [...new Set((citas||[]).map(c => c.fecha))].sort();
+    if(!L.length) return "";
+    if(L.length === 1){ const c = (citas||[]).find(x => x.fecha === L[0]); return fmtFecha(L[0]) + (c && c.hora ? " " + c.hora : ""); }
+    return L.length + " días: " + fmtFecha(L[0]) + " – " + fmtFecha(L[L.length-1]);
+  };
+  // Misma comunidad, misma especialidad y tipo, pendientes y con fecha = el mismo trabajo apuntado varias veces (Ángel 29/10)
+  const claveGrupo = t => !CERRADOS.includes(t.estado) && (t.citas||[]).length && (t.comunidadId || t.direccion) ? [t.comunidadId || sinAc(t.direccion), t.especialidad || "", t.tipo || ""].join("|") : "";
+  function agrupar(L){
+    const g = {}, fuera = [];
+    L.forEach(t => { const k = claveGrupo(t); if(k) (g[k] = g[k] || []).push(t); else fuera.push(t); });
+    Object.values(g).forEach(G => {
+      if(G.length === 1){ fuera.push(G[0]); return; }
+      G.sort((a,b) => (a.numero||"").localeCompare(b.numero||""));
+      const citas = [].concat(...G.map(x => x.citas||[])).sort((a,b) => (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+      fuera.push({...G[0], citas, asignados:[...new Set([].concat(...G.map(x => x.asignados||[])))], urgencia:G.some(x => x.urgencia === "urgente") ? "urgente" : G[0].urgencia, _grupo:G});
+    });
+    return fuera;
+  }
+  async function unirIntervenciones(ids, docs){
+    const G = ids.map(i => docs.find(x => x.id === i)).filter(Boolean).sort((a,b) => (a.numero||"").localeCompare(b.numero||""));
+    if(G.length < 2) return;
+    const [m, ...otras] = G;
+    if(!await DHS_PREGUNTA("¿Unir " + G.map(x => x.numero).join(", ") + " en una sola (" + m.numero + ")? Se juntan todas las citas y personas en " + m.numero + "; las otras quedan canceladas como «unida a " + m.numero + "» con su historial.")) return;
+    const {db, S} = D(), yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp(), firma = {por:yo, en};
+    const vistas = new Set(), citas = [];
+    [].concat(...G.map(x => x.citas||[])).sort((a,b) => (a.fecha+a.hora).localeCompare(b.fecha+b.hora)).forEach(c => { const k = c.fecha + c.hora + c.personal; if(!vistas.has(k)){ vistas.add(k); citas.push(c); } });
+    const asignados = [...new Set([].concat(...G.map(x => x.asignados||[])))];
+    const lote = db.batch(), T = db.collection("dhs_trabajos");
+    lote.update(T.doc(m.id), {citas, asignados, ...(G.some(x => x.urgencia === "urgente") ? {urgencia:"urgente"} : {}), modificado:firma});
+    lote.set(T.doc(m.id).collection("notas").doc(), {tipo:"nota", texto:"Unidas en esta: " + otras.map(x => x.numero).join(", ") + " (" + citas.length + " citas)", por:yo, en});
+    otras.forEach(x => {
+      lote.update(T.doc(x.id), {estado:"cancelado", unidaA:m.id, motivo:"Unida a " + m.numero, modificado:firma});
+      lote.set(T.doc(x.id).collection("notas").doc(), {tipo:"estado", de:x.estado, a:"cancelado", texto:"Unida a " + m.numero + " (era el mismo trabajo)", por:yo, en});
+    });
+    lote.set(db.collection("dhs_registro").doc(), {por:yo, en, accion:"unir intervenciones", coleccion:"dhs_trabajos", docId:m.id, nombre:G.map(x => x.numero).join(" + ")});
+    await lote.commit();
+    location.hash = "intervencion/" + m.id;
   }
 
   // Tocar el punto: urgente → alta → normal → baja → urgente…
@@ -403,7 +443,7 @@
       <div class="panel">
         <div class="cab-lista"><h2>Intervenciones</h2>${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Nueva intervención</a>` : ""}${S.puede("trabajos","todo") ? ` <a class="btn sec" href="#ruta">🚐 Hacer ruta${(n => n ? " (" + n + " para la ruta)" : "")(docs.filter(t => (t.ruta || ["pequeno","presupuesto"].includes(t.tipo)) && !(t.citas||[]).length && !["hecho","esperando","facturado","cobrado","cancelado","encurso"].includes(t.estado)).length)}</a>` : ""}</div>
         ${(() => { // Resumen arriba (Ángel 29/10), como en Economía y Proveedores; al tocar una caja se filtra la lista
-          const n = k => docs.filter(t => enCaja(t, k)).length;
+          const G = agrupar(docs), n = k => G.filter(t => enCaja(t, k)).length;
           const c = (k, cls, ico, txt, sub) => `<button class="eco-caja int-caja ${cls} ${filtro.caja===k?"on":""}" data-caja="${k}"><span>${ico} ${txt}</span><b>${n(k)}</b><i>${sub}</i></button>`;
           return `<div class="eco-cajas">${c("sin","c2","📅","Sin agendar","pendientes sin fecha")}${c("sin3","c-mal","⏰","Sin agendar +3 días","llevan más de 3 días esperando")}${c("agenda","c3","🗓️","Agendadas","con fecha puesta")}${c("remate","c-rem","🔧","Pendiente de remate","a medias: falta algo")}</div>`;
         })()}
@@ -425,7 +465,7 @@
         <p id="cuentaInt" class="vacio" style="margin-top:4px;font-weight:600"></p><div class="lista" id="listaInt" style="margin-top:4px"></div>
       </div>`;
     const pintar = () => {
-      const vis = docs.filter(t => (!filtro.caja || enCaja(t, filtro.caja)) && (filtro.ver === "todas" || (filtro.ver === "pendientes" ? !CERRADOS.includes(t.estado) : CERRADOS.includes(t.estado)))
+      const vis = agrupar(docs).filter(t => (!filtro.caja || enCaja(t, filtro.caja)) && (filtro.ver === "todas" || (filtro.ver === "pendientes" ? !CERRADOS.includes(t.estado) : CERRADOS.includes(t.estado)))
                               && (filtro.espec === "todas" || t.especialidad === filtro.espec)
                               && (filtro.estado === "todos" || t.estado === filtro.estado)
                               && (filtro.fecha === "todas" || (filtro.fecha === "sin" ? !(t.citas||[]).length : !!(t.citas||[]).length))
@@ -436,6 +476,8 @@
       const caja = el.querySelector("#listaInt");
       caja.innerHTML = vis.map(t => fila(t, P)).join("") || `<p class="vacio" style="padding:10px 0">No hay intervenciones aquí.</p>`;
       activarPrioridad(caja, docs, pintar);
+      caja.querySelectorAll(".unir-int").forEach(b => b.onclick = async ev => { ev.preventDefault(); b.disabled = true;
+        try{ await unirIntervenciones(b.dataset.ids.split(","), docs); }catch(e){ b.insertAdjacentHTML("afterend", ` <span class="tag aviso">No se ha podido unir (${esc(e.code||e)})</span>`); } b.disabled = false; });
     };
     const chips = (sel, campo) => el.querySelectorAll(sel + " .chip").forEach(b => b.onclick = () => { filtro[campo] = b.dataset.k; el.querySelectorAll(sel + " .chip").forEach(x => x.classList.toggle("on", x === b)); pintar(); });
     chips("#chVer", "ver"); chips("#chEsp", "espec");

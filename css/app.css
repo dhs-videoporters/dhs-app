@@ -416,3 +416,4 @@ h1 .emp-chip{font-size:13px}
 .int-caja{font:inherit;text-align:left;cursor:pointer}
 .int-caja.on{outline:3px solid #1f3a5f;outline-offset:1px}
 .eco-caja.c-rem{background:#f3edfb;border-color:#d6c6ef}
+.grupo-int{padding:4px 12px 8px 46px;font-size:13px}.btn-mini{padding:3px 8px;font-size:12px}
