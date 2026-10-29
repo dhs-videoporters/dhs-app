@@ -411,3 +411,8 @@ h1 .emp-chip{font-size:13px}
 .eco-balance span{display:block;font-size:12px;color:var(--gris)}.eco-balance b{font-size:20px}
 .eco-balance .menos b{color:#b45309}.eco-balance .ok b{color:#1d7a46}.eco-balance .mal b{color:#c0392b}
 .eco-balance a{font-size:12px;margin-left:6px}
+
+/* Cajas del resumen de Intervenciones (29/10) */
+.int-caja{font:inherit;text-align:left;cursor:pointer}
+.int-caja.on{outline:3px solid #1f3a5f;outline-offset:1px}
+.eco-caja.c-rem{background:#f3edfb;border-color:#d6c6ef}

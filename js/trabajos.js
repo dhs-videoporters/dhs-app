@@ -380,7 +380,19 @@
   }
 
   // ---------- LISTA (pendientes primero, por prioridad) ----------
-  const filtro = {ver:"pendientes", espec:"todas", quien:"todos", estado:"todos", texto:"", emp:"todas", fecha:"todas"};
+  const filtro = {ver:"pendientes", espec:"todas", quien:"todos", estado:"todos", texto:"", emp:"todas", fecha:"todas", caja:""};
+  // Cajas del resumen de Intervenciones
+  const TRES_DIAS = 3 * 864e5;
+  const creadoMs = t => t.creado && t.creado.en && t.creado.en.toMillis ? t.creado.en.toMillis() : (t.creado && t.creado.en && t.creado.en.seconds ? t.creado.en.seconds * 1000 : 0);
+  const enCaja = (t, k) => {
+    if(CERRADOS.includes(t.estado)) return false;
+    const sinFecha = !(t.citas||[]).length && !["amedias","encurso"].includes(t.estado);
+    if(k === "sin") return sinFecha;
+    if(k === "sin3") return sinFecha && Date.now() - creadoMs(t) > TRES_DIAS;
+    if(k === "agenda") return !!(t.citas||[]).length && t.estado !== "amedias";
+    if(k === "remate") return t.estado === "amedias";
+    return true;
+  };
   async function lista(el){
     const {S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
@@ -390,6 +402,11 @@
     el.innerHTML = `
       <div class="panel">
         <div class="cab-lista"><h2>Intervenciones</h2>${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Nueva intervención</a>` : ""}${S.puede("trabajos","todo") ? ` <a class="btn sec" href="#ruta">🚐 Hacer ruta${(n => n ? " (" + n + " para la ruta)" : "")(docs.filter(t => (t.ruta || ["pequeno","presupuesto"].includes(t.tipo)) && !(t.citas||[]).length && !["hecho","esperando","facturado","cobrado","cancelado","encurso"].includes(t.estado)).length)}</a>` : ""}</div>
+        ${(() => { // Resumen arriba (Ángel 29/10), como en Economía y Proveedores; al tocar una caja se filtra la lista
+          const n = k => docs.filter(t => enCaja(t, k)).length;
+          const c = (k, cls, ico, txt, sub) => `<button class="eco-caja int-caja ${cls} ${filtro.caja===k?"on":""}" data-caja="${k}"><span>${ico} ${txt}</span><b>${n(k)}</b><i>${sub}</i></button>`;
+          return `<div class="eco-cajas">${c("sin","c2","📅","Sin agendar","pendientes sin fecha")}${c("sin3","c-mal","⏰","Sin agendar +3 días","llevan más de 3 días esperando")}${c("agenda","c3","🗓️","Agendadas","con fecha puesta")}${c("remate","c-rem","🔧","Pendiente de remate","a medias: falta algo")}</div>`;
+        })()}
         <div class="chips" id="chVer" style="margin-top:10px">
           ${[["pendientes","Pendientes"],["hechas","Hechas"],["todas","Todas"]].map(([k,n]) => `<button class="chip ${filtro.ver===k?"on":""}" data-k="${k}">${n}</button>`).join("")}
         </div>
@@ -408,7 +425,7 @@
         <p id="cuentaInt" class="vacio" style="margin-top:4px;font-weight:600"></p><div class="lista" id="listaInt" style="margin-top:4px"></div>
       </div>`;
     const pintar = () => {
-      const vis = docs.filter(t => (filtro.ver === "todas" || (filtro.ver === "pendientes" ? !CERRADOS.includes(t.estado) : CERRADOS.includes(t.estado)))
+      const vis = docs.filter(t => (!filtro.caja || enCaja(t, filtro.caja)) && (filtro.ver === "todas" || (filtro.ver === "pendientes" ? !CERRADOS.includes(t.estado) : CERRADOS.includes(t.estado)))
                               && (filtro.espec === "todas" || t.especialidad === filtro.espec)
                               && (filtro.estado === "todos" || t.estado === filtro.estado)
                               && (filtro.fecha === "todas" || (filtro.fecha === "sin" ? !(t.citas||[]).length : !!(t.citas||[]).length))
@@ -422,6 +439,12 @@
     };
     const chips = (sel, campo) => el.querySelectorAll(sel + " .chip").forEach(b => b.onclick = () => { filtro[campo] = b.dataset.k; el.querySelectorAll(sel + " .chip").forEach(x => x.classList.toggle("on", x === b)); pintar(); });
     chips("#chVer", "ver"); chips("#chEsp", "espec");
+    el.querySelectorAll(".int-caja").forEach(b => b.onclick = () => {
+      filtro.caja = filtro.caja === b.dataset.caja ? "" : b.dataset.caja;
+      el.querySelectorAll(".int-caja").forEach(x => x.classList.toggle("on", x.dataset.caja === filtro.caja));
+      if(filtro.caja){ filtro.ver = "pendientes"; el.querySelectorAll("#chVer .chip").forEach(x => x.classList.toggle("on", x.dataset.k === "pendientes")); }
+      pintar();
+    });
     el.querySelector("#busInt").oninput = e => { filtro.texto = e.target.value.trim(); pintar(); };
     el.querySelector("#selFecha").onchange = e => { filtro.fecha = e.target.value; pintar(); };
     el.querySelector("#selQuien").onchange = e => { filtro.quien = e.target.value; pintar(); };
