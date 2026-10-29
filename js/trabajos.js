@@ -458,7 +458,7 @@
           <input id="busInt" placeholder="Buscar calle, número, descripción…" value="${esc(filtro.texto)}">
           <select id="selQuien"><option value="todos">Todo el equipo</option><option value="nadie" ${filtro.quien==="nadie"?"selected":""}>Sin asignar</option>${Object.entries(P).filter(([k,p]) => p.activo !== false).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,p]) => `<option value="${esc(k)}" ${filtro.quien===k?"selected":""}>${esc(p.nombre)}</option>`).join("")}</select>
           <select id="selFecha"><option value="todas">Con y sin fecha</option><option value="sin" ${filtro.fecha==="sin"?"selected":""}>📅 Sin fecha (por agendar)</option><option value="con" ${filtro.fecha==="con"?"selected":""}>Con fecha</option></select>
-          <select id="selEstado"><option value="todos">Todos los estados</option>${Object.entries(ESTADOS).map(([k,n]) => `<option value="${k}" ${filtro.estado===k?"selected":""}>${n}</option>`).join("")}</select>
+          <select id="selEstado"><option value="todos">Todos los estados</option><option value="_sin" ${filtro.estado==="_sin"?"selected":""}>📅 Sin agendar</option><option value="_sin3" ${filtro.estado==="_sin3"?"selected":""}>⏰ Sin agendar +3 días</option>${Object.entries(ESTADOS).map(([k,n]) => `<option value="${k}" ${filtro.estado===k?"selected":""}>${n}</option>`).join("")}</select>
           ${window.DHS_EMP && window.DHS_EMP.lista().length ? `<select id="selEmp"><option value="todas">De parte de cualquiera</option><option value="ninguna" ${filtro.emp==="ninguna"?"selected":""}>Directo (sin empresa)</option>${window.DHS_EMP.lista().map(([k,a]) => `<option value="${esc(k)}" ${filtro.emp===k?"selected":""}>🏗️ ${esc(a.nombre)}</option>`).join("")}</select>` : ""}
         </div>
         <p class="vacio" style="margin-top:8px">${ORDEN_PRIOR.map(k => PRIOR[k][0] + " " + PRIOR[k][1]).join(" · ")}${S.puede("trabajos","todo") ? " — toca el punto para cambiar la prioridad" : ""}</p>
@@ -467,7 +467,7 @@
     const pintar = () => {
       const vis = agrupar(docs).filter(t => (!filtro.caja || enCaja(t, filtro.caja)) && (filtro.ver === "todas" || (filtro.ver === "pendientes" ? !CERRADOS.includes(t.estado) : CERRADOS.includes(t.estado)))
                               && (filtro.espec === "todas" || t.especialidad === filtro.espec)
-                              && (filtro.estado === "todos" || t.estado === filtro.estado)
+                              && (filtro.estado === "todos" || (filtro.estado === "_sin" ? enCaja(t, "sin") : filtro.estado === "_sin3" ? enCaja(t, "sin3") : t.estado === filtro.estado))
                               && (filtro.fecha === "todas" || (filtro.fecha === "sin" ? !(t.citas||[]).length : !!(t.citas||[]).length))
                               && (filtro.emp === "todas" || (filtro.emp === "ninguna" ? !t.encargo : t.encargo === filtro.emp))
                               && (filtro.quien === "todos" || (filtro.quien === "nadie" ? !(t.asignados||[]).length : (t.asignados||[]).includes(filtro.quien)))
