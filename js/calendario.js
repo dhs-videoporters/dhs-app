@@ -141,6 +141,7 @@
           ${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Intervención</a>` : ""}
           ${puedeAus ? `<button class="btn sec" id="btnAus">+ Ausencia</button>` : ""}
         </div>
+        ${window.DHS_PREPARA ? window.DHS_PREPARA.aviso(trabajos) : ""}
         ${puedeCrear && tecnicos.length ? `<p class="vacio cal-ayuda-movil" style="margin-top:6px">Toca la hora en la columna del técnico para apuntar una intervención.</p><p class="vacio cal-ayuda" style="margin-top:6px">Para apuntar una intervención: <b>arrastra</b> en la columna del técnico desde la hora de inicio hasta la de fin (en el móvil, <b>toca</b> la hora).${puedeMover ? " Para <b>mover</b> una cita, arrástrala a otro día, hora o técnico; para cambiar lo que dura, <b>estira</b> su borde de abajo." : ""}</p>` : ""}
         ${!tecnicos.length ? `<p class="vacio" style="margin-top:10px">Da de alta al equipo (Pedro, Alberto…) en Ajustes › Equipo para que salgan sus columnas.</p>` : ""}
         <form id="fAus" class="oculto bloque" style="margin-top:10px">

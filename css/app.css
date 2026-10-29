@@ -417,3 +417,6 @@ h1 .emp-chip{font-size:13px}
 .int-caja.on{outline:3px solid #1f3a5f;outline-offset:1px}
 .eco-caja.c-rem{background:#f3edfb;border-color:#d6c6ef}
 .grupo-int{padding:4px 12px 8px 46px;font-size:13px}.btn-mini{padding:3px 8px;font-size:12px}
+.aviso-prep{margin-top:10px;padding:10px 14px;border-radius:10px;background:#fff6e6;border:1px solid #f3d39b}
+.aviso-prep ul{margin:6px 0 0 18px;padding:0}.aviso-prep li{margin:3px 0}.aviso-prep li.prep-urge{color:#b03a2e}.aviso-prep a{color:inherit}
+.prep-chk{display:block;margin:8px 0}

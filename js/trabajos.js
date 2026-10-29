@@ -7,6 +7,29 @@
   // Especialidad: de qué va (para que Joel vea de un vistazo qué es cada cosa).
   const ESPEC = {videoportero:["🔔","Videoportero"], antena:["📡","Antena / parabólica"], electricidad:["⚡","Electricidad"], camaras:["📹","Cámaras"], otros:["🔧","Otros"]};
   const TIPOS = {reparacion:"Reparación", instalacion:"Instalación", mantenimiento:"Mantenimiento", pequeno:"Cosa pequeña", presupuesto:"Visita para presupuesto"};
+  // Preparación de una instalación de videoportero (Ángel 29/10): 15 días antes tiene que estar el cartel puesto,
+  // la placa de fuera medida y el técnico avisado. La app avisa cada día hasta que esté todo marcado.
+  const PREP = [["cartel","Cartel puesto en la finca"],["medidas","Medidas de la placa de fuera"],["tecnico","Técnico avisado"]];
+  const PREP_DIAS = 15;
+  const PREPARA = {
+    necesita: t => t.especialidad === "videoportero" && t.tipo === "instalacion" && !["hecho","facturado","cobrado","cancelado"].includes(t.estado),
+    primerDia: t => ((t.citas||[]).map(c => c.fecha).filter(Boolean).sort())[0] || "",
+    faltan: t => PREP.filter(([k]) => !(t.preparacion||{})[k]),
+    dias: f => Math.round((new Date(f + "T12:00") - new Date(new Date().toISOString().slice(0,10) + "T12:00")) / 864e5),
+    // Las que están dentro de los 15 días (o ya pasadas) y les falta algo
+    pendientes(L){
+      return L.filter(t => PREPARA.necesita(t) && PREPARA.primerDia(t) && PREPARA.dias(PREPARA.primerDia(t)) <= PREP_DIAS && PREPARA.faltan(t).length)
+        .sort((a,b) => PREPARA.primerDia(a).localeCompare(PREPARA.primerDia(b)))
+        .filter((t, i, A) => A.findIndex(x => (x.comunidadId || x.direccion) === (t.comunidadId || t.direccion)) === i);   // una vez por finca
+    },
+    aviso(L){
+      const P = PREPARA.pendientes(L); if(!P.length) return "";
+      const fila = t => { const f = PREPARA.primerDia(t), d = PREPARA.dias(f);
+        return `<li class="${d <= 7 ? "prep-urge" : ""}"><a href="#intervencion/${t.id}"><b>${esc(t.nombre)}</b></a> · instalación ${esc(fmtFecha(f))} (${d < 0 ? "ya ha pasado" : d === 0 ? "hoy" : "en " + d + " día" + (d === 1 ? "" : "s")}) · falta: ${PREPARA.faltan(t).map(([k,n]) => esc(n.toLowerCase())).join(", ")}</li>`; };
+      return `<div class="aviso-prep"><b>⚠️ Preparar instalación de videoportero (${P.length})</b><ul>${P.map(fila).join("")}</ul></div>`;
+    }
+  };
+  window.DHS_PREPARA = PREPARA;
   // Prioridad con puntos de color. Joel la cambia tocando el punto en la lista.
   // Ángel y Joel 26/10: solo Urgente y Normal (lo que antes era alta/baja cuenta como normal)
   const PRIOR = {urgente:["🔴","Urgente",0], normal:["⚪","Normal",1]};
@@ -361,7 +384,7 @@
       <a class="f-cuerpo" href="#intervencion/${t.id}">
         <div class="f-nombre">${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.nombre)} <span class="vacio">· ${esc(t.numero)}</span></div>
         <div class="f-sub">${CERRADOS.includes(t.estado) && t.resumenHecho ? "✅ " + (t.fechaHecho ? esc(fmtFecha(t.fechaHecho)) + " · " : "") + esc(t.resumenHecho.slice(0,110)) : esc((t.descripcion||"").slice(0,110))}${t.estado === "amedias" && t.falta ? ` <span class="tag aviso">Falta: ${esc(t.falta.slice(0,60))}</span>` : ""}</div>
-        <div class="f-tags">${window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}${quien}<span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span>${cita ? `<span class="tag gris">${esc(fechasTxt(t.citas))}</span>` : `<span class="tag aviso">Sin fecha</span>`}${t._grupo ? `<span class="tag azul">🔗 ${t._grupo.length} intervenciones juntas</span>` : ""}</div>
+        <div class="f-tags">${window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}${quien}<span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span>${cita ? `<span class="tag gris">${esc(fechasTxt(t.citas))}</span>` : `<span class="tag aviso">Sin fecha</span>`}${t._grupo ? `<span class="tag azul">🔗 ${t._grupo.length} intervenciones juntas</span>` : ""}${PREPARA.necesita(t) && PREPARA.faltan(t).length ? `<span class="tag aviso">⚠️ Falta preparar: ${PREPARA.faltan(t).length}/3</span>` : ""}</div>
       </a></div>${t._grupo ? `<div class="grupo-int">${t._grupo.filter(x => x.id !== t.id).map(x => `<a href="#intervencion/${x.id}" class="vacio">${esc(x.numero)}</a>`).join(" · ")}${D().S.puede("trabajos","todo") ? ` <button class="btn sec btn-mini unir-int" data-ids="${t._grupo.map(x => x.id).join(",")}">Unir en una sola</button>` : ""}</div>` : ""}</div>`;
   }
   // Fechas de una intervención: un día, o «5 días: 30 oct – 5 nov»
@@ -447,6 +470,7 @@
           const c = (k, cls, ico, txt, sub) => `<button class="eco-caja int-caja ${cls} ${filtro.caja===k?"on":""}" data-caja="${k}"><span>${ico} ${txt}</span><b>${n(k)}</b><i>${sub}</i></button>`;
           return `<div class="eco-cajas">${c("sin","c2","📅","Sin agendar","pendientes sin fecha")}${c("sin3","c-mal","⏰","Sin agendar +3 días","llevan más de 3 días esperando")}${c("agenda","c3","🗓️","Agendadas","con fecha puesta")}${c("remate","c-rem","🔧","Pendiente de remate","a medias: falta algo")}</div>`;
         })()}
+        ${PREPARA.aviso(docs)}
         <div class="chips" id="chVer" style="margin-top:10px">
           ${[["pendientes","Pendientes"],["hechas","Hechas"],["todas","Todas"]].map(([k,n]) => `<button class="chip ${filtro.ver===k?"on":""}" data-k="${k}">${n}</button>`).join("")}
         </div>
@@ -648,6 +672,12 @@
       </div>
       </div>
 
+      ${PREPARA.necesita(t) || t.preparacion ? `<div class="panel" style="margin-top:14px" id="bPrep">
+        <h3>Preparación de la instalación</h3>
+        <p class="vacio">Tiene que estar hecho ${PREP_DIAS} días antes de instalar${PREPARA.primerDia(t) ? " (antes del " + esc(fmtFecha(PREPARA.primerDia(t))) + ")" : " — falta poner la fecha de la instalación"}. Mientras falte algo, sale el aviso cada día en el calendario y en Intervenciones.</p>
+        ${PREP.map(([k,n]) => { const v = (t.preparacion||{})[k]; return `<label class="chk prep-chk"><input type="checkbox" data-prep="${k}" ${v ? "checked" : ""} ${todo ? "" : "disabled"}> ${esc(n)}${v ? ` <span class="vacio">· ${esc(nombreDe(v.por))} ${esc(v.dia||"")}</span>` : ""}</label>`; }).join("")}
+        <span id="msgPrep" class="vacio"></span>
+      </div>` : ""}
       <div class="panel" style="margin-top:14px" id="bFotosInt"></div>
       <div class="panel" style="margin-top:14px">
         <h3>Historial y notas</h3>
@@ -770,6 +800,18 @@
       };
       el.querySelector("#quitaCita").onclick = () => { if(confirm("¿Quitar la cita? La intervención queda sin fecha.")) guardarCita([], t.asignados || [], "Cita quitada"); };
     }
+
+    // Preparación (cartel, medidas, técnico avisado)
+    el.querySelectorAll("[data-prep]").forEach(c => c.onchange = async () => {
+      const k = c.dataset.prep, n = (PREP.find(x => x[0] === k)||[])[1] || k;
+      const val = c.checked ? {por:yo, dia:new Date().toLocaleDateString("es-ES")} : firebase.firestore.FieldValue.delete();
+      c.disabled = true;
+      try{
+        await ref.update({["preparacion." + k]: val, modificado:{por:yo, en:firebase.firestore.FieldValue.serverTimestamp()}});
+        await nota({tipo:"nota", texto:(c.checked ? "✔️ " : "↩️ Quitado: ") + n});
+        ficha(el, id);
+      }catch(e){ el.querySelector("#msgPrep").textContent = "No se ha podido guardar (" + (e.code||e) + ")."; c.checked = !c.checked; c.disabled = false; }
+    });
 
     // Notas
     const bN = el.querySelector("#btnNota");
