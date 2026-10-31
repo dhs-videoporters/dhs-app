@@ -56,6 +56,7 @@
     const f = masDias(diaSel), lista = delDia(L, f);
     el.innerHTML = `<div class="tec">
       ${PREVIEW ? `<p class="tec-preview">👁️ ${PRUEBAS() ? "Probando como" : "Vista previa como"} <b>${esc(PREVIEW.nombre)}</b>${PRUEBAS() ? " (versión de pruebas: se puede tocar todo; el fichaje es simulado)" : " (solo mirar)"}. <a href="#salir-vista" class="tec-salir">✖ Salir de la vista técnico</a></p>` : ""}
+      ${PREVIEW && PRUEBAS() ? `<div class="tec-demo"><button class="btn sec" id="tecDemo">🧪 Ponerle 5 intervenciones de prueba</button>${L.some(t => t.demo) ? ` <button class="btn-mini" id="tecDemoX">🧹 Quitar las de prueba</button>` : ""}<p class="vacio" id="tecDemoMsg"></p></div>` : ""}
       <div id="tecFichaje"></div>
       <div class="tec-dias">${DIAS.map(([n,i]) => `<button class="${i===diaSel?"on":""}" data-d="${i}">${n}<span>${delDia(L, masDias(i)).length}</span></button>`).join("")}</div>
       <p class="tec-fecha">${esc(fmtDia(f))}${diaSel ? " · solo información" : ""}</p>
@@ -67,8 +68,36 @@
         <div class="ti-ir">›</div></a>`).join("") || `<p class="vacio tec-nada">No tienes nada ${["hoy","mañana","pasado mañana"][diaSel]}.</p>`}
     </div>`;
     el.querySelectorAll(".tec-dias button").forEach(b => b.onclick = () => { diaSel = Number(b.dataset.d); agenda(el); });
+    const bD = el.querySelector("#tecDemo"), bX = el.querySelector("#tecDemoX"), mD = x => el.querySelector("#tecDemoMsg").textContent = x;
+    if(bD) bD.onclick = async () => { bD.disabled = true; mD("Creando…"); try{ await crearDemo(); diaSel = 0; agenda(el); }catch(e){ mD("No se ha podido (" + (e.code||e) + ")."); bD.disabled = false; } };
+    if(bX) bX.onclick = async () => { bX.disabled = true; try{ const b = D().db.batch(); L.filter(t => t.demo).forEach(t => b.delete(D().db.collection("dhs_trabajos").doc(t.id))); await b.commit(); agenda(el); }catch(e){ mD("No se ha podido (" + (e.code||e) + ")."); } };
     if(!PREVIEW || PRUEBAS()) fichaje(el.querySelector("#tecFichaje"));
     else el.querySelector("#tecFichaje").innerHTML = `<div class="tec-fichaje"><div>⚪ Sin fichar hoy</div><button class="btn" disabled>🟢 Fichar entrada</button></div>`;
+  }
+
+  // Solo en PRUEBAS: intervenciones de mentira para el técnico que se está probando (hoy, mañana y pasado), para ver cómo entra, escribe, hace fotos y cierra
+  async function crearDemo(){
+    const {db, S} = D(), pid = yoPid(), yo = S.usuario.email.toLowerCase();
+    if(!PRUEBAS()) throw "solo en la versión de pruebas";
+    const coms = [];
+    try{ (await db.collection("dhs_comunidades").limit(40).get()).forEach(d => { const c = d.data(); if(c.activo !== false && c.tipo !== "particular" && c.direccion && coms.length < 3) coms.push({id:d.id, ...c}); }); }catch(e){}
+    const com = i => coms[i] ? {comunidadId:coms[i].id, nombre:coms[i].nombre || coms[i].direccion, direccion:coms[i].direccion, poblacion:coms[i].poblacion || "", adminId:coms[i].adminId || null, origen:coms[i].adminId ? "administracion" : "empresa"}
+                             : {comunidadId:null, nombre:"Comunidad de prueba " + (i+1), direccion:"Calle de Prueba " + (10 + i), poblacion:"Terrassa", adminId:"prueba", origen:"administracion"};
+    const priv = (n, dir) => ({comunidadId:null, nombre:n, direccion:dir, poblacion:"Sabadell", telefono:"600000000", email:"", adminId:null, origen:"particular"});
+    const L = [
+      [0, "09:00", 60,  com(0), "No funciona el botón de abrir de la placa. Revisar pulsador y abrepuertas.", "videoportero"],
+      [0, "11:00", 90,  com(1), "Monitor del 3º 2ª sin imagen. Comprobar cableado y cambiar monitor si hace falta.", "videoportero"],
+      [0, "16:00", 60,  priv("Particular de prueba (Marta)", "Avenida de Prueba 5, 2º 1ª"), "Quiere cambiar su telefonillo por un monitor con vídeo. Hacer presupuesto y cobrar si lo hace hoy.", "videoportero"],
+      [1, "10:00", 120, com(2), "Revisión de cámaras: 2 cámaras del parking no graban.", "camaras"],
+      [2, "12:00", 60,  priv("Particular de prueba (Jordi)", "Calle Falsa 123, bajos"), "Abrepuertas de la puerta de la calle no abre. Cambiarlo.", "videoportero"]
+    ];
+    const firma = {por:yo, en:firebase.firestore.FieldValue.serverTimestamp()}, b = db.batch();
+    L.forEach(([dia, hora, dur, cli, desc, esp], i) => b.set(db.collection("dhs_trabajos").doc(), {
+      numero:"PRUEBA-" + (i+1), ...cli, especialidad:esp, tipo:"reparacion", urgencia:"normal", ruta:false, estado:"agendado",
+      descripcion:desc, avisa:cli.origen === "particular" ? null : {nombre:"Vecino de prueba", piso:"1º 1ª", telefono:"600000000"},
+      duracionEstimada:dur, citas:[{fecha:masDias(dia), hora, duracion:dur, personal:[pid]}], asignados:[pid], hechoPor:[], material:[], tiempoReal:null, fotos:[],
+      demo:true, creado:firma, modificado:firma}));
+    await b.commit();
   }
 
   // ---------- FICHAJE: entrada (a menos de 3 km de Viladecavalls) y salida ----------

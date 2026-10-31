@@ -467,3 +467,4 @@ body.modo-tec .aviso-flotante{display:none!important}
 body.modo-tec #btnVistaTec{display:none}
 .tec-elegir{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.tec-elegir .btn{font-size:16px;padding:12px 18px}
 .tec-pend{display:block;font-size:13px;color:#a05a00;margin-top:2px}
+.tec-demo{margin-bottom:10px}.tec-demo .btn{width:100%;padding:12px;font-size:15px}.tec-demo .btn-mini{margin-top:6px}
