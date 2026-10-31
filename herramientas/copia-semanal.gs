@@ -25,41 +25,63 @@ function instalar() {
 }
 
 /** Hace la copia completa (de toda la base oficial: app, cámaras y cobros). Se ejecuta sola de lunes a viernes.
- *  31/10: PRIMERO la copia y DESPUÉS las facturas de proveedores, y estas solo si sobra tiempo
- *  (Google corta a los 6 minutos; leer facturas antes dejaba la copia sin hacer desde el 26/10). */
+ *  31/10: rápida (las subcolecciones se piden de 50 en 50 a la vez; antes era una petición por documento y pasaba de los 6 minutos de Google)
+ *  y PRIMERO la copia, DESPUÉS las facturas de proveedores, solo si sobra tiempo. */
 function copiaSemanal() {
   const inicio = Date.now();
   try {
     const copia = { app: 'dhs-app', entorno: ENTORNO, fecha: new Date().toISOString(), por: 'copia automática (diaria)', datos: {} };
     let total = 0;
+    const rutas = [];   // [col, id] de cada documento
     listarColecciones_('').forEach(col => {
       copia.datos[col] = {};
       listarDocs_(col).forEach(doc => {
         const id = doc.name.split('/').pop();
-        const entrada = { datos: aJSON_(doc.fields || {}) };
-        listarColecciones_(col + '/' + id).forEach(sub => {
-          entrada[sub] = {};
-          listarDocs_(col + '/' + id + '/' + sub).forEach(s => entrada[sub][s.name.split('/').pop()] = aJSON_(s.fields || {}));
-        });
-        copia.datos[col][id] = entrada; total++;
+        copia.datos[col][id] = { datos: aJSON_(doc.fields || {}) };
+        rutas.push([col, id]); total++;
       });
     });
+    // ¿Qué documentos tienen subcolecciones? (de 50 en 50 a la vez)
+    const conSub = [];
+    pedirVarios_(rutas.map(([col, id]) => ({ url: BASE + '/' + col + '/' + id + ':listCollectionIds', method: 'post', payload: JSON.stringify({ pageSize: 100 }) })))
+      .forEach((r, i) => (r.collectionIds || []).forEach(sub => conSub.push([rutas[i][0], rutas[i][1], sub])));
+    // Documentos de cada subcolección (también de 50 en 50; si alguna tiene más de 300, se sigue pidiendo aparte)
+    pedirVarios_(conSub.map(([col, id, sub]) => ({ url: BASE + '/' + col + '/' + id + '/' + sub + '?pageSize=300' })))
+      .forEach((r, i) => {
+        const [col, id, sub] = conSub[i], dest = copia.datos[col][id][sub] = {};
+        let docs = r.documents || [];
+        if (r.nextPageToken) docs = listarDocs_(col + '/' + id + '/' + sub);
+        docs.forEach(s => dest[s.name.split('/').pop()] = aJSON_(s.fields || {}));
+      });
     const carpeta = carpeta_();
     const nombre = 'dhs-app-' + (ENTORNO === 'pruebas' ? 'PRUEBAS-' : '') + 'copia-' + copia.fecha.slice(0, 10) + '.json';
     carpeta.createFile(nombre, JSON.stringify(copia), 'application/json');
     limpiar_(carpeta);
     apuntarEnRegistro_(total);
-    Logger.log('Copia hecha: ' + nombre + ' (' + total + ' documentos)');
+    Logger.log('Copia hecha: ' + nombre + ' (' + total + ' documentos, ' + Math.round((Date.now() - inicio) / 1000) + ' s)');
   } catch (e) {
     MailApp.sendEmail(AVISAR_A, '⚠ DHS App: ha fallado la copia de seguridad de hoy',
       'No se ha podido hacer la copia automática de ' + PROYECTO + '.\n\nError: ' + e + '\n\nHaz una copia manual desde la app (Ajustes › Copias) y avisa a Claude.');
     throw e;
   }
-  // Después de la copia: leer facturas de proveedores nuevas, solo mientras queden más de 2 minutos de margen
+  // Después de la copia: leer facturas de proveedores nuevas, solo mientras quede margen
   try {
     if (typeof leerFacturasProveedores_ === 'function')
       for (let i = 0; i < 5 && Date.now() - inicio < 3.5 * 60 * 1000; i++) { const r = leerFacturasProveedores_(PROYECTO); if (!r.quedan || !r.leidas) break; }
   } catch (e) { Logger.log('Proveedores: ' + e); }
+}
+
+/** Muchas peticiones a Firestore a la vez (de 50 en 50). Devuelve las respuestas en el mismo orden. */
+function pedirVarios_(lista) {
+  const cab = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Goog-User-Project': PROYECTO }, out = [];
+  for (let i = 0; i < lista.length; i += 50) {
+    const trozo = lista.slice(i, i + 50).map(q => Object.assign({ headers: cab, contentType: 'application/json', muteHttpExceptions: true, method: 'get' }, q));
+    UrlFetchApp.fetchAll(trozo).forEach(r => {
+      if (r.getResponseCode() >= 300) throw new Error(r.getResponseCode() + ' ' + r.getContentText().slice(0, 300));
+      out.push(JSON.parse(r.getContentText() || '{}'));
+    });
+  }
+  return out;
 }
 
 function pedir_(url, opciones) {
