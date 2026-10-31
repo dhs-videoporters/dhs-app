@@ -171,6 +171,13 @@
       antes.sort((a,b) => (b.fechaHecho||"").localeCompare(a.fechaHecho||"")); antes = antes.slice(0,3);
     }
     try{ (await ref.collection("notas").orderBy("en", "desc").limit(20).get()).forEach(n => { const v = n.data(); if(v.texto && !["cita","prioridad"].includes(v.tipo)) notas.push(v); }); }catch(e){}
+    // Primera vez en la finca: foto de la placa del videoportero + ¿tiene cámaras? (Ángel 31/10)
+    let ed = null;
+    if(t.comunidadId && com && com.tipo !== "particular"){
+      ed = {placa:false, camaras:com.camaras && com.camaras.tiene ? "si" : ""};
+      try{ (await db.collection("dhs_comunidades").doc(t.comunidadId).collection("fotos").get()).forEach(d => { const v = d.data();
+        if(d.id === "_edificio") ed.camaras = ed.camaras || v.camaras || ""; else if(v.ruta && /placa/i.test(v.etiqueta || "")) ed.placa = true; }); }catch(e){ ed = null; }
+    }
     const hoy = isoLocal(new Date());
     const c = (t.citas||[]).find(x => x.fecha === fecha && mio(x)) || (t.citas||[]).find(mio) || {};
     const cerrada = CERRADOS.includes(t.estado);
@@ -187,6 +194,13 @@
         <h1>${esc(t.direccion || t.nombre)}</h1>
         <p class="vacio">${esc([t.poblacion, t.nombre !== t.direccion ? t.nombre : ""].filter(Boolean).join(" · "))} · <a href="${mapa}" target="_blank" rel="noopener">Cómo llegar</a></p>
         ${com && com.acceso ? `<p class="tf-acceso">🔑 ${esc(com.acceso)}</p>` : ""}
+        ${vistaHoy && ed && (!ed.placa || !ed.camaras) ? `<div class="tf-bloque tf-edificio" id="tfEdif"><h3>🏢 Primera vez en esta finca</h3>
+          <p>Antes de nada, 2 cosas rápidas:</p>
+          <p class="ed-paso"><b>1.</b> Foto de la placa del videoportero (de cerca, que se vea la marca y los pulsadores).</p>
+          <div id="edPlaca">${ed.placa ? `<p class="ed-ok">✅ Foto de la placa hecha</p>` : `<label class="btn tf-foto-grande">📷 Foto de la placa<input type="file" accept="image/*" capture="environment" hidden></label>`}</div>
+          <p class="ed-paso"><b>2.</b> ¿El edificio tiene cámaras?</p>
+          <div class="ed-cam" id="edCam">${ed.camaras ? `<p class="ed-ok">✅ Cámaras: ${ed.camaras === "si" ? "Sí" : "No"}</p>` : `<button class="btn sec" data-c="si">📹 Sí tiene</button><button class="btn sec" data-c="no">🚫 No tiene</button>`}</div>
+          <p class="vacio" id="edMsg"></p></div>` : ""}
 
         <div class="tf-bloque"><h3>Contacto</h3>
           <p class="tf-nombre">${esc(k.nombre || "Sin contacto")}</p>
@@ -213,6 +227,27 @@
       </div></div>`;
     const fotos = el.querySelector("#tfFotos");
     if(fotos) window.DHS_FOTOS.bloqueTrabajo(fotos, id, t, editable);
+    const edB = el.querySelector("#tfEdif");
+    if(edB && editable){
+      const fRef = db.collection("dhs_comunidades").doc(t.comunidadId).collection("fotos"), edMsg = x => edB.querySelector("#edMsg").textContent = x;
+      const yoE = S.usuario.email.toLowerCase();
+      const inp = edB.querySelector("#edPlaca input");
+      if(inp) inp.onchange = async e => {
+        const file = e.target.files[0]; e.target.value = ""; if(!file) return;
+        edMsg("Subiendo la foto…");
+        try{
+          const f = await window.DHS_FOTOS.subir(file, "comunidades/" + t.comunidadId + "/finca");
+          await fRef.add({...f, etiqueta:"Placa de calle", principal:true, trabajoId:id});
+          ed.placa = true; edB.querySelector("#edPlaca").innerHTML = `<p class="ed-ok">✅ Foto de la placa hecha</p>`; edMsg("");
+        }catch(err){ edMsg("No se ha podido subir (" + (err.code || err) + ")."); }
+      };
+      edB.querySelectorAll("#edCam button").forEach(b => b.onclick = async () => {
+        try{
+          await fRef.doc("_edificio").set({tipo:"edificio", camaras:b.dataset.c, por:yoE, en:Date.now(), trabajoId:id});
+          ed.camaras = b.dataset.c; edB.querySelector("#edCam").innerHTML = `<p class="ed-ok">✅ Cámaras: ${b.dataset.c === "si" ? "Sí" : "No"}</p>`;
+        }catch(err){ edMsg("No se ha podido guardar (" + (err.code || err) + ")."); }
+      });
+    }
     if(vistaHoy && PREVIEW && !PRUEBAS()){   // vista previa: mismo aspecto, nada se puede tocar
       if(fotos) fotos.querySelector("h3").insertAdjacentHTML("afterend", `<span class="btn sec btn-foto">📷 Hacer / subir foto</span>`);
       el.querySelectorAll(".tec-ficha textarea, .tec-ficha input, .tec-ficha button").forEach(x => x.disabled = true);
@@ -243,6 +278,7 @@
       const tx = texto(); if(!tx) return msg("Para cerrar, escribe qué has hecho.");
       let fs = []; try{ fs = ((await ref.get()).data().fotos) || []; }catch(e){}
       if(!fs.length) return msg("Para cerrar, añade al menos una foto del trabajo.");
+      if(ed && (!ed.placa || !ed.camaras)){ el.querySelector("#tfEdif").scrollIntoView({block:"center"}); return msg("Para cerrar, arriba del todo: foto de la placa del videoportero y si el edificio tiene cámaras."); }
       if(!await DHS_PREGUNTA("¿Cerrar la intervención? Quedará como terminada.")) return;
       msg("Cerrando…");
       try{

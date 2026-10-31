@@ -468,3 +468,7 @@ body.modo-tec #btnVistaTec{display:none}
 .tec-elegir{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.tec-elegir .btn{font-size:16px;padding:12px 18px}
 .tec-pend{display:block;font-size:13px;color:#a05a00;margin-top:2px}
 .tec-demo{margin-bottom:10px}.tec-demo .btn{width:100%;padding:12px;font-size:15px}.tec-demo .btn-mini{margin-top:6px}
+.tf-edificio{background:#fff6e6;border:2px solid #f3b14b;border-radius:12px;padding:12px 14px}
+.tf-edificio h3{margin-top:0}.ed-paso{margin:10px 0 6px}.ed-ok{margin:4px 0;font-weight:600;color:#1f7a3d}
+.tf-foto-grande{display:block;text-align:center;font-size:17px;padding:14px;cursor:pointer}
+.ed-cam{display:flex;gap:8px}.ed-cam .btn{flex:1;font-size:16px;padding:12px}

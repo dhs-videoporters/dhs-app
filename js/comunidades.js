@@ -133,7 +133,7 @@
         <div class="cifras">
           <div class="cifra"><b>${c.vecinos ?? "—"}</b><span>vecinos</span></div>
           <div class="cifra"><b id="cifraInt">…</b><span>intervenciones</span></div>
-          <div class="cifra"><b>${c.camaras && c.camaras.tiene ? (c.camaras.numero ?? "Sí") : "No"}</b><span>cámaras</span></div>
+          <div class="cifra"><b id="cifraCam">${c.camaras && c.camaras.tiene ? (c.camaras.numero ?? "Sí") : "No"}</b><span>cámaras</span></div>
         </div>
       </div>
       ${D().S.puede("trabajos","editar") ? `<p style="margin:10px 0 0"><a class="btn" href="#nueva-intervencion/${encodeURIComponent(id)}">📅 Agendar intervención</a></p>` : ""}
@@ -145,6 +145,11 @@
     const bC = el.querySelector("#btnCompletar");
     if(bC) bC.onclick = () => { pestanaActual = "info"; el.querySelectorAll(".pest").forEach(x => x.classList.toggle("on", x.dataset.k === "info")); editar(document.getElementById("cuerpoFicha"), id, c, oficina); };
     pintar();
+    // Lo que miró el técnico la primera vez (Ángel 31/10): si no son nuestras, oportunidad de ofrecer cámaras o mantenimiento
+    if(!(c.camaras && c.camaras.tiene)) D().db.collection("dhs_comunidades").doc(id).collection("fotos").doc("_edificio").get().then(d => {
+      const b = document.getElementById("cifraCam"); if(!b || !d.exists) return;
+      b.innerHTML = d.data().camaras === "si" ? `Sí <small class="tag aviso">no nuestras: ofrecer mantenimiento</small>` : `No <small class="tag aviso">ofrecer cámaras</small>`;
+    }).catch(() => {});
     if(pestanaActual !== "intervenciones") window.DHS_TRAB.contar(id).then(n => { const b = document.getElementById("cifraInt"); if(b) b.textContent = n ?? "—"; });
   }
 

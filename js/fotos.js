@@ -100,7 +100,7 @@
     el.innerHTML = `<p class="vacio">Cargando…</p>`;
     const ref = db.collection("dhs_comunidades").doc(comId).collection("fotos");
     let finca = [], deTrabajos = [];
-    try{ (await ref.get()).forEach(d => finca.push({id:d.id, ...d.data()})); }catch(e){}
+    try{ (await ref.get()).forEach(d => { if(d.data().ruta) finca.push({id:d.id, ...d.data()}); }); }catch(e){}
     if(S.puede("trabajos","ver")){
       try{ (await db.collection("dhs_trabajos").where("comunidadId", "==", comId).get()).forEach(d => {
         const t = d.data(); (t.fotos||[]).forEach(f => deTrabajos.push({...f, pie:(t.fechaHecho || "") + " · " + t.numero, trabajoId:d.id}));
