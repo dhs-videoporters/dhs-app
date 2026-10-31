@@ -45,7 +45,10 @@
     });
   }
   const mapaUbi = u => u && u.lat != null ? `https://www.google.com/maps/search/?api=1&query=${u.lat},${u.lng}` : "";
-  const pinUbi = u => !u ? "" : (u.lat != null ? ` <a class="pin" href="${mapaUbi(u)}" target="_blank" rel="noopener" title="Ubicación al fichar (±${u.precision} m)">📍</a>` : ` <span class="pin sin" title="Sin ubicación: ${esc(u.sin)}">📍✕</span>`);
+  let pinUbi = u => !u ? "" : (u.lat != null ? ` <a class="pin" href="${mapaUbi(u)}" target="_blank" rel="noopener" title="Ubicación al fichar (±${u.precision} m)">📍</a>` : ` <span class="pin sin" title="Sin ubicación: ${esc(u.sin)}">📍✕</span>`);
+  // Fichado lejos del almacén (o sin ubicación): se marca para que Dirección lo vea
+  const pinUbiBase = pinUbi;
+  pinUbi = u => pinUbiBase(u) + (u && u.fuera ? ` <span class="tag aviso" title="Fichado fuera del almacén">⚠️ ${u.distAlmacenKm != null ? esc(String(u.distAlmacenKm).replace(".", ",")) + " km" : "fuera"}</span>` : "");
 
   // ---------- Tarjeta de fichaje en "Mi trabajo" ----------
   // ¿Tiene que fichar antes de trabajar? (plantilla, día laborable y hoy todavía nada fichado)

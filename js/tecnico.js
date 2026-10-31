@@ -9,7 +9,9 @@
   const D = () => window.DHS;
   const CERRADOS = ["hecho","facturado","cobrado","cancelado","esperando"];
   // Punto de fichaje: Viladecavalls (centro del municipio; pendiente de confirmar la dirección exacta con Ángel)
-  const FICHAJE = {lat:41.557778, lng:1.955833, radioKm:3, lugar:"Viladecavalls"};
+  // Almacén de DHS: Carrer de Baix 45, Viladecavalls (punto de la calle según OpenStreetMap). Ángel 31/10:
+  // allí recogen y dejan la furgoneta. Más lejos de 500 m: avisa y, si fichan igualmente, queda marcado.
+  const FICHAJE = {lat:41.55422, lng:1.95255, radioKm:0.5, lugar:"el almacén (Carrer de Baix, Viladecavalls)"};
   const isoLocal = d => d.toLocaleDateString("sv-SE");
   const masDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return isoLocal(d); };
   const DIAS = [["Hoy",0],["Mañana",1],["Pasado mañana",2]];
@@ -94,10 +96,18 @@
       b.disabled = true; msg("Mirando dónde estás…");
       let u;
       try{ u = await posicion(); }
-      catch(e){ if(tipo === "entrada"){ msg(String(e)); b.disabled = false; return; } u = {sin:String(e)}; }
-      if(tipo === "entrada"){
-        const km = distKm(u, FICHAJE);
-        if(km > FICHAJE.radioKm){ msg("Estás a " + km.toFixed(1).replace(".", ",") + " km de " + FICHAJE.lugar + ". La entrada solo se puede fichar a menos de " + FICHAJE.radioKm + " km."); b.disabled = false; return; }
+      catch(e){
+        if(!await DHS_PREGUNTA(String(e) + " ¿Fichar igualmente? Quedará marcado «sin ubicación».")){ msg(""); b.disabled = false; return; }
+        u = {sin:String(e), fuera:true};
+      }
+      if(u.lat != null){
+        const km = Math.round(distKm(u, FICHAJE) * 10) / 10;
+        u.distAlmacenKm = km;
+        if(km - Math.min(u.precision || 0, 300) / 1000 > FICHAJE.radioKm){   // margen por el error del GPS (hasta 300 m)
+          const txt = km < 1 ? Math.round(km * 1000) + " m" : String(km).replace(".", ",") + " km";
+          if(!await DHS_PREGUNTA("⚠️ Estás a " + txt + " de " + FICHAJE.lugar + ". Se ficha en el almacén. ¿Fichar igualmente? Quedará marcado «fuera del almacén».")){ msg(""); b.disabled = false; return; }
+          u.fuera = true;
+        }
       }
       msg("Guardando…");
       try{
