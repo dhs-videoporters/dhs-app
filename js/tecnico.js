@@ -63,6 +63,7 @@
     </div>`;
     el.querySelectorAll(".tec-dias button").forEach(b => b.onclick = () => { diaSel = Number(b.dataset.d); agenda(el); });
     if(!PREVIEW) fichaje(el.querySelector("#tecFichaje"));
+    else el.querySelector("#tecFichaje").innerHTML = `<div class="tec-fichaje"><div>⚪ Sin fichar hoy</div><button class="btn" disabled>🟢 Fichar entrada</button></div>`;
   }
 
   // ---------- FICHAJE: entrada (a menos de 3 km de Viladecavalls) y salida ----------
