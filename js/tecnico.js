@@ -14,7 +14,9 @@
   const FICHAJE = {lat:41.55422, lng:1.95255, radioKm:0.5, lugar:"el almacén (Carrer de Baix, Viladecavalls)"};
   const isoLocal = d => d.toLocaleDateString("sv-SE");
   const masDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return isoLocal(d); };
-  const DIAS = [["Hoy",0],["Mañana",1],["Pasado mañana",2]];
+  // Los 3 próximos días laborables (sin sábados ni domingos), empezando por hoy si es laborable (Ángel 31/10)
+  const laborables = () => { const L = [], d = new Date(); while(L.length < 3){ if(d.getDay() !== 0 && d.getDay() !== 6) L.push(isoLocal(d)); d.setDate(d.getDate() + 1); } return L; };
+  const nomDia = f => f === masDias(0) ? "Hoy" : f === masDias(1) ? "Mañana" : new Date(f + "T12:00").toLocaleDateString("es-ES", {weekday:"long", day:"numeric"}).replace(/^./, x => x.toUpperCase());
   const fmtDia = f => new Date(f + "T12:00").toLocaleDateString("es-ES", {weekday:"long", day:"numeric", month:"long"});
   const dur = m => !m ? "" : m < 60 ? m + " min" : (m % 60 ? Math.floor(m/60) + " h " + (m % 60) + " min" : (m/60) + " h");
   const eur = n => (Math.round((Number(n)||0) * 100) / 100).toLocaleString("es-ES", {minimumFractionDigits:2, maximumFractionDigits:2}) + " €";
@@ -53,19 +55,20 @@
     el.innerHTML = `<div class="panel">Cargando…</div>`;
     if(!yoPid()){ el.innerHTML = `<div class="panel"><p class="vacio">Tu cuenta no está unida a nadie del equipo. Avisa a la oficina.</p></div>`; return; }
     let L; try{ L = await leerMios(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer tus trabajos (${esc(e.code)}).</div>`; return; }
-    const f = masDias(diaSel), lista = delDia(L, f);
+    const DL = laborables(); if(diaSel >= DL.length) diaSel = 0;
+    const f = DL[diaSel], lista = delDia(L, f), esHoy = f === masDias(0);
     el.innerHTML = `<div class="tec">
       ${PREVIEW ? `<p class="tec-preview">👁️ ${PRUEBAS() ? "Probando como" : "Vista previa como"} <b>${esc(PREVIEW.nombre)}</b>${PRUEBAS() ? " (versión de pruebas: se puede tocar todo; el fichaje es simulado)" : " (solo mirar)"}. <a href="#salir-vista" class="tec-salir">✖ Salir de la vista técnico</a></p>` : ""}
       ${PREVIEW && PRUEBAS() ? `<div class="tec-demo"><button class="btn sec" id="tecDemo">🧪 Ponerle 5 intervenciones de prueba</button>${L.some(t => t.demo) ? ` <button class="btn-mini" id="tecDemoX">🧹 Quitar las de prueba</button>` : ""}<p class="vacio" id="tecDemoMsg"></p></div>` : ""}
       <div id="tecFichaje"></div>
-      <div class="tec-dias">${DIAS.map(([n,i]) => `<button class="${i===diaSel?"on":""}" data-d="${i}">${n}<span>${delDia(L, masDias(i)).length}</span></button>`).join("")}</div>
-      <p class="tec-fecha">${esc(fmtDia(f))}${diaSel ? " · solo información" : ""}</p>
+      <div class="tec-dias">${DL.map((x,i) => `<button class="${i===diaSel?"on":""}" data-d="${i}">${esc(nomDia(x))}<span>${delDia(L, x).length}</span></button>`).join("")}</div>
+      <p class="tec-fecha">${esc(fmtDia(f))}${esHoy ? "" : " · solo información"}</p>
       ${lista.map(({t,c}) => `<a class="tec-item ${CERRADOS.includes(t.estado) ? "hecha" : ""}" href="#t/${t.id}/${f}">
         <div class="ti-hora">${esc(c.hora || "—")}<span>${esc(dur(c.duracion))}</span></div>
         <div class="ti-cuerpo"><b>${esc(t.direccion || t.nombre)}</b><span>${esc(t.poblacion || "")}</span>
           <span class="ti-desc">${esc((t.descripcion || "").slice(0,80))}</span>
           ${CERRADOS.includes(t.estado) ? `<span class="ti-est ok">✅ Terminada</span>` : t.estado === "encurso" || t.resumenHecho ? `<span class="ti-est">▶️ Empezada</span>` : ""}</div>
-        <div class="ti-ir">›</div></a>`).join("") || `<p class="vacio tec-nada">No tienes nada ${["hoy","mañana","pasado mañana"][diaSel]}.</p>`}
+        <div class="ti-ir">›</div></a>`).join("") || `<p class="vacio tec-nada">No tienes nada ${esHoy ? "hoy" : "el " + esc(fmtDia(f))}.</p>`}
     </div>`;
     el.querySelectorAll(".tec-dias button").forEach(b => b.onclick = () => { diaSel = Number(b.dataset.d); agenda(el); });
     const bD = el.querySelector("#tecDemo"), bX = el.querySelector("#tecDemoX"), mD = x => el.querySelector("#tecDemoMsg").textContent = x;
@@ -95,7 +98,7 @@
     L.forEach(([dia, hora, dur, cli, desc, esp], i) => b.set(db.collection("dhs_trabajos").doc(), {
       numero:"PRUEBA-" + (i+1), ...cli, especialidad:esp, tipo:"reparacion", urgencia:"normal", ruta:false, estado:"agendado",
       descripcion:desc, avisa:cli.origen === "particular" ? null : {nombre:"Vecino de prueba", piso:"1º 1ª", telefono:"600000000"},
-      duracionEstimada:dur, citas:[{fecha:masDias(dia), hora, duracion:dur, personal:[pid]}], asignados:[pid], hechoPor:[], material:[], tiempoReal:null, fotos:[],
+      duracionEstimada:dur, citas:[{fecha:laborables()[dia], hora, duracion:dur, personal:[pid]}], asignados:[pid], hechoPor:[], material:[], tiempoReal:null, fotos:[],
       demo:true, creado:firma, modificado:firma}));
     await b.commit();
   }
