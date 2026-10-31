@@ -229,7 +229,17 @@ const PUENTE = {
     const desdeCob = conf.desde || (new Date().getFullYear() + '-01-01');
     res.forEach(f => {
       const c = cob['f_' + f.id];
-      if (c) { aplicarCobro_(f, c); return; }
+      if (c) {
+        // Lo que ya está cobrado en Contasimple cuenta como cobrado aunque la app de cobros aún no se haya
+        // actualizado (cobros solo lo recoge cuando se abre y se pulsa «Actualizar ahora»). Ángel 31/10.
+        const csPagada = f.estado === 'Payed' || (Number(f.pendiente) || 0) <= 0.01, csPend = Number(f.pendiente) || 0, csPagos = f.pagos;
+        aplicarCobro_(f, c);
+        if (csPagada && f.pendiente > 0.01) {
+          f.pendiente = 0; f.estado = 'Payed'; f.devuelto = false; f.enHoja = false; f.enBanco = false; f.importeBanco = 0;
+          f.pagado = f.total; f.fuenteCobro = 'contasimple'; f.pagadoEnCS = true; if (!f.pagos.length) f.pagos = csPagos;
+        } else if (csPend < f.pendiente - 0.01) { f.pendiente = csPend; f.estado = 'Incomplete'; }
+        return;
+      }
       if (desdeCob && f.fecha && f.fecha < desdeCob) { f.fuenteCobro = 'antes'; f.pendiente = 0; f.estado = 'Payed'; f.pagos = []; return; }
       f.fuenteCobro = 'contasimple'; f.sinCobros = true;
     });
