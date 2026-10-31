@@ -123,11 +123,19 @@
   function irA(ruta){
     const [id0, arg, arg2] = decodeURIComponent(ruta||"").split("/");
     // Modo técnico: solo agenda y ficha. Dirección puede verlo como un técnico con #vista-tecnico/<id>.
-    if(S.modoTec || (window.DHS_TEC && window.DHS_TEC.enPrevia() && (id0 === "agenda" || id0 === "t"))){
+    // La vista de técnico de Dirección se queda puesta (aunque se recargue o haya que volver a entrar) hasta pulsar "Salir".
+    let guardada = null; try{ guardada = localStorage.getItem("dhs_vistaTec"); }catch(e){}
+    if(id0 === "salir-vista"){
+      try{ localStorage.removeItem("dhs_vistaTec"); }catch(e){}
+      if(window.DHS_TEC) window.DHS_TEC.salirVista();
+      location.hash = "calendario"; return;
+    }
+    if(id0 === "vista-tecnico" && arg && S.direccion) return window.DHS_TEC.vistaPrevia($("#contenido"), arg);
+    if(S.direccion && guardada && window.DHS_TEC && !window.DHS_TEC.enPrevia()) return window.DHS_TEC.vistaPrevia($("#contenido"), guardada);
+    if(S.modoTec || (window.DHS_TEC && window.DHS_TEC.enPrevia())){
       if(id0 === "t" && arg) return window.DHS_TEC.ficha($("#contenido"), arg, arg2);
       return window.DHS_TEC.agenda($("#contenido"));
     }
-    if(id0 === "vista-tecnico" && arg && S.direccion) return window.DHS_TEC.vistaPrevia($("#contenido"), arg);
     if(window.DHS_TEC) window.DHS_TEC.salirVista();
     const ALIAS = {comunidad:"comunidades", administrador:"administradores", intervencion:"intervenciones", "nueva-intervencion":"intervenciones", ruta:"intervenciones", trabajos:"intervenciones"};
     // La ficha de trabajo la abre el técnico (desde Mi trabajo) y también la oficina (desde la intervención).

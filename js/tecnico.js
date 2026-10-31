@@ -55,7 +55,7 @@
     let L; try{ L = await leerMios(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer tus trabajos (${esc(e.code)}).</div>`; return; }
     const f = masDias(diaSel), lista = delDia(L, f);
     el.innerHTML = `<div class="tec">
-      ${PREVIEW ? `<p class="tec-preview">👁️ ${PRUEBAS() ? "Probando como" : "Vista previa como"} <b>${esc(PREVIEW.nombre)}</b>${PRUEBAS() ? " (versión de pruebas: se puede tocar todo; el fichaje es simulado)" : " (solo mirar)"}. <a href="#calendario">Salir</a></p>` : ""}
+      ${PREVIEW ? `<p class="tec-preview">👁️ ${PRUEBAS() ? "Probando como" : "Vista previa como"} <b>${esc(PREVIEW.nombre)}</b>${PRUEBAS() ? " (versión de pruebas: se puede tocar todo; el fichaje es simulado)" : " (solo mirar)"}. <a href="#salir-vista" class="tec-salir">✖ Salir de la vista técnico</a></p>` : ""}
       <div id="tecFichaje"></div>
       <div class="tec-dias">${DIAS.map(([n,i]) => `<button class="${i===diaSel?"on":""}" data-d="${i}">${n}<span>${delDia(L, masDias(i)).length}</span></button>`).join("")}</div>
       <p class="tec-fecha">${esc(fmtDia(f))}${diaSel ? " · solo información" : ""}</p>
@@ -279,6 +279,7 @@
   // Dirección puede ver la pantalla de un técnico sin tocar nada: #vista-tecnico/p_pedro
   async function vistaPrevia(el, pid){
     document.body.classList.add("modo-tec");
+    try{ localStorage.setItem("dhs_vistaTec", pid); }catch(e){}
     try{ const d = await D().db.collection("dhs_personal").doc(pid).get(); PREVIEW = {pid, nombre:d.exists ? d.data().nombre : pid}; }
     catch(e){ PREVIEW = {pid, nombre:pid}; }
     agenda(el);
