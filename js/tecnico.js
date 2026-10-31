@@ -22,7 +22,7 @@
   // En la versión de PRUEBAS, Dirección puede probar la pantalla del técnico de verdad (guardar, fotos, cerrar);
   // el fichaje se simula (no se guarda). En la oficial, la vista previa es solo para mirar.
   const PRUEBAS = () => (window.DHS_CONFIG || {}).entorno === "pruebas";
-  let diaSel = 0, PREVIEW = null;   // PREVIEW = {pid, nombre} cuando Dirección mira la pantalla de un técnico
+  let diaSel = 0, PREVIEW = null, SIM = [];   // PREVIEW = {pid, nombre} cuando Dirección mira la pantalla de un técnico
 
   const yoPid = () => PREVIEW ? PREVIEW.pid : D().S.personalId;
   const mio = c => !(c.personal||[]).length || (c.personal||[]).includes(yoPid());
@@ -82,14 +82,15 @@
   async function fichaje(el){ // devuelve una promesa: se espera para poner el aviso debajo
     const {db, S} = D(), yo = S.usuario.email.toLowerCase(), hoy = isoLocal(new Date());
     let hoyL = [];
-    try{ (await db.collection("dhs_fichajes").where("email", "==", yo).get()).forEach(d => { const f = d.data(); if(f.fecha === hoy && f.tipo !== "correccion") hoyL.push(f); }); }
+    if(PREVIEW) hoyL = SIM.filter(f => f.fecha === hoy && f.pid === PREVIEW.pid);   // prueba: fichajes de mentira, solo en esta pantalla
+    else try{ (await db.collection("dhs_fichajes").where("email", "==", yo).get()).forEach(d => { const f = d.data(); if(f.fecha === hoy && f.tipo !== "correccion") hoyL.push(f); }); }
     catch(e){ el.innerHTML = ""; return; }
     hoyL.sort((a,b) => ((a.en && a.en.toMillis && a.en.toMillis()) || 0) - ((b.en && b.en.toMillis && b.en.toMillis()) || 0));
     const ult = hoyL[hoyL.length - 1], dentro = ult && ult.tipo !== "salida";
     const hora = f => f && f.en && f.en.toDate ? f.en.toDate().toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}) : "";
     const ent = hoyL.find(f => f.tipo === "entrada"), sal = [...hoyL].reverse().find(f => f.tipo === "salida");
     el.innerHTML = `<div class="tec-fichaje ${dentro ? "dentro" : ""}">
-      <div>${dentro ? `🟢 Trabajando desde las <b>${esc(hora(ent))}</b>` : sal ? `Jornada terminada a las <b>${esc(hora(sal))}</b>` : `⚪ Sin fichar hoy`}</div>
+      <div>${dentro ? `🟢 Trabajando desde las <b>${esc(hora(ent))}</b>${ent && ent.ubicacion && ent.ubicacion.fuera ? ` <span class="tec-pend">⚠️ pendiente de que la oficina lo acepte</span>` : ""}` : sal ? `Jornada terminada a las <b>${esc(hora(sal))}</b>` : `⚪ Sin fichar hoy`}</div>
       <button class="btn ${dentro ? "sec" : ""}" id="btnFichar">${dentro ? "🔴 Fichar salida" : "🟢 Fichar entrada"}</button>
       <p class="vacio" id="msgFichar"></p></div>`;
     const b = el.querySelector("#btnFichar"), msg = x => el.querySelector("#msgFichar").textContent = x;
@@ -110,7 +111,12 @@
           u.fuera = true; u.aviso = "Estás a " + txt + " de " + FICHAJE.lugar + ". El fichaje queda pendiente de que la oficina lo acepte.";
         }
       }
-      if(PREVIEW){ msg("🧪 Prueba (no se guarda): " + (u.aviso ? "⚠️ " + u.aviso : "dentro del almacén, se ficharía la " + tipo + " sin problema.") + (u.distAlmacenKm != null ? " Distancia: " + String(u.distAlmacenKm).replace(".", ",") + " km." : "")); b.disabled = false; return; }
+      if(PREVIEW){   // prueba: hace como si fichara (sigue trabajando aunque esté lejos), pero no se guarda nada
+        const ahora = new Date(); SIM.push({tipo, fecha:hoy, pid:PREVIEW.pid, ubicacion:u, en:{toDate:() => ahora, toMillis:() => ahora.getTime()}});
+        await fichaje(el);
+        el.querySelector("#msgFichar").textContent = "🧪 Prueba (no se guarda). " + (u.aviso ? "⚠️ " + u.aviso + " Puede seguir trabajando." : "Dentro del almacén: " + tipo + " fichada sin problema.");
+        return;
+      }
       msg("Guardando…");
       try{
         await db.collection("dhs_fichajes").add({tipo, email:yo, personalId:S.personalId, nombre:S.nombre, fecha:hoy, ubicacion:u, en:firebase.firestore.FieldValue.serverTimestamp()});
