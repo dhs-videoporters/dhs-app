@@ -24,10 +24,11 @@ function instalar() {
   copiaSemanal();
 }
 
-/** Hace la copia completa (de toda la base oficial: app, cámaras y cobros). Se ejecuta sola de lunes a viernes. */
+/** Hace la copia completa (de toda la base oficial: app, cámaras y cobros). Se ejecuta sola de lunes a viernes.
+ *  31/10: PRIMERO la copia y DESPUÉS las facturas de proveedores, y estas solo si sobra tiempo
+ *  (Google corta a los 6 minutos; leer facturas antes dejaba la copia sin hacer desde el 26/10). */
 function copiaSemanal() {
-  // Antes de la copia: leer las facturas de proveedores nuevas que hayan llegado a Drive (si falla, la copia sigue igual)
-  try { if (typeof leerFacturasProveedores_ === 'function') for (let i = 0; i < 5; i++) { const r = leerFacturasProveedores_(PROYECTO); if (!r.quedan || !r.leidas) break; } } catch (e) {}
+  const inicio = Date.now();
   try {
     const copia = { app: 'dhs-app', entorno: ENTORNO, fecha: new Date().toISOString(), por: 'copia automática (diaria)', datos: {} };
     let total = 0;
@@ -54,9 +55,13 @@ function copiaSemanal() {
       'No se ha podido hacer la copia automática de ' + PROYECTO + '.\n\nError: ' + e + '\n\nHaz una copia manual desde la app (Ajustes › Copias) y avisa a Claude.');
     throw e;
   }
+  // Después de la copia: leer facturas de proveedores nuevas, solo mientras queden más de 2 minutos de margen
+  try {
+    if (typeof leerFacturasProveedores_ === 'function')
+      for (let i = 0; i < 5 && Date.now() - inicio < 3.5 * 60 * 1000; i++) { const r = leerFacturasProveedores_(PROYECTO); if (!r.quedan || !r.leidas) break; }
+  } catch (e) { Logger.log('Proveedores: ' + e); }
 }
 
-// ---- Funciones internas ----
 function pedir_(url, opciones) {
   const r = UrlFetchApp.fetch(url, Object.assign({
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Goog-User-Project': PROYECTO },
