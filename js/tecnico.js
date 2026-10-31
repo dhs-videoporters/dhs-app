@@ -19,6 +19,9 @@
   const dur = m => !m ? "" : m < 60 ? m + " min" : (m % 60 ? Math.floor(m/60) + " h " + (m % 60) + " min" : (m/60) + " h");
   const eur = n => (Math.round((Number(n)||0) * 100) / 100).toLocaleString("es-ES", {minimumFractionDigits:2, maximumFractionDigits:2}) + " €";
   const num = v => Number(String(v||"").replace(",", ".")) || 0;
+  // En la versión de PRUEBAS, Dirección puede probar la pantalla del técnico de verdad (guardar, fotos, cerrar);
+  // el fichaje se simula (no se guarda). En la oficial, la vista previa es solo para mirar.
+  const PRUEBAS = () => (window.DHS_CONFIG || {}).entorno === "pruebas";
   let diaSel = 0, PREVIEW = null;   // PREVIEW = {pid, nombre} cuando Dirección mira la pantalla de un técnico
 
   const yoPid = () => PREVIEW ? PREVIEW.pid : D().S.personalId;
@@ -52,7 +55,7 @@
     let L; try{ L = await leerMios(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer tus trabajos (${esc(e.code)}).</div>`; return; }
     const f = masDias(diaSel), lista = delDia(L, f);
     el.innerHTML = `<div class="tec">
-      ${PREVIEW ? `<p class="tec-preview">👁️ Vista previa como <b>${esc(PREVIEW.nombre)}</b> (solo mirar). <a href="#calendario">Salir</a></p>` : ""}
+      ${PREVIEW ? `<p class="tec-preview">👁️ ${PRUEBAS() ? "Probando como" : "Vista previa como"} <b>${esc(PREVIEW.nombre)}</b>${PRUEBAS() ? " (versión de pruebas: se puede tocar todo; el fichaje es simulado)" : " (solo mirar)"}. <a href="#calendario">Salir</a></p>` : ""}
       <div id="tecFichaje"></div>
       <div class="tec-dias">${DIAS.map(([n,i]) => `<button class="${i===diaSel?"on":""}" data-d="${i}">${n}<span>${delDia(L, masDias(i)).length}</span></button>`).join("")}</div>
       <p class="tec-fecha">${esc(fmtDia(f))}${diaSel ? " · solo información" : ""}</p>
@@ -64,7 +67,7 @@
         <div class="ti-ir">›</div></a>`).join("") || `<p class="vacio tec-nada">No tienes nada ${["hoy","mañana","pasado mañana"][diaSel]}.</p>`}
     </div>`;
     el.querySelectorAll(".tec-dias button").forEach(b => b.onclick = () => { diaSel = Number(b.dataset.d); agenda(el); });
-    if(!PREVIEW) fichaje(el.querySelector("#tecFichaje"));
+    if(!PREVIEW || PRUEBAS()) fichaje(el.querySelector("#tecFichaje"));
     else el.querySelector("#tecFichaje").innerHTML = `<div class="tec-fichaje"><div>⚪ Sin fichar hoy</div><button class="btn" disabled>🟢 Fichar entrada</button></div>`;
   }
 
@@ -76,7 +79,7 @@
     navigator.geolocation.getCurrentPosition(p => ok({lat:Math.round(p.coords.latitude*1e6)/1e6, lng:Math.round(p.coords.longitude*1e6)/1e6, precision:Math.round(p.coords.accuracy)}),
       e => ko(e.code === 1 ? "No has dado permiso de ubicación. Actívalo para esta web en el móvil." : "No se ha podido saber dónde estás. Prueba otra vez."), {enableHighAccuracy:true, timeout:15000, maximumAge:0});
   });
-  async function fichaje(el){
+  async function fichaje(el){ // devuelve una promesa: se espera para poner el aviso debajo
     const {db, S} = D(), yo = S.usuario.email.toLowerCase(), hoy = isoLocal(new Date());
     let hoyL = [];
     try{ (await db.collection("dhs_fichajes").where("email", "==", yo).get()).forEach(d => { const f = d.data(); if(f.fecha === hoy && f.tipo !== "correccion") hoyL.push(f); }); }
@@ -97,22 +100,21 @@
       let u;
       try{ u = await posicion(); }
       catch(e){
-        if(!await DHS_PREGUNTA(String(e) + " ¿Fichar igualmente? Quedará marcado «sin ubicación».")){ msg(""); b.disabled = false; return; }
-        u = {sin:String(e), fuera:true};
+        u = {sin:String(e), fuera:true, aviso:String(e) + " El fichaje queda pendiente de que la oficina lo acepte."};
       }
       if(u.lat != null){
         const km = Math.round(distKm(u, FICHAJE) * 10) / 10;
         u.distAlmacenKm = km;
         if(km - Math.min(u.precision || 0, 300) / 1000 > FICHAJE.radioKm){   // margen por el error del GPS (hasta 300 m)
           const txt = km < 1 ? Math.round(km * 1000) + " m" : String(km).replace(".", ",") + " km";
-          if(!await DHS_PREGUNTA("⚠️ Estás a " + txt + " de " + FICHAJE.lugar + ". Se ficha en el almacén. ¿Fichar igualmente? Quedará marcado «fuera del almacén».")){ msg(""); b.disabled = false; return; }
-          u.fuera = true;
+          u.fuera = true; u.aviso = "Estás a " + txt + " de " + FICHAJE.lugar + ". El fichaje queda pendiente de que la oficina lo acepte.";
         }
       }
+      if(PREVIEW){ msg("🧪 Prueba (no se guarda): " + (u.aviso ? "⚠️ " + u.aviso : "dentro del almacén, se ficharía la " + tipo + " sin problema.") + (u.distAlmacenKm != null ? " Distancia: " + String(u.distAlmacenKm).replace(".", ",") + " km." : "")); b.disabled = false; return; }
       msg("Guardando…");
       try{
         await db.collection("dhs_fichajes").add({tipo, email:yo, personalId:S.personalId, nombre:S.nombre, fecha:hoy, ubicacion:u, en:firebase.firestore.FieldValue.serverTimestamp()});
-        fichaje(el);
+        const av = u.aviso; await fichaje(el); if(av){ const m2 = el.querySelector("#msgFichar"); if(m2) m2.textContent = "⚠️ " + av; }
       }catch(e){ msg("No se ha podido fichar (" + (e.code||e) + ")."); b.disabled = false; }
     };
   }
@@ -135,7 +137,7 @@
     const c = (t.citas||[]).find(x => x.fecha === fecha && mio(x)) || (t.citas||[]).find(mio) || {};
     const cerrada = CERRADOS.includes(t.estado);
     const vistaHoy = !cerrada && (c.fecha === hoy || !!PREVIEW);          // lo que ve el técnico hoy
-    const editable = vistaHoy && !PREVIEW;                  // en la vista previa de Dirección, igual pero sin poder tocar
+    const editable = vistaHoy && (!PREVIEW || PRUEBAS());                  // en la vista previa de Dirección, igual pero sin poder tocar
     const k = contacto(t, com), priv = esPrivativo(t, com);
     const mapa = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([t.direccion, t.poblacion].filter(Boolean).join(", "));
     const cobro = t.cobro || {}, pres = cobro.presupuesto || {};
@@ -172,7 +174,7 @@
       </div></div>`;
     const fotos = el.querySelector("#tfFotos");
     if(fotos) window.DHS_FOTOS.bloqueTrabajo(fotos, id, t, editable);
-    if(vistaHoy && PREVIEW){   // vista previa: mismo aspecto, nada se puede tocar
+    if(vistaHoy && PREVIEW && !PRUEBAS()){   // vista previa: mismo aspecto, nada se puede tocar
       if(fotos) fotos.querySelector("h3").insertAdjacentHTML("afterend", `<span class="btn sec btn-foto">📷 Hacer / subir foto</span>`);
       el.querySelectorAll(".tec-ficha textarea, .tec-ficha input, .tec-ficha button").forEach(x => x.disabled = true);
       el.querySelector("#tfMsg").textContent = "Vista previa: así lo verá el técnico. Desde aquí no se puede guardar.";
@@ -205,7 +207,7 @@
       if(!await DHS_PREGUNTA("¿Cerrar la intervención? Quedará como terminada.")) return;
       msg("Cerrando…");
       try{
-        const cambio = {estado:"hecho", resumenHecho:tx, hechoPor:[S.personalId], fechaHecho:isoLocal(new Date()), falta:"", editando:null, modificado:firma()};
+        const cambio = {estado:"hecho", resumenHecho:tx, hechoPor:[yoPid()], fechaHecho:isoLocal(new Date()), falta:"", editando:null, modificado:firma()};
         if(t.empezado) cambio.tiempoReal = Math.max(15, Math.round((Date.now() - t.empezado) / 900000) * 15);
         if(t.adminId && t.comunidadId && !(t.avisoAdmin && ["enviado","enviadoPruebas","pendiente"].includes(t.avisoAdmin.estado))) cambio.avisoAdmin = {estado:"pendiente", pedidoPor:yo, pedidoEn:Date.now()};
         await ref.update(cambio);

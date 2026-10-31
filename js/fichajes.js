@@ -48,7 +48,9 @@
   let pinUbi = u => !u ? "" : (u.lat != null ? ` <a class="pin" href="${mapaUbi(u)}" target="_blank" rel="noopener" title="Ubicación al fichar (±${u.precision} m)">📍</a>` : ` <span class="pin sin" title="Sin ubicación: ${esc(u.sin)}">📍✕</span>`);
   // Fichado lejos del almacén (o sin ubicación): se marca para que Dirección lo vea
   const pinUbiBase = pinUbi;
-  pinUbi = u => pinUbiBase(u) + (u && u.fuera ? ` <span class="tag aviso" title="Fichado fuera del almacén">⚠️ ${u.distAlmacenKm != null ? esc(String(u.distAlmacenKm).replace(".", ",")) + " km" : "fuera"}</span>` : "");
+  const lejos = u => u.distAlmacenKm != null ? String(u.distAlmacenKm).replace(".", ",") + " km" : "sin ubicación";
+  pinUbi = u => pinUbiBase(u) + (!u || !u.fuera ? "" : !u.decision ? ` <span class="tag aviso" title="Fichado fuera del almacén: pendiente de aceptar">⚠️ ${esc(lejos(u))}</span>`
+    : /aceptado/.test(u.decision.accion) ? ` <span class="tag gris" title="Aceptado por ${esc(u.decision.por)}">✅ ${esc(lejos(u))}</span>` : ` <span class="tag aviso" title="Rechazado: ${esc(u.decision.motivo||"")}">❌ ${esc(lejos(u))}</span>`);
 
   // ---------- Tarjeta de fichaje en "Mi trabajo" ----------
   // ¿Tiene que fichar antes de trabajar? (plantilla, día laborable y hoy todavía nada fichado)
@@ -109,6 +111,10 @@
     let inicio = null;
     try{ (await db.collection("dhs_fichajes").orderBy("fecha").limit(1).get()).forEach(d => inicio = d.data().fecha); }catch(e){}
     try{ (await db.collection("dhs_trabajos").get()).forEach(d => T.push(d.data())); }catch(e){}
+    // Fichajes fuera del almacén: los acepta o rechaza Dirección (queda en el registro de cambios)
+    const DEC = {};
+    try{ (await db.collection("dhs_registro").where("coleccion", "==", "dhs_fichajes").get()).forEach(d => { const r = d.data(); if(r.docId) DEC[r.docId] = r; }); }catch(e){}
+    F.forEach(f => { if(f.ubicacion && f.ubicacion.fuera) f.ubicacion = {...f.ubicacion, decision:DEC[f.id] || null}; });
     return {P, F, T, inicio};
   }
   const plantilla = P => Object.entries(P).filter(([k,p]) => p.activo !== false && p.tipo === "plantilla").sort((a,b) => a[1].nombre.localeCompare(b[1].nombre));
@@ -130,6 +136,10 @@
       <h3>Fichajes</h3>
       ${!inicio ? `<p class="aviso-cal">Todavía nadie ha fichado con la app. Los avisos de "sin fichar" empiezan a contar desde el primer fichaje.</p>` : ""}
       <p class="vacio" style="margin:4px 0 10px">Registro diario de jornada de la plantilla (obligatorio: se guarda 4 años). Los fichajes no se pueden cambiar; si alguien se olvida, añade una <b>corrección</b> con el motivo (sale con *).</p>
+      ${(() => { const pend = F.filter(f => f.ubicacion && f.ubicacion.fuera && !f.ubicacion.decision).sort((a,b) => ms(b) - ms(a));
+        return pend.length ? `<div class="aviso-prep" style="margin-bottom:12px"><b>⚠️ Fichajes fuera del almacén pendientes de aceptar (${pend.length})</b>
+          ${pend.map(f => `<div class="fi-pend" data-id="${esc(f.id)}"><span><b>${esc((P[f.personalId]||{}).nombre || f.nombre || f.email)}</b> · ${esc(f.tipo)} · ${esc(f.fecha.split("-").reverse().join("/"))} ${hhmm(ms(f))} · ${esc(lejos(f.ubicacion))} del almacén${f.ubicacion.lat != null ? ` <a href="${mapaUbi(f.ubicacion)}" target="_blank" rel="noopener">📍 ver dónde</a>` : ""}</span>
+            <span><button class="btn btn-mini fi-ok">✅ Aceptar</button> <button class="btn sec btn-mini fi-no">❌ Rechazar</button></span></div>`).join("")}</div>` : ""; })()}
       <div class="fi-barra"><input type="month" id="mesFi" value="${mesSel}"> <button class="btn sec" id="csvFi">⬇ Descargar el mes (Excel/CSV)</button></div>
       ${gente.length ? gente.map(([k,p]) => {
         const filas = dias.map(f => ({f, c:fila(k, f), citas:citasDe(T, k, f)}));
@@ -159,6 +169,14 @@
         </div>
         <button class="btn" type="submit">Guardar corrección</button> <button class="btn sec" type="button" id="corrNo">Cancelar</button> <span id="msgCorr" class="vacio"></span>
       </form>`;
+    el.querySelectorAll(".fi-pend").forEach(div => {
+      const decidir = async (accion, motivo) => {
+        try{ await db.collection("dhs_registro").add({por:S.usuario.email.toLowerCase(), en:firebase.firestore.FieldValue.serverTimestamp(), accion, coleccion:"dhs_fichajes", docId:div.dataset.id, motivo:motivo || ""}); vista(el); }
+        catch(e){ div.insertAdjacentHTML("beforeend", ` <span class="tag aviso">No se ha podido guardar (${esc(e.code||e)})</span>`); }
+      };
+      div.querySelector(".fi-ok").onclick = () => decidir("fichaje aceptado");
+      div.querySelector(".fi-no").onclick = async () => { const m = prompt("Motivo del rechazo (se guarda):"); if(m === null) return; decidir("fichaje rechazado", m.trim()); };
+    });
     el.querySelector("#mesFi").onchange = e => { mesSel = e.target.value || mesSel; vista(el); };
     el.querySelector("#csvFi").onclick = () => {
       const L = [["Trabajador","Fecha","Tipo","Hora","Corrección","Motivo","Corregido por","Ubicación"]];
@@ -204,6 +222,8 @@
       if(seguidos >= DIAS_AVISO && F.some(y => y.personalId === k) ) avisos.push(`<b>${esc(p.nombre)}</b> lleva ${seguidos} días laborables sin fichar.`);
       else if(seguidos >= DIAS_AVISO && !F.some(y => y.personalId === k)) avisos.push(`<b>${esc(p.nombre)}</b> no ha fichado ningún día en las dos últimas semanas.`);
     });
+    const pendFuera = F.filter(f => f.ubicacion && f.ubicacion.fuera && !f.ubicacion.decision).length;
+    if(pendFuera) avisos.unshift(`<b>${pendFuera}</b> fichaje${pendFuera===1?"":"s"} fuera del almacén pendiente${pendFuera===1?"":"s"} de aceptar.`);
     if(!avisos.length) return;
     const b = document.createElement("div");
     b.className = "aviso-flotante aviso-fi";
