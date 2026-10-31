@@ -464,3 +464,5 @@ body.modo-tec .aviso-flotante{display:none!important}
 .tec-fichaje:not(.dentro) .btn{background:#1e7a3c;border-color:#1e7a3c;color:#fff}
 .tec-fichaje.dentro .btn{background:#c0392b;border-color:#c0392b;color:#fff}
 .tec-salir{display:inline-block;margin-top:6px;padding:6px 12px;border-radius:8px;background:#fff;border:1px solid #f3d39b;font-weight:600;text-decoration:none;color:inherit}
+body.modo-tec #btnVistaTec{display:none}
+.tec-elegir{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.tec-elegir .btn{font-size:16px;padding:12px 18px}

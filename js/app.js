@@ -100,8 +100,12 @@
     montarMenu();
     document.querySelector(".buscador").classList.toggle("oculto", !S.puede("comunidades") || S.modoTec);
     if(S.puede("comunidades")) window.DHS_COM.buscadorGlobal(document.querySelector("#buscaGlobal"), document.querySelector("#resGlobal"));
+    $("#btnVistaTec").classList.toggle("oculto", !S.direccion);
+    $("#btnVistaTec").onclick = () => { location.hash = "vista-tecnico"; };
     mostrar("app");
-    irA(location.hash.slice(1) || (S.modoTec ? "agenda" : "calendario"));
+    // También vale ?tecnico=p_pedro en el enlace (hay móviles que pierden lo que va detrás de #)
+    let qTec = null; try{ qTec = new URLSearchParams(location.search).get("tecnico"); }catch(e){}
+    irA(qTec && S.direccion ? "vista-tecnico/" + qTec : (location.hash.slice(1) || (S.modoTec ? "agenda" : "calendario")));
     window.DHS_COPIAS.avisoAlEntrar();
     if(window.DHS_FICHA) window.DHS_FICHA.avisoAlEntrar();
   });
@@ -131,6 +135,7 @@
       location.hash = "calendario"; return;
     }
     if(id0 === "vista-tecnico" && arg && S.direccion) return window.DHS_TEC.vistaPrevia($("#contenido"), arg);
+    if(id0 === "vista-tecnico" && S.direccion) return elegirTecnico($("#contenido"));
     if(S.direccion && guardada && window.DHS_TEC && !window.DHS_TEC.enPrevia()) return window.DHS_TEC.vistaPrevia($("#contenido"), guardada);
     if(S.modoTec || (window.DHS_TEC && window.DHS_TEC.enPrevia())){
       if(id0 === "t" && arg) return window.DHS_TEC.ficha($("#contenido"), arg, arg2);
@@ -156,6 +161,19 @@
     if(id0 === "ruta" && S.puede("trabajos","todo")) return window.DHS_RUTA.vista($("#contenido"));
     if(id0 === "ajustes" && arg) return window.DHS_AJ.vista($("#contenido"), arg);
     (VISTAS[id] || (()=>{}))($("#contenido"));
+  }
+
+  // Dirección elige qué técnico quiere "ser" para ver su pantalla
+  async function elegirTecnico(el){
+    document.querySelectorAll("#menu a, #menuMovil a").forEach(a => a.classList.remove("on"));
+    el.innerHTML = panel("👷 Ver la app como un técnico", "Cargando el equipo…");
+    try{
+      const q = await db.collection("dhs_personal").get();
+      const gente = q.docs.map(d => ({id:d.id, ...d.data()})).filter(p => p.activo !== false).sort((a,b) => (a.nombre||"").localeCompare(b.nombre||""));
+      const esc = t => String(t||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+      el.innerHTML = `<div class="panel"><h2>👷 Ver la app como un técnico</h2><p class="vacio">Elige a quién. Verás solo lo que ve él (sin menús). ${C.entorno === "pruebas" ? "Es la versión de pruebas: se puede tocar todo." : "En la versión oficial es solo para mirar."} Para volver, "✖ Salir de la vista técnico".</p>
+        <div class="tec-elegir">${gente.map(p => `<a class="btn" href="#vista-tecnico/${encodeURIComponent(p.id)}">${esc(p.nombre || p.id)}</a>`).join("") || "<p>No hay nadie en el equipo.</p>"}</div></div>`;
+    }catch(e){ el.innerHTML = panel("👷 Ver la app como un técnico", "No se ha podido cargar el equipo (" + (e.code||e) + ")."); }
   }
 
   // ---------- Vistas (se irán rellenando en las próximas sesiones) ----------
