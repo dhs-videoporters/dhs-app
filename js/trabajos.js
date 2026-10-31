@@ -649,7 +649,7 @@
             <label class="campo"><span>Día</span><input name="fecha" type="date" value="${esc(cita0.fecha || new Date().toISOString().slice(0,10))}"></label>
             <label class="campo"><span>Hasta (si dura varios días)</span><input name="hasta" type="date" value="${(t.citas||[]).length > 1 ? esc(t.citas[t.citas.length-1].fecha) : ""}"></label>
             <label class="campo"><span>Hora</span><select name="hora">${HORAS.map(h => `<option ${h===(cita0.hora||"09:00")?"selected":""}>${h}</option>`).join("")}</select></label>
-            <label class="campo"><span>Duración</span><select name="duracion">${DURACIONES.map(m => `<option value="${m}" ${m===(cita0.duracion||t.duracionEstimada||60)?"selected":""}>${durTxt(m)}</option>`).join("")}</select></label>
+            <label class="campo"><span>Duración</span><select name="duracion">${DURACIONES.map(m => `<option value="${m}" ${m===((t.estado === "amedias" && /\((\d+) min\)/.test(t.falta||"") ? Number(/\((\d+) min\)/.exec(t.falta)[1]) : 0)||cita0.duracion||t.duracionEstimada||60)?"selected":""}>${durTxt(m)}</option>`).join("")}</select></label>
             <div class="campo"><span>Quién va</span><div class="personas-sel">${activos.map(([k,p]) => `<label><input type="checkbox" name="asignados" value="${k}" ${(t.asignados||[]).includes(k)?"checked":""}><i style="background:${esc(p.color)}"></i>${esc(p.nombre)}</label>`).join("")}</div></div>
             <button class="btn" type="submit">Guardar cita</button> <button class="btn sec" type="button" id="quitaCita">Quitar cita</button> <span id="msgCita" class="vacio"></span>
           </form>` : ""}

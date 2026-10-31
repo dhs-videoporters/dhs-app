@@ -67,7 +67,7 @@
         <div class="ti-hora">${esc(c.hora || "—")}<span>${esc(dur(c.duracion))}</span></div>
         <div class="ti-cuerpo"><b>${esc(t.direccion || t.nombre)}</b><span>${esc(t.poblacion || "")}</span>
           <span class="ti-desc">${esc((t.descripcion || "").slice(0,80))}</span>
-          ${CERRADOS.includes(t.estado) ? `<span class="ti-est ok">✅ Terminada</span>` : t.estado === "encurso" || t.resumenHecho ? `<span class="ti-est">▶️ Empezada</span>` : ""}</div>
+          ${CERRADOS.includes(t.estado) ? `<span class="ti-est ok">✅ Terminada</span>` : t.estado === "amedias" ? `<span class="ti-est">🔁 Hay que volver</span>` : t.estado === "encurso" || t.resumenHecho ? `<span class="ti-est">▶️ Empezada</span>` : ""}</div>
         <div class="ti-ir">›</div></a>`).join("") || `<p class="vacio tec-nada">No tienes nada ${esHoy ? "hoy" : "el " + esc(fmtDia(f))}.</p>`}
     </div>`;
     el.querySelectorAll(".tec-dias button").forEach(b => b.onclick = () => { diaSel = Number(b.dataset.d); agenda(el); });
@@ -193,6 +193,8 @@
     const k = contacto(t, com), priv = esPrivativo(t, com);
     const mapa = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([t.direccion, t.poblacion].filter(Boolean).join(", "));
     const cobro = t.cobro || {}, pres = cobro.presupuesto || {};
+    const durV = m => m < 60 ? m + " min" : (m % 60 ? Math.floor(m/60) + " h " + (m%60) + " min" : (m/60) + (m === 60 ? " hora" : " horas")) + (m === 240 ? " (media jornada)" : m === 480 ? " (jornada entera)" : "");
+    const tHoy = (() => { if(!t.empezado) return 60; const m = (Date.now() - t.empezado) / 60000; return [15,30,45,60,90,120,180,240,300,360,480].reduce((a,b) => Math.abs(b - m) < Math.abs(a - m) ? b : a); })();
     el.innerHTML = `<div class="tec">
       <a href="#agenda" class="volver">‹ Agenda</a>
       <div class="panel tec-ficha">
@@ -226,7 +228,13 @@
           ${priv ? bloquePrivativo(t, pres, cobro) : ""}
           <div class="tf-botones">
             <button class="btn sec" id="tfGuardar">💾 Guardar avance</button>
+            <button class="btn tf-volver" id="tfVolver">🔁 Tengo que volver</button>
             <button class="btn btn-ok" id="tfCerrar">✅ Cerrar intervención</button></div>
+          <div class="tf-bloque tf-volver-caja oculto" id="tfVolverCaja"><h3>🔁 Tengo que volver</h3>
+            <label class="campo"><span>¿Qué falta por hacer? (material, otra visita…)</span><textarea id="tvFalta" rows="3" placeholder="Ej.: Falta cambiar la placa, hay que pedirla. Traer cable."></textarea></label>
+            <label class="campo"><span>¿Cuánto tiempo necesitas la próxima vez?</span><select id="tvMin">${[30,60,90,120,180,240,360,480].map(m => `<option value="${m}" ${m === 60 ? "selected" : ""}>${esc(durV(m))}</option>`).join("")}</select></label>
+            <label class="campo"><span>¿Cuánto has estado hoy?</span><select id="tvHoy">${[15,30,45,60,90,120,180,240,300,360,480].map(m => `<option value="${m}" ${m === tHoy ? "selected" : ""}>${esc(durV(m))}</option>`).join("")}</select></label>
+            <button class="btn tf-volver" id="tvOk">Guardar: hay que volver</button></div>
           <p class="vacio" id="tfMsg"></p>`
         : cerrada ? `<div class="tf-bloque ok"><h3>✅ Terminada</h3><p>${esc(t.resumenHecho || "")}</p></div><div class="tf-bloque" id="tfFotos"></div>`
         : `<p class="tf-info">ℹ️ Solo información. La podrás rellenar el día de la intervención.</p>`}
@@ -285,6 +293,20 @@
         msg("✔️ Guardado. La intervención sigue abierta.");
       }catch(e){ msg("No se ha podido guardar (" + (e.code||e) + ")."); }
     };
+    // Tengo que volver (Ángel 31/10): queda "a medias" con lo que falta y el tiempo que hará falta la próxima vez
+    el.querySelector("#tfVolver").onclick = () => { const c2 = el.querySelector("#tfVolverCaja"); c2.classList.toggle("oculto"); if(!c2.classList.contains("oculto")) c2.scrollIntoView({block:"center"}); };
+    el.querySelector("#tvOk").onclick = async () => {
+      const tx = texto(); if(!tx) return msg("Escribe arriba qué has hecho hoy.");
+      const falta = el.querySelector("#tvFalta").value.trim(); if(!falta){ el.querySelector("#tvFalta").focus(); return msg("Escribe qué falta por hacer."); }
+      const min = Number(el.querySelector("#tvMin").value), hoyMin = Number(el.querySelector("#tvHoy").value);
+      msg("Guardando…");
+      try{
+        await ref.update({estado:"amedias", resumenHecho:tx, falta:falta + " · ⏱ Volver: " + durV(min) + " (" + min + " min)", tiempoReal:hoyMin, hechoPor:[yoPid()], fechaHecho:isoLocal(new Date()), editando:null, modificado:firma()});
+        await nota({tipo:"estado", de:t.estado, a:"amedias", texto:tx + "\nFalta: " + falta + "\nPara volver necesita: " + durV(min) + " · Hoy ha estado: " + durV(hoyMin), volverMin:min, hoyMin});
+        location.hash = "agenda";
+      }catch(e){ msg("No se ha podido guardar (" + (e.code||e) + ")."); }
+    };
+
     // Cerrar: obligatorio lo hecho y al menos una foto
     el.querySelector("#tfCerrar").onclick = async () => {
       const tx = texto(); if(!tx) return msg("Para cerrar, escribe qué has hecho.");

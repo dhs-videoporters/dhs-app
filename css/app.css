@@ -472,3 +472,7 @@ body.modo-tec #btnVistaTec{display:none}
 .tf-edificio h3{margin-top:0}.ed-paso{margin:10px 0 6px}.ed-ok{margin:4px 0;font-weight:600;color:#1f7a3d}
 .tf-foto-grande{display:block;text-align:center;font-size:17px;padding:14px;cursor:pointer}
 .ed-cam{display:flex;gap:8px}.ed-cam .btn{flex:1;font-size:16px;padding:12px}
+.tf-volver{background:#e8890c;color:#fff}.tf-volver-caja{border:2px solid #e8890c;border-radius:12px;padding:12px 14px}
+.tf-volver-caja .campo{display:block;margin-bottom:10px}.tf-volver-caja textarea,.tf-volver-caja select{width:100%;font-size:16px}
+.tf-volver-caja #tvOk{width:100%;padding:13px;font-size:16px}
+.tf-botones #tfCerrar{grid-column:1/-1}
