@@ -65,7 +65,7 @@
     el.innerHTML = `
       <div class="panel">
         <div class="cab-lista"><h2>Economía</h2>
-          <select id="fAdm"><option value="">Todas las administraciones</option>${Object.entries(C.admins).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,a]) => `<option value="${esc(k)}" ${adminF===k?"selected":""}>${esc(a.nombre)}</option>`).join("")}<option value="-" ${adminF==="-"?"selected":""}>Sin administración</option></select>
+          <select id="fAdm"><option value="">Todas las administraciones</option>${Object.entries(C.admins).filter(([k,a]) => a.activo !== false || adminF === k).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,a]) => `<option value="${esc(k)}" ${adminF===k?"selected":""}>${esc(a.nombre)}</option>`).join("")}<option value="-" ${adminF==="-"?"selected":""}>Sin administración</option></select>
           <button class="btn sec" id="btnRec">⟳ Actualizar</button></div>
         <p class="vacio">Pendiente de cobrar con el mismo criterio que la app de cobros (pendientes, devueltas y en la hoja del viernes; lo cargado en el banco no cuenta).${nSin ? ` Incluye ${nSin} factura${nSin===1?"":"s"} nueva${nSin===1?"":"s"} que aún no ha${nSin===1?"":"n"} pasado a cobros (${eur(tSin)}).` : ""}${tBanco ? ` En el banco, pendiente de confirmar: ${eur(tBanco)}.` : ""}</p>
         <div class="eco-cajas">
