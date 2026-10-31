@@ -123,7 +123,8 @@
     const hoy = isoLocal(new Date());
     const c = (t.citas||[]).find(x => x.fecha === fecha && mio(x)) || (t.citas||[]).find(mio) || {};
     const cerrada = CERRADOS.includes(t.estado);
-    const editable = !PREVIEW && !cerrada && c.fecha === hoy;
+    const vistaHoy = !cerrada && (c.fecha === hoy || !!PREVIEW);          // lo que ve el técnico hoy
+    const editable = vistaHoy && !PREVIEW;                  // en la vista previa de Dirección, igual pero sin poder tocar
     const k = contacto(t, com), priv = esPrivativo(t, com);
     const mapa = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([t.direccion, t.poblacion].filter(Boolean).join(", "));
     const cobro = t.cobro || {}, pres = cobro.presupuesto || {};
@@ -147,7 +148,7 @@
           ${antes.map(a => `<p class="tf-ant">• <b>${esc(a.fechaHecho ? new Date(a.fechaHecho + "T12:00").toLocaleDateString("es-ES", {day:"numeric", month:"short", year:"2-digit"}) : "")}</b> ${esc(a.resumenHecho || a.descripcion || "")}</p>`).join("")}
           ${!notas.length && !antes.length ? `<p class="vacio">Nada apuntado.</p>` : ""}</div>
 
-        ${editable ? `<div class="tf-bloque"><h3>¿Qué has hecho?</h3>
+        ${vistaHoy ? `<div class="tf-bloque"><h3>¿Qué has hecho?</h3>
             <textarea id="tfHecho" rows="4" placeholder="Ej.: Cambiado el monitor del 3º 1ª. Probado y funciona.">${esc(t.resumenHecho || "")}</textarea></div>
           <div class="tf-bloque" id="tfFotos"></div>
           ${priv ? bloquePrivativo(t, pres, cobro) : ""}
@@ -160,6 +161,11 @@
       </div></div>`;
     const fotos = el.querySelector("#tfFotos");
     if(fotos) window.DHS_FOTOS.bloqueTrabajo(fotos, id, t, editable);
+    if(vistaHoy && PREVIEW){   // vista previa: mismo aspecto, nada se puede tocar
+      if(fotos) fotos.querySelector("h3").insertAdjacentHTML("afterend", `<span class="btn sec btn-foto">📷 Hacer / subir foto</span>`);
+      el.querySelectorAll(".tec-ficha textarea, .tec-ficha input, .tec-ficha button").forEach(x => x.disabled = true);
+      el.querySelector("#tfMsg").textContent = "Vista previa: así lo verá el técnico. Desde aquí no se puede guardar.";
+    }
     if(!editable) return;
 
     const yo = S.usuario.email.toLowerCase(), firma = () => ({por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
@@ -259,11 +265,12 @@
 
   // Dirección puede ver la pantalla de un técnico sin tocar nada: #vista-tecnico/p_pedro
   async function vistaPrevia(el, pid){
+    document.body.classList.add("modo-tec");
     try{ const d = await D().db.collection("dhs_personal").doc(pid).get(); PREVIEW = {pid, nombre:d.exists ? d.data().nombre : pid}; }
     catch(e){ PREVIEW = {pid, nombre:pid}; }
     agenda(el);
   }
-  const salirVista = () => { PREVIEW = null; };
+  const salirVista = () => { if(PREVIEW && !D().S.modoTec) document.body.classList.remove("modo-tec"); PREVIEW = null; };
 
   window.DHS_TEC = { agenda, ficha, vistaPrevia, salirVista, enPrevia: () => !!PREVIEW };
 })();

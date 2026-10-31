@@ -94,7 +94,8 @@
     Object.assign(S, {usuario:u, nombre:q.nombre, direccion:q.direccion, perfil:q.perfil, nombrePerfil:q.nombrePerfil || "", permisos:q.permisos, personalId:q.personalId || ""});
     if(S.direccion) await asegurarPerfiles();
     // Técnicos y subcontratas: pantalla propia sin menús (Ángel 31/10): agenda → ficha → cerrar
-    S.modoTec = !S.direccion && !!S.personalId && !S.puede("trabajos","todo");
+    // Perfil Técnico o Subcontrata (o cualquiera del equipo sin "Intervenciones: todo") = pantalla básica, sea quien sea.
+    S.modoTec = !S.direccion && (["tecnico","subcontrata"].includes(S.perfil) || (!!S.personalId && !S.puede("trabajos","todo")));
     document.body.classList.toggle("modo-tec", S.modoTec);
     montarMenu();
     document.querySelector(".buscador").classList.toggle("oculto", !S.puede("comunidades") || S.modoTec);
