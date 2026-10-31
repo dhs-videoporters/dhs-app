@@ -62,7 +62,7 @@
       ${PREVIEW && PRUEBAS() ? `<div class="tec-demo"><button class="btn sec" id="tecDemo">🧪 Ponerle 5 intervenciones de prueba</button>${L.some(t => t.demo) ? ` <button class="btn-mini" id="tecDemoX">🧹 Quitar las de prueba</button>` : ""}<p class="vacio" id="tecDemoMsg"></p></div>` : ""}
       <div id="tecFichaje"></div>
       <div class="tec-dias">${DL.map((x,i) => `<button class="${i===diaSel?"on":""}" data-d="${i}">${esc(nomDia(x))}<span>${delDia(L, x).length}</span></button>`).join("")}</div>
-      <p class="tec-fecha">${esc(fmtDia(f))}${esHoy ? "" : " · solo información"}</p>
+      <p class="tec-fecha">${esc(fmtDia(f))}${esHoy ? "" : " · si acabas pronto, puedes adelantarlas"}</p>
       ${lista.map(({t,c}) => `<a class="tec-item ${CERRADOS.includes(t.estado) ? "hecha" : ""}" href="#t/${t.id}/${f}">
         <div class="ti-hora">${esc(c.hora || "—")}<span>${esc(dur(c.duracion))}</span></div>
         <div class="ti-cuerpo"><b>${esc(t.direccion || t.nombre)}</b><span>${esc(t.poblacion || "")}</span>
@@ -174,7 +174,8 @@
     const hoy = isoLocal(new Date());
     const c = (t.citas||[]).find(x => x.fecha === fecha && mio(x)) || (t.citas||[]).find(mio) || {};
     const cerrada = CERRADOS.includes(t.estado);
-    const vistaHoy = !cerrada && (c.fecha === hoy || !!PREVIEW);          // lo que ve el técnico hoy
+    // Puede trabajar en cualquiera de sus 3 días (Ángel 31/10: si acaba pronto, adelanta una de mañana y la cierra)
+    const vistaHoy = !cerrada && (c.fecha === hoy || laborables().includes(c.fecha) || !!PREVIEW);
     const editable = vistaHoy && (!PREVIEW || PRUEBAS());                  // en la vista previa de Dirección, igual pero sin poder tocar
     const k = contacto(t, com), priv = esPrivativo(t, com);
     const mapa = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([t.direccion, t.poblacion].filter(Boolean).join(", "));
@@ -249,7 +250,7 @@
         if(t.empezado) cambio.tiempoReal = Math.max(15, Math.round((Date.now() - t.empezado) / 900000) * 15);
         if(t.adminId && t.comunidadId && !(t.avisoAdmin && ["enviado","enviadoPruebas","pendiente"].includes(t.avisoAdmin.estado))) cambio.avisoAdmin = {estado:"pendiente", pedidoPor:yo, pedidoEn:Date.now()};
         await ref.update(cambio);
-        await nota({tipo:"estado", de:t.estado, a:"hecho", texto:tx});
+        await nota({tipo:"estado", de:t.estado, a:"hecho", texto:tx + (c.fecha && c.fecha > hoy ? " (adelantada: estaba para el " + fmtDia(c.fecha) + ", hecha hoy)" : "")});
         location.hash = "agenda";
       }catch(e){ msg("No se ha podido cerrar (" + (e.code||e) + ")."); }
     };
