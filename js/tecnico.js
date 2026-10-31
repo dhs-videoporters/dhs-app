@@ -119,7 +119,7 @@
       try{ (await db.collection("dhs_trabajos").where("comunidadId", "==", t.comunidadId).get()).forEach(x => { const v = x.data(); if(x.id !== id && ["hecho","facturado","cobrado"].includes(v.estado)) antes.push(v); }); }catch(e){}
       antes.sort((a,b) => (b.fechaHecho||"").localeCompare(a.fechaHecho||"")); antes = antes.slice(0,3);
     }
-    try{ (await ref.collection("notas").orderBy("en", "desc").limit(10).get()).forEach(n => { const v = n.data(); if(v.texto) notas.push(v); }); }catch(e){}
+    try{ (await ref.collection("notas").orderBy("en", "desc").limit(20).get()).forEach(n => { const v = n.data(); if(v.texto && !["cita","prioridad"].includes(v.tipo)) notas.push(v); }); }catch(e){}
     const hoy = isoLocal(new Date());
     const c = (t.citas||[]).find(x => x.fecha === fecha && mio(x)) || (t.citas||[]).find(mio) || {};
     const cerrada = CERRADOS.includes(t.estado);

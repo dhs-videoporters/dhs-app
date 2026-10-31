@@ -431,7 +431,7 @@ body.modo-tec #menu, body.modo-tec #menuMovil, body.modo-tec .buscador{display:n
 .tec-dias button{font:inherit;font-size:15px;font-weight:600;padding:12px 4px;border-radius:10px;border:1px solid var(--linea);background:#fff;cursor:pointer}
 .tec-dias button.on{background:#1f3a5f;color:#fff;border-color:#1f3a5f}
 .tec-dias span{display:inline-block;margin-left:6px;min-width:20px;padding:0 6px;border-radius:10px;background:rgba(0,0,0,.08);font-size:13px}
-.tec-fecha{margin:12px 2px 8px;color:var(--gris);text-transform:capitalize}
+.tec-fecha{margin:12px 2px 8px;color:var(--gris)}.tec-fecha::first-letter{text-transform:uppercase}
 .tec-item{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--linea);border-radius:12px;padding:14px;margin-bottom:8px;text-decoration:none;color:inherit}
 .tec-item.hecha{opacity:.6}
 .ti-hora{font-size:22px;font-weight:700;min-width:64px;text-align:center}.ti-hora span{display:block;font-size:12px;font-weight:400;color:var(--gris)}
@@ -440,7 +440,7 @@ body.modo-tec #menu, body.modo-tec #menuMovil, body.modo-tec .buscador{display:n
 .ti-ir{font-size:26px;color:var(--gris)}
 .tec-nada{text-align:center;padding:30px 0}
 .tec-ficha h1{font-size:22px;margin:4px 0}
-.tf-hora{font-size:20px;font-weight:700}.tf-hora span{font-weight:400;color:var(--gris);font-size:16px}.tf-dia{display:block;font-size:14px!important;text-transform:capitalize}
+.tf-hora{font-size:20px;font-weight:700}.tf-hora span{font-weight:400;color:var(--gris);font-size:16px}.tf-dia{display:block;font-size:14px!important}.tf-dia::first-letter{text-transform:uppercase}
 .tf-acceso{margin-top:6px;background:#eef4ff;border-radius:8px;padding:6px 10px}
 .tf-bloque{border-top:1px solid var(--linea);margin-top:14px;padding-top:12px}.tf-bloque h3{margin:0 0 6px;font-size:15px;color:var(--gris);text-transform:uppercase;letter-spacing:.03em}
 .tf-bloque.ok{background:#effaf2;border-radius:10px;padding:10px 12px}
