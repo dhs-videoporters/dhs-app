@@ -454,3 +454,5 @@ body.modo-tec #menu, body.modo-tec #menuMovil, body.modo-tec .buscador{display:n
 .tp-linea{display:grid;grid-template-columns:1fr 90px;gap:6px;margin-bottom:6px}
 .tp-total{margin:8px 0;font-size:16px}.tp-canal{display:flex;gap:16px;margin:8px 0}.tp-canal label{font-size:16px}
 #tpEnviar,#tcGuardar{margin-top:8px;width:100%;padding:12px;font-size:16px}
+.tec-ficha #tfFotos .btn-foto{display:block;text-align:center;font-size:18px;padding:14px;margin:4px 0 10px;background:#2f6fd6;border-color:#2f6fd6;color:#fff;font-weight:600;cursor:pointer}
+.tec-ficha #tfFotos h3{margin-bottom:8px}
