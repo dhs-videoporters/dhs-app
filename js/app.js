@@ -93,11 +93,14 @@
     }
     Object.assign(S, {usuario:u, nombre:q.nombre, direccion:q.direccion, perfil:q.perfil, nombrePerfil:q.nombrePerfil || "", permisos:q.permisos, personalId:q.personalId || ""});
     if(S.direccion) await asegurarPerfiles();
+    // Técnicos y subcontratas: pantalla propia sin menús (Ángel 31/10): agenda → ficha → cerrar
+    S.modoTec = !S.direccion && !!S.personalId && !S.puede("trabajos","todo");
+    document.body.classList.toggle("modo-tec", S.modoTec);
     montarMenu();
-    document.querySelector(".buscador").classList.toggle("oculto", !S.puede("comunidades"));
+    document.querySelector(".buscador").classList.toggle("oculto", !S.puede("comunidades") || S.modoTec);
     if(S.puede("comunidades")) window.DHS_COM.buscadorGlobal(document.querySelector("#buscaGlobal"), document.querySelector("#resGlobal"));
     mostrar("app");
-    irA(location.hash.slice(1) || (S.personalId && !S.puede("trabajos","todo") ? "mitrabajo" : "calendario"));
+    irA(location.hash.slice(1) || (S.modoTec ? "agenda" : "calendario"));
     window.DHS_COPIAS.avisoAlEntrar();
     if(window.DHS_FICHA) window.DHS_FICHA.avisoAlEntrar();
   });
@@ -117,7 +120,14 @@
   window.addEventListener("hashchange", () => S.usuario && irA(location.hash.slice(1)));
 
   function irA(ruta){
-    const [id0, arg] = decodeURIComponent(ruta||"").split("/");
+    const [id0, arg, arg2] = decodeURIComponent(ruta||"").split("/");
+    // Modo técnico: solo agenda y ficha. Dirección puede verlo como un técnico con #vista-tecnico/<id>.
+    if(S.modoTec || (window.DHS_TEC && window.DHS_TEC.enPrevia() && (id0 === "agenda" || id0 === "t"))){
+      if(id0 === "t" && arg) return window.DHS_TEC.ficha($("#contenido"), arg, arg2);
+      return window.DHS_TEC.agenda($("#contenido"));
+    }
+    if(id0 === "vista-tecnico" && arg && S.direccion) return window.DHS_TEC.vistaPrevia($("#contenido"), arg);
+    if(window.DHS_TEC) window.DHS_TEC.salirVista();
     const ALIAS = {comunidad:"comunidades", administrador:"administradores", intervencion:"intervenciones", "nueva-intervencion":"intervenciones", ruta:"intervenciones", trabajos:"intervenciones"};
     // La ficha de trabajo la abre el técnico (desde Mi trabajo) y también la oficina (desde la intervención).
     if(id0 === "trabajo" && arg && S.puede("trabajos","propios")){

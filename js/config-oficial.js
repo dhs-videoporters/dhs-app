@@ -1,6 +1,7 @@
 // Configuración PÚBLICA del proyecto Firebase OFICIAL (dhs-camaras), el mismo de las apps de cámaras y de cobros.
 // Estas claves no son secretas: la seguridad la ponen las reglas de Firestore y de Storage.
 window.DHS_CONFIG = {
+  fichaje: true,   // Ángel 31/10: los técnicos fichan entrada (a menos de 3 km de Viladecavalls) y salida
   entorno: "oficial",
   firebase: {
     apiKey: "AIzaSyDqcZncea3Wo9HE4x3KZuVt2Veha3CPCdE",

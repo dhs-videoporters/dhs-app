@@ -420,3 +420,37 @@ h1 .emp-chip{font-size:13px}
 .aviso-prep{margin-top:10px;padding:10px 14px;border-radius:10px;background:#fff6e6;border:1px solid #f3d39b}
 .aviso-prep ul{margin:6px 0 0 18px;padding:0}.aviso-prep li{margin:3px 0}.aviso-prep li.prep-urge{color:#b03a2e}.aviso-prep a{color:inherit}
 .prep-chk{display:block;margin:8px 0}
+
+/* ---------- Pantalla del técnico (31/10) ---------- */
+body.modo-tec #menu, body.modo-tec #menuMovil, body.modo-tec .buscador{display:none!important}
+.tec{max-width:640px;margin:0 auto}
+.tec-preview{background:#fff6e6;border:1px solid #f3d39b;border-radius:10px;padding:8px 12px;margin-bottom:10px}
+.tec-fichaje{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;background:#fff;border:1px solid var(--linea);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.tec-fichaje.dentro{background:#effaf2;border-color:#bfe6cc}.tec-fichaje .btn{font-size:16px;padding:10px 16px}.tec-fichaje p{width:100%;margin:0}
+.tec-dias{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tec-dias button{font:inherit;font-size:15px;font-weight:600;padding:12px 4px;border-radius:10px;border:1px solid var(--linea);background:#fff;cursor:pointer}
+.tec-dias button.on{background:#1f3a5f;color:#fff;border-color:#1f3a5f}
+.tec-dias span{display:inline-block;margin-left:6px;min-width:20px;padding:0 6px;border-radius:10px;background:rgba(0,0,0,.08);font-size:13px}
+.tec-fecha{margin:12px 2px 8px;color:var(--gris);text-transform:capitalize}
+.tec-item{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--linea);border-radius:12px;padding:14px;margin-bottom:8px;text-decoration:none;color:inherit}
+.tec-item.hecha{opacity:.6}
+.ti-hora{font-size:22px;font-weight:700;min-width:64px;text-align:center}.ti-hora span{display:block;font-size:12px;font-weight:400;color:var(--gris)}
+.ti-cuerpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.ti-cuerpo b{font-size:17px}.ti-cuerpo span{color:var(--gris);font-size:14px}
+.ti-desc{color:var(--texto)!important}.ti-est{font-weight:600;color:#9a5b00!important}.ti-est.ok{color:#1e7a3c!important}
+.ti-ir{font-size:26px;color:var(--gris)}
+.tec-nada{text-align:center;padding:30px 0}
+.tec-ficha h1{font-size:22px;margin:4px 0}
+.tf-hora{font-size:20px;font-weight:700}.tf-hora span{font-weight:400;color:var(--gris);font-size:16px}.tf-dia{display:block;font-size:14px!important;text-transform:capitalize}
+.tf-acceso{margin-top:6px;background:#eef4ff;border-radius:8px;padding:6px 10px}
+.tf-bloque{border-top:1px solid var(--linea);margin-top:14px;padding-top:12px}.tf-bloque h3{margin:0 0 6px;font-size:15px;color:var(--gris);text-transform:uppercase;letter-spacing:.03em}
+.tf-bloque.ok{background:#effaf2;border-radius:10px;padding:10px 12px}
+.tf-nombre{font-size:17px;font-weight:600;margin:0 0 8px}
+.tf-llamar{display:block;text-align:center;font-size:18px;padding:14px;background:#1e7a3c;border-color:#1e7a3c}
+.tf-txt{font-size:17px;white-space:pre-wrap}.tf-nota{background:#fff6e6;border-radius:8px;padding:6px 10px}
+.tf-ant{margin:4px 0}
+.tec-ficha textarea,.tec-ficha input:not([type=radio]){width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid #cfd7e3;border-radius:8px;box-sizing:border-box}
+.tf-botones{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}.tf-botones .btn{font-size:16px;padding:14px 8px}
+.tf-info{margin-top:16px;background:#eef0f3;border-radius:10px;padding:12px}
+.tp-linea{display:grid;grid-template-columns:1fr 90px;gap:6px;margin-bottom:6px}
+.tp-total{margin:8px 0;font-size:16px}.tp-canal{display:flex;gap:16px;margin:8px 0}.tp-canal label{font-size:16px}
+#tpEnviar,#tcGuardar{margin-top:8px;width:100%;padding:12px;font-size:16px}

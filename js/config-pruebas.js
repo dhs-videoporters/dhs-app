@@ -1,6 +1,7 @@
 // Configuración PÚBLICA del proyecto Firebase de PRUEBAS (dhs-pruebas).
 // Estas claves no son secretas: la seguridad la ponen las reglas de Firestore.
 window.DHS_CONFIG = {
+  fichaje: true,   // Ángel 31/10: los técnicos fichan entrada (a menos de 3 km de Viladecavalls) y salida
   entorno: "pruebas",
   firebase: {
     apiKey: "AIzaSyA8RF2qbRo5b89OHkTClQLMZxzeHqXdKNc",
