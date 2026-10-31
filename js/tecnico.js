@@ -172,8 +172,14 @@
     }
     try{ (await ref.collection("notas").orderBy("en", "desc").limit(20).get()).forEach(n => { const v = n.data(); if(v.texto && !["cita","prioridad"].includes(v.tipo)) notas.push(v); }); }catch(e){}
     // Primera vez en la finca: foto de la placa del videoportero + ¿tiene cámaras? (Ángel 31/10)
+    // Para todos (comunidades y particulares). Particular sin ficha de comunidad: se guarda en la propia intervención.
     let ed = null;
-    if(t.comunidadId && com && com.tipo !== "particular"){
+    const edEnTrabajo = !t.comunidadId || !com;
+    if(edEnTrabajo){
+      ed = {placa:(t.fotos||[]).some(f => /placa/i.test(f.etiqueta || "")), camaras:""};
+      try{ (await ref.collection("notas").where("tipo", "==", "edificio").get()).forEach(n => { ed.camaras = n.data().camaras || ed.camaras; }); }catch(e){}
+    }
+    else {
       ed = {placa:false, camaras:com.camaras && com.camaras.tiene ? "si" : ""};
       try{ (await db.collection("dhs_comunidades").doc(t.comunidadId).collection("fotos").get()).forEach(d => { const v = d.data();
         if(d.id === "_edificio") ed.camaras = ed.camaras || v.camaras || ""; else if(v.ruta && /placa/i.test(v.etiqueta || "")) ed.placa = true; }); }catch(e){ ed = null; }
@@ -194,11 +200,11 @@
         <h1>${esc(t.direccion || t.nombre)}</h1>
         <p class="vacio">${esc([t.poblacion, t.nombre !== t.direccion ? t.nombre : ""].filter(Boolean).join(" · "))} · <a href="${mapa}" target="_blank" rel="noopener">Cómo llegar</a></p>
         ${com && com.acceso ? `<p class="tf-acceso">🔑 ${esc(com.acceso)}</p>` : ""}
-        ${vistaHoy && ed && (!ed.placa || !ed.camaras) ? `<div class="tf-bloque tf-edificio" id="tfEdif"><h3>🏢 Primera vez en esta finca</h3>
+        ${vistaHoy && ed && (!ed.placa || !ed.camaras) ? `<div class="tf-bloque tf-edificio" id="tfEdif"><h3>🏢 ${edEnTrabajo ? "Antes de empezar" : "Primera vez en esta finca"}</h3>
           <p>Antes de nada, 2 cosas rápidas:</p>
           <p class="ed-paso"><b>1.</b> Foto de la placa del videoportero (de cerca, que se vea la marca y los pulsadores).</p>
           <div id="edPlaca">${ed.placa ? `<p class="ed-ok">✅ Foto de la placa hecha</p>` : `<label class="btn tf-foto-grande">📷 Foto de la placa<input type="file" accept="image/*" capture="environment" hidden></label>`}</div>
-          <p class="ed-paso"><b>2.</b> ¿El edificio tiene cámaras?</p>
+          <p class="ed-paso"><b>2.</b> ${edEnTrabajo ? "¿Tiene cámaras (la casa o el edificio)?" : "¿El edificio tiene cámaras?"}</p>
           <div class="ed-cam" id="edCam">${ed.camaras ? `<p class="ed-ok">✅ Cámaras: ${ed.camaras === "si" ? "Sí" : "No"}</p>` : `<button class="btn sec" data-c="si">📹 Sí tiene</button><button class="btn sec" data-c="no">🚫 No tiene</button>`}</div>
           <p class="vacio" id="edMsg"></p></div>` : ""}
 
@@ -229,21 +235,27 @@
     if(fotos) window.DHS_FOTOS.bloqueTrabajo(fotos, id, t, editable);
     const edB = el.querySelector("#tfEdif");
     if(edB && editable){
-      const fRef = db.collection("dhs_comunidades").doc(t.comunidadId).collection("fotos"), edMsg = x => edB.querySelector("#edMsg").textContent = x;
+      const fRef = edEnTrabajo ? null : db.collection("dhs_comunidades").doc(t.comunidadId).collection("fotos"), edMsg = x => edB.querySelector("#edMsg").textContent = x;
       const yoE = S.usuario.email.toLowerCase();
       const inp = edB.querySelector("#edPlaca input");
       if(inp) inp.onchange = async e => {
         const file = e.target.files[0]; e.target.value = ""; if(!file) return;
         edMsg("Subiendo la foto…");
         try{
-          const f = await window.DHS_FOTOS.subir(file, "comunidades/" + t.comunidadId + "/finca");
-          await fRef.add({...f, etiqueta:"Placa de calle", principal:true, trabajoId:id});
+          if(edEnTrabajo){
+            const f = await window.DHS_FOTOS.subir(file, "particulares/" + id);
+            await ref.update({fotos:firebase.firestore.FieldValue.arrayUnion({...f, etiqueta:"Placa del videoportero"}), modificado:firma()});
+          } else {
+            const f = await window.DHS_FOTOS.subir(file, "comunidades/" + t.comunidadId + "/finca");
+            await fRef.add({...f, etiqueta:"Placa de calle", principal:true, trabajoId:id});
+          }
           ed.placa = true; edB.querySelector("#edPlaca").innerHTML = `<p class="ed-ok">✅ Foto de la placa hecha</p>`; edMsg("");
         }catch(err){ edMsg("No se ha podido subir (" + (err.code || err) + ")."); }
       };
       edB.querySelectorAll("#edCam button").forEach(b => b.onclick = async () => {
         try{
-          await fRef.doc("_edificio").set({tipo:"edificio", camaras:b.dataset.c, por:yoE, en:Date.now(), trabajoId:id});
+          if(edEnTrabajo) await nota({tipo:"edificio", camaras:b.dataset.c, texto:"Cámaras: " + (b.dataset.c === "si" ? "sí tiene" : "no tiene")});
+          else await fRef.doc("_edificio").set({tipo:"edificio", camaras:b.dataset.c, por:yoE, en:Date.now(), trabajoId:id});
           ed.camaras = b.dataset.c; edB.querySelector("#edCam").innerHTML = `<p class="ed-ok">✅ Cámaras: ${b.dataset.c === "si" ? "Sí" : "No"}</p>`;
         }catch(err){ edMsg("No se ha podido guardar (" + (err.code || err) + ")."); }
       });

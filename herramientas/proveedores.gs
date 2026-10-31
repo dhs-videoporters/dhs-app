@@ -103,3 +103,14 @@ function leerFacturasProveedores_(proyecto) {
 }
 // Para ejecutar a mano desde el editor (oficial)
 function leerFacturasProveedores() { Logger.log(JSON.stringify(leerFacturasProveedores_('dhs-camaras'))); }
+
+/** Cada noche a las 21:00: lee las facturas de proveedores nuevas de Drive (aparte de la copia, que ya va justa de tiempo). 31/10 */
+function proveedoresNoche() {
+  const inicio = Date.now();
+  for (let i = 0; i < 8 && Date.now() - inicio < 4 * 60 * 1000; i++) { const r = leerFacturasProveedores_(PROYECTO); if (!r.quedan || !r.leidas) break; }
+}
+/** Ejecutar una sola vez: programa proveedoresNoche cada día a las 21:00. */
+function instalarProveedoresNoche() {
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'proveedoresNoche') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('proveedoresNoche').timeBased().everyDays(1).atHour(21).create();
+}
