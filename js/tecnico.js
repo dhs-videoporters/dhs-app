@@ -234,6 +234,10 @@
           <div class="tf-bloque tf-volver-caja oculto" id="tfVolverCaja"><h3>🔁 Tengo que volver</h3>
             <label class="campo"><span>¿Qué falta por hacer? (material, otra visita…)</span><textarea id="tvFalta" rows="3" placeholder="Ej.: Falta cambiar la placa, hay que pedirla. Traer cable."></textarea></label>
             <label class="campo"><span>¿Cuánto tiempo necesitas la próxima vez?</span><select id="tvMin">${[30,60,90,120,180,240,360,480].map(m => `<option value="${m}" ${m === 60 ? "selected" : ""}>${esc(durV(m))}</option>`).join("")}</select></label>
+            <div class="campo"><span>¿Has quedado ya con el cliente?</span>
+              <div class="tp-canal"><label><input type="radio" name="tvQuedado" value="no" checked> No, que lo agende la oficina</label><label><input type="radio" name="tvQuedado" value="si"> Sí, vuelvo el día…</label></div></div>
+            <div id="tvCuando" class="oculto"><div class="tv-cuando"><label>Día<input type="date" id="tvDia"></label><label>Hora<input type="time" id="tvHora" step="900"></label></div>
+              <div id="tvHueco" class="tv-hueco"></div></div>
             <button class="btn tf-volver" id="tvOk">Guardar: hay que volver</button></div>
           <p class="vacio" id="tfMsg"></p>`
         : cerrada ? `<div class="tf-bloque ok"><h3>✅ Terminada</h3><p>${esc(t.resumenHecho || "")}</p></div><div class="tf-bloque" id="tfFotos"></div>`
@@ -296,14 +300,64 @@
     };
     // Tengo que volver (Ángel 31/10): queda "a medias" con lo que falta y el tiempo que hará falta la próxima vez
     el.querySelector("#tfVolver").onclick = () => { const c2 = el.querySelector("#tfVolverCaja"); c2.classList.toggle("oculto"); if(!c2.classList.contains("oculto")) c2.scrollIntoView({block:"center"}); };
+    // El técnico puede dejar ya agendada la vuelta si ha quedado con el cliente; se mira su agenda de ese día y avisa si la dobla (Ángel 01/11)
+    const aMin = h => { const [a, b] = String(h||"").split(":").map(Number); return (a||0) * 60 + (b||0); };
+    const aHora = m => String(Math.floor(m/60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+    let choque = null;   // [{hora, fin, txt}] de lo que se solapa
+    const quedado = () => (el.querySelector("input[name=tvQuedado]:checked") || {}).value === "si";
+    async function mirarHueco(){
+      const caja = el.querySelector("#tvHueco"), dia = el.querySelector("#tvDia").value, hora = el.querySelector("#tvHora").value, min = Number(el.querySelector("#tvMin").value);
+      choque = null; caja.innerHTML = ""; if(!dia) return;
+      const dow = new Date(dia + "T12:00").getDay();
+      let L = []; try{ L = await leerMios(); }catch(e){}
+      const ocup = delDia(L.filter(x => x.id !== id), dia).filter(({t:x}) => !CERRADOS.includes(x.estado))
+        .map(({t:x, c:cc}) => ({ini:aMin(cc.hora || "09:00"), fin:aMin(cc.hora || "09:00") + (Number(cc.duracion) || 60), txt:(cc.hora || "sin hora") + " · " + (x.direccion || x.nombre)}))
+        .sort((a,b) => a.ini - b.ini);
+      // Primer hueco libre de 8:00 a 19:00 que quepa
+      let libre = null; for(let m = 8 * 60; m + min <= 19 * 60; m += 15){ if(!ocup.some(o => m < o.fin && m + min > o.ini)){ libre = m; break; } }
+      let h = "";
+      if(dow === 0 || dow === 6) h += `<p class="tv-mal">⚠️ Ese día es ${dow === 6 ? "sábado" : "domingo"}.</p>`;
+      if(dia < isoLocal(new Date())) h += `<p class="tv-mal">⚠️ Ese día ya ha pasado.</p>`;
+      h += ocup.length ? `<p>Ese día ya tienes:</p><ul>${ocup.map(o => `<li>${esc(o.txt)} (hasta las ${aHora(o.fin)})</li>`).join("")}</ul>` : `<p class="tv-bien">✅ Ese día lo tienes libre.</p>`;
+      if(hora){
+        const ini = aMin(hora), fin = ini + min;
+        const sol = ocup.filter(o => ini < o.fin && fin > o.ini);
+        if(sol.length){ choque = sol; h += `<p class="tv-mal">⚠️ A las ${esc(hora)} (${esc(durV(min))}) <b>doblas la agenda</b> con: ${sol.map(o => esc(o.txt)).join(", ")}.</p>`; }
+        else h += `<p class="tv-bien">✅ A las ${esc(hora)} tienes hueco (hasta las ${aHora(fin)}).</p>`;
+      }
+      if((!hora || choque) && libre != null) h += `<button type="button" class="btn sec btn-mini" id="tvUsar" data-h="${aHora(libre)}">Usar el primer hueco libre: ${aHora(libre)}</button>`;
+      if(libre == null && ocup.length) h += `<p class="tv-mal">Ese día no te queda un hueco de ${esc(durV(min))} entre las 8:00 y las 19:00.</p>`;
+      caja.innerHTML = h;
+      const u = caja.querySelector("#tvUsar"); if(u) u.onclick = () => { el.querySelector("#tvHora").value = u.dataset.h; mirarHueco(); };
+    }
+    el.querySelectorAll("input[name=tvQuedado]").forEach(r => r.onchange = () => { el.querySelector("#tvCuando").classList.toggle("oculto", !quedado()); if(quedado()){ if(!el.querySelector("#tvDia").value) el.querySelector("#tvDia").value = laborables().find(x => x > isoLocal(new Date())) || ""; mirarHueco(); } });
+    ["#tvDia", "#tvHora", "#tvMin"].forEach(k => el.querySelector(k).addEventListener("change", () => quedado() && mirarHueco()));
+
     el.querySelector("#tvOk").onclick = async () => {
       const tx = texto(); if(!tx) return msg("Escribe arriba qué has hecho hoy.");
       const falta = el.querySelector("#tvFalta").value.trim(); if(!falta){ el.querySelector("#tvFalta").focus(); return msg("Escribe qué falta por hacer."); }
       const min = Number(el.querySelector("#tvMin").value), hoyMin = tiempoHoy(); if(!hoyMin) return;
+      let vuelta = null;
+      if(quedado()){
+        const dia = el.querySelector("#tvDia").value, hora = el.querySelector("#tvHora").value;
+        if(!dia || !hora) return msg("Pon el día y la hora en que has quedado con el cliente.");
+        await mirarHueco();
+        if(choque && !await DHS_PREGUNTA("Vas a doblar la agenda: ese día a esa hora ya tienes " + choque.map(o => o.txt).join(", ") + ". ¿Lo dejas así igualmente?")) return;
+        vuelta = {fecha:dia, hora, duracion:min, personal:[yoPid()]};
+      }
       msg("Guardando…");
+      const base = {estado:"amedias", resumenHecho:tx, tiempoReal:(yaFue ? (t.tiempoReal||0) : 0) + hoyMin, hechoPor:[yoPid()], fechaHecho:isoLocal(new Date()), editando:null, modificado:firma()};
+      const faltaTxt = falta + " · ⏱ Volver: " + durV(min) + " (" + min + " min)";
+      const cuandoTxt = vuelta ? fmtDia(vuelta.fecha) + " a las " + vuelta.hora : "";
       try{
-        await ref.update({estado:"amedias", resumenHecho:tx, falta:falta + " · ⏱ Volver: " + durV(min) + " (" + min + " min)", tiempoReal:(yaFue ? (t.tiempoReal||0) : 0) + hoyMin, hechoPor:[yoPid()], fechaHecho:isoLocal(new Date()), editando:null, modificado:firma()});
-        await nota({tipo:"estado", de:t.estado, a:"amedias", texto:tx + "\nFalta: " + falta + "\nPara volver necesita: " + durV(min) + " · Hoy ha estado: " + durV(hoyMin), volverMin:min, hoyMin});
+        let agendada = false;
+        if(vuelta){
+          try{ await ref.update({...base, falta:faltaTxt, citas:[...(t.citas||[]), vuelta]}); agendada = true; }
+          catch(e){ if(e.code !== "permission-denied") throw e; }   // si aún no tiene permiso para poner citas: queda apuntado para la oficina
+        }
+        if(!agendada) await ref.update({...base, falta:faltaTxt + (vuelta ? " · 📞 Quedado con el cliente: " + cuandoTxt + " (confirmar)" : "")});
+        await nota({tipo:"estado", de:t.estado, a:"amedias", texto:tx + "\nFalta: " + falta + "\nPara volver necesita: " + durV(min) + " · Hoy ha estado: " + durV(hoyMin)
+          + (vuelta ? (agendada ? "\n📅 Vuelta agendada por el técnico: " : "\n📞 Ha quedado con el cliente (falta ponerlo en el calendario): ") + cuandoTxt + (choque ? " ⚠️ dobla la agenda" : "") : ""), volverMin:min, hoyMin});
         location.hash = "agenda";
       }catch(e){ msg("No se ha podido guardar (" + (e.code||e) + ")."); }
     };
