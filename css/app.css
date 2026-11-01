@@ -451,7 +451,7 @@ body.modo-tec #menu, body.modo-tec #menuMovil, body.modo-tec .buscador{display:n
 .tec-ficha textarea,.tec-ficha input:not([type=radio]){width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid #cfd7e3;border-radius:8px;box-sizing:border-box}
 .tf-botones{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}.tf-botones .btn{font-size:16px;padding:14px 8px}
 .tf-info{margin-top:16px;background:#eef0f3;border-radius:10px;padding:12px}
-.tp-linea{display:grid;grid-template-columns:1fr 90px;gap:6px;margin-bottom:6px}
+.tp-linea{display:block}
 .tp-total{margin:8px 0;font-size:16px}.tp-canal{display:flex;gap:16px;margin:8px 0}.tp-canal label{font-size:16px}
 #tpEnviar,#tcGuardar{margin-top:8px;width:100%;padding:12px;font-size:16px}
 .tec-ficha #tfFotos .btn-foto{display:block;text-align:center;font-size:18px;padding:14px;margin:4px 0 10px;background:#2f6fd6;border-color:#2f6fd6;color:#fff;font-weight:600;cursor:pointer}
@@ -487,3 +487,6 @@ body.modo-tec #btnVistaTec{display:none}
 .tv-cuando{display:flex;gap:8px;margin:6px 0}.tv-cuando label{flex:1;font-size:12px;color:var(--gris)}.tv-cuando input{width:100%;font-size:16px}
 .tv-hueco{font-size:14px;margin-bottom:10px}.tv-hueco ul{margin:4px 0 6px 18px;padding:0}.tv-mal{color:#b03a2e;font-weight:600}.tv-bien{color:#1f7a3d;font-weight:600}
 .tf-volver-caja .tp-canal{display:flex;flex-direction:column;gap:6px}
+.tf-volver-caja .tp-canal label{display:flex;align-items:center;gap:8px;font-size:15px;text-align:left}.tf-volver-caja .tp-canal input[type=radio]{width:auto;margin:0}
+.tp-f1 .tp-con{min-width:0;width:100%}.tp-f2 .tp-imp{flex:1}.tp-sug{margin-top:4px}
+.tf-llamar{text-decoration:none}
