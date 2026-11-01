@@ -383,8 +383,8 @@
       <button class="prio ${cambia ? "cambia" : ""}" data-id="${t.id}" title="Prioridad: ${pr[1]}${cambia ? " (toca para cambiar)" : ""}" ${cambia ? "" : "disabled"}>${pr[0]}</button>
       <a class="f-cuerpo" href="#intervencion/${t.id}">
         <div class="f-nombre">${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] + " " : ""}${esc(t.nombre)} <span class="vacio">· ${esc(t.numero)}</span></div>
-        <div class="f-sub">${CERRADOS.includes(t.estado) && t.resumenHecho ? "✅ " + (t.fechaHecho ? esc(fmtFecha(t.fechaHecho)) + " · " : "") + esc(t.resumenHecho.slice(0,110)) : esc((t.descripcion||"").slice(0,110))}${t.estado === "amedias" && t.falta ? ` <span class="tag aviso">Falta: ${esc(t.falta.slice(0,60))}</span>` : ""}</div>
-        <div class="f-tags">${window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}${quien}<span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span>${cita ? `<span class="tag gris">${esc(fechasTxt(t.citas))}</span>` : `<span class="tag aviso">Sin fecha</span>`}${t._grupo ? `<span class="tag azul">🔗 ${t._grupo.length} intervenciones juntas</span>` : ""}${PREPARA.necesita(t) && PREPARA.faltan(t).length ? `<span class="tag aviso">⚠️ Falta preparar: ${PREPARA.faltan(t).length}/3</span>` : ""}</div>
+        <div class="f-sub">${CERRADOS.includes(t.estado) && t.resumenHecho ? "✅ " + (t.fechaHecho ? esc(fmtFecha(t.fechaHecho)) + " · " : "") + esc(t.resumenHecho.slice(0,110)) : esc((t.descripcion||"").slice(0,110))}${t.estado === "amedias" && t.falta ? ` <span class="tag aviso">Falta: ${esc(t.falta.slice(0,80))}</span>` : ""}</div>
+        <div class="f-tags">${window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}${quien}<span class="tag est-${esc(t.estado)}">${esc(ESTADOS[t.estado]||t.estado)}</span>${t.estado === "amedias" ? ((t.citas||[]).some(c => c.fecha > (t.fechaHecho || "")) ? `<span class="tag azul">🔁 2ª visita agendada</span>` : `<span class="tag c-volver">🔁 Ya fue · hay que volver: agendar</span>`) : ""}${cita ? `<span class="tag gris">${esc(fechasTxt(t.citas))}</span>` : `<span class="tag aviso">Sin fecha</span>`}${t._grupo ? `<span class="tag azul">🔗 ${t._grupo.length} intervenciones juntas</span>` : ""}${PREPARA.necesita(t) && PREPARA.faltan(t).length ? `<span class="tag aviso">⚠️ Falta preparar: ${PREPARA.faltan(t).length}/3</span>` : ""}</div>
       </a></div>${t._grupo ? `<div class="grupo-int">${t._grupo.filter(x => x.id !== t.id).map(x => `<a href="#intervencion/${x.id}" class="vacio">${esc(x.numero)}</a>`).join(" · ")}${D().S.puede("trabajos","todo") ? ` <button class="btn sec btn-mini unir-int" data-ids="${t._grupo.map(x => x.id).join(",")}">Unir en una sola</button>` : ""}</div>` : ""}</div>`;
   }
   // Fechas de una intervención: un día, o «5 días: 30 oct – 5 nov»
@@ -468,7 +468,7 @@
         ${(() => { // Resumen arriba (Ángel 29/10), como en Economía y Proveedores; al tocar una caja se filtra la lista
           const G = agrupar(docs), n = k => G.filter(t => enCaja(t, k)).length;
           const c = (k, cls, ico, txt, sub) => `<button class="eco-caja int-caja ${cls} ${filtro.caja===k?"on":""}" data-caja="${k}"><span>${ico} ${txt}</span><b>${n(k)}</b><i>${sub}</i></button>`;
-          return `<div class="eco-cajas">${c("sin","c2","📅","Sin agendar","pendientes sin fecha")}${c("sin3","c-mal","⏰","Sin agendar +3 días","llevan más de 3 días esperando")}${c("agenda","c3","🗓️","Agendadas","con fecha puesta")}${c("remate","c-rem","🔧","Pendiente de remate","a medias: falta algo")}</div>`;
+          return `<div class="eco-cajas">${c("sin","c2","📅","Sin agendar","pendientes sin fecha")}${c("sin3","c-mal","⏰","Sin agendar +3 días","llevan más de 3 días esperando")}${c("agenda","c3","🗓️","Agendadas","con fecha puesta")}${c("remate","c-rem","🔁","Hay que volver","ya se fue: falta algo (2ª visita)")}</div>`;
         })()}
         ${PREPARA.aviso(docs)}
         <div class="chips" id="chVer" style="margin-top:10px">

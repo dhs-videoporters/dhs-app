@@ -194,7 +194,7 @@
     const mapa = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([t.direccion, t.poblacion].filter(Boolean).join(", "));
     const cobro = t.cobro || {}, pres = cobro.presupuesto || {};
     const durV = m => m < 60 ? m + " min" : (m % 60 ? Math.floor(m/60) + " h " + (m%60) + " min" : (m/60) + (m === 60 ? " hora" : " horas")) + (m === 240 ? " (media jornada)" : m === 480 ? " (jornada entera)" : "");
-    const tHoy = (() => { if(!t.empezado) return 60; const m = (Date.now() - t.empezado) / 60000; return [15,30,45,60,90,120,180,240,300,360,480].reduce((a,b) => Math.abs(b - m) < Math.abs(a - m) ? b : a); })();
+    const yaFue = t.estado === "amedias";   // segunda visita: el tiempo se suma al de la primera
     el.innerHTML = `<div class="tec">
       <a href="#agenda" class="volver">‹ Agenda</a>
       <div class="panel tec-ficha">
@@ -223,7 +223,8 @@
           ${!notas.length && !antes.length ? `<p class="vacio">Nada apuntado.</p>` : ""}</div>
 
         ${vistaHoy ? `<div class="tf-bloque"><h3>¿Qué has hecho?</h3>
-            <textarea id="tfHecho" rows="4" placeholder="Ej.: Cambiado el monitor del 3º 1ª. Probado y funciona.">${esc(t.resumenHecho || "")}</textarea></div>
+            <textarea id="tfHecho" rows="4" placeholder="Ej.: Cambiado el monitor del 3º 1ª. Probado y funciona. (Lo verá el cliente)">${esc(t.resumenHecho || "")}</textarea>
+            <label class="campo tf-tiempo"><span>⏱ ¿Cuánto has estado hoy?</span><select id="tfTiempo"><option value="">— Elige —</option>${[15,30,45,60,90,120,150,180,240,300,360,420,480].map(m => `<option value="${m}">${esc(durV(m))}</option>`).join("")}</select></label></div>
           <div class="tf-bloque" id="tfFotos"></div>
           ${priv ? bloquePrivativo(t, pres, cobro) : ""}
           <div class="tf-botones">
@@ -233,7 +234,6 @@
           <div class="tf-bloque tf-volver-caja oculto" id="tfVolverCaja"><h3>🔁 Tengo que volver</h3>
             <label class="campo"><span>¿Qué falta por hacer? (material, otra visita…)</span><textarea id="tvFalta" rows="3" placeholder="Ej.: Falta cambiar la placa, hay que pedirla. Traer cable."></textarea></label>
             <label class="campo"><span>¿Cuánto tiempo necesitas la próxima vez?</span><select id="tvMin">${[30,60,90,120,180,240,360,480].map(m => `<option value="${m}" ${m === 60 ? "selected" : ""}>${esc(durV(m))}</option>`).join("")}</select></label>
-            <label class="campo"><span>¿Cuánto has estado hoy?</span><select id="tvHoy">${[15,30,45,60,90,120,180,240,300,360,480].map(m => `<option value="${m}" ${m === tHoy ? "selected" : ""}>${esc(durV(m))}</option>`).join("")}</select></label>
             <button class="btn tf-volver" id="tvOk">Guardar: hay que volver</button></div>
           <p class="vacio" id="tfMsg"></p>`
         : cerrada ? `<div class="tf-bloque ok"><h3>✅ Terminada</h3><p>${esc(t.resumenHecho || "")}</p></div><div class="tf-bloque" id="tfFotos"></div>`
@@ -278,6 +278,7 @@
     const yo = S.usuario.email.toLowerCase(), firma = () => ({por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
     const msg = x => el.querySelector("#tfMsg").textContent = x;
     const texto = () => el.querySelector("#tfHecho").value.trim();
+    const tiempoHoy = () => { const v = Number(el.querySelector("#tfTiempo").value); if(!v){ el.querySelector("#tfTiempo").focus(); msg("Pon cuánto tiempo has estado hoy (⏱)."); } return v; };
     const nota = x => ref.collection("notas").add({...x, por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
     // Guardar avance: lo escrito queda en la intervención y en su historial, sin cerrarla
     el.querySelector("#tfGuardar").onclick = async () => {
@@ -298,10 +299,10 @@
     el.querySelector("#tvOk").onclick = async () => {
       const tx = texto(); if(!tx) return msg("Escribe arriba qué has hecho hoy.");
       const falta = el.querySelector("#tvFalta").value.trim(); if(!falta){ el.querySelector("#tvFalta").focus(); return msg("Escribe qué falta por hacer."); }
-      const min = Number(el.querySelector("#tvMin").value), hoyMin = Number(el.querySelector("#tvHoy").value);
+      const min = Number(el.querySelector("#tvMin").value), hoyMin = tiempoHoy(); if(!hoyMin) return;
       msg("Guardando…");
       try{
-        await ref.update({estado:"amedias", resumenHecho:tx, falta:falta + " · ⏱ Volver: " + durV(min) + " (" + min + " min)", tiempoReal:hoyMin, hechoPor:[yoPid()], fechaHecho:isoLocal(new Date()), editando:null, modificado:firma()});
+        await ref.update({estado:"amedias", resumenHecho:tx, falta:falta + " · ⏱ Volver: " + durV(min) + " (" + min + " min)", tiempoReal:(yaFue ? (t.tiempoReal||0) : 0) + hoyMin, hechoPor:[yoPid()], fechaHecho:isoLocal(new Date()), editando:null, modificado:firma()});
         await nota({tipo:"estado", de:t.estado, a:"amedias", texto:tx + "\nFalta: " + falta + "\nPara volver necesita: " + durV(min) + " · Hoy ha estado: " + durV(hoyMin), volverMin:min, hoyMin});
         location.hash = "agenda";
       }catch(e){ msg("No se ha podido guardar (" + (e.code||e) + ")."); }
@@ -310,6 +311,7 @@
     // Cerrar: obligatorio lo hecho y al menos una foto
     el.querySelector("#tfCerrar").onclick = async () => {
       const tx = texto(); if(!tx) return msg("Para cerrar, escribe qué has hecho.");
+      const hoyMin = tiempoHoy(); if(!hoyMin) return;
       let fs = []; try{ fs = ((await ref.get()).data().fotos) || []; }catch(e){}
       if(!fs.length) return msg("Para cerrar, añade al menos una foto del trabajo.");
       if(ed && (!ed.placa || !ed.camaras)){ el.querySelector("#tfEdif").scrollIntoView({block:"center"}); return msg("Para cerrar, arriba del todo: foto de la placa del videoportero y si el edificio tiene cámaras."); }
@@ -317,10 +319,10 @@
       msg("Cerrando…");
       try{
         const cambio = {estado:"hecho", resumenHecho:tx, hechoPor:[yoPid()], fechaHecho:isoLocal(new Date()), falta:"", editando:null, modificado:firma()};
-        if(t.empezado) cambio.tiempoReal = Math.max(15, Math.round((Date.now() - t.empezado) / 900000) * 15);
+        cambio.tiempoReal = (yaFue ? (t.tiempoReal||0) : 0) + hoyMin;
         if(t.adminId && t.comunidadId && !(t.avisoAdmin && ["enviado","enviadoPruebas","pendiente"].includes(t.avisoAdmin.estado))) cambio.avisoAdmin = {estado:"pendiente", pedidoPor:yo, pedidoEn:Date.now()};
         await ref.update(cambio);
-        await nota({tipo:"estado", de:t.estado, a:"hecho", texto:tx + (c.fecha && c.fecha > hoy ? " (adelantada: estaba para el " + fmtDia(c.fecha) + ", hecha hoy)" : "")});
+        await nota({tipo:"estado", de:t.estado, a:"hecho", texto:tx + "\n⏱ Hoy: " + durV(hoyMin) + (yaFue ? " · Total con la visita anterior: " + durV((t.tiempoReal||0) + hoyMin) : "") + (c.fecha && c.fecha > hoy ? " (adelantada: estaba para el " + fmtDia(c.fecha) + ", hecha hoy)" : "")});
         location.hash = "agenda";
       }catch(e){ msg("No se ha podido cerrar (" + (e.code||e) + ")."); }
     };
@@ -328,7 +330,27 @@
   }
 
   // ---------- PRIVATIVOS: presupuesto sencillo y cobro ----------
-  const lineaP = (l={}) => `<div class="tp-linea"><input class="tp-con" placeholder="Concepto" value="${esc(l.concepto||"")}"><input class="tp-imp" inputmode="decimal" placeholder="€" value="${l.importe != null ? esc(String(l.importe).replace(".", ",")) : ""}"></div>`;
+  // Líneas del presupuesto del técnico: se busca en el catálogo (lo marcado "Técnico" en Presupuestos › Catálogo) y el precio sale solo (Ángel 01/11)
+  const sinAcT = x => String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  let CATT = null;
+  async function catTec(){
+    if(CATT) return CATT;
+    const L = [];
+    try{ (await D().db.collection("dhs_catalogo").get()).forEach(d => { const p = d.data(); if(p.activo !== false && p.nombre) L.push({id:d.id, nombre:p.nombre, precio:Number(p.precio)||0, iva:p.iva != null ? Number(p.iva) : 21, tecnico:!!p.tecnico}); }); }catch(e){}
+    const tec = L.filter(p => p.tecnico);
+    CATT = (tec.length ? tec : L).sort((x,y) => x.nombre.localeCompare(y.nombre));
+    return CATT;
+  }
+  const n2 = x => x == null || x === "" ? "" : String(Math.round(Number(x) * 100) / 100).replace(".", ",");
+  const lineaP = (l={}) => {
+    const precio = l.precio != null ? l.precio : (l.importe ? Math.round(l.importe / 1.21 * 100) / 100 : "");
+    return `<div class="tp-linea" data-cat="${esc(l.catId||"")}" data-iva="${esc(l.iva != null ? l.iva : 21)}">
+      <div class="tp-f1"><input class="tp-con" placeholder="Busca: desplazamiento, hora, cerradura…" autocomplete="off" value="${esc(l.concepto||"")}"><button type="button" class="tp-x" title="Quitar">✕</button></div>
+      <div class="tp-sug"></div>
+      <div class="tp-f2"><label>Cantidad<input class="tp-can" inputmode="decimal" value="${esc(n2(l.cantidad != null ? l.cantidad : 1))}"></label>
+        <label>Precio (sin IVA)<input class="tp-pre" inputmode="decimal" value="${esc(n2(precio))}" ${l.catId ? "readonly" : ""}></label>
+        <span class="tp-imp">${l.importe ? eur(l.importe) : ""}</span></div></div>`;
+  };
   function bloquePrivativo(t, pres, cobro){
     return `<div class="tf-bloque"><h3>Presupuesto (particular)</h3>
         <div id="tpLineas">${(pres.lineas||[]).map(lineaP).join("") || lineaP()}</div>
@@ -350,14 +372,42 @@
   }
   function activarPrivativo(el, ref, t, firma, nota){
     const caja = el.querySelector("#tpLineas");
-    const lineas = () => [...caja.querySelectorAll(".tp-linea")].map(d => ({concepto:d.querySelector(".tp-con").value.trim(), importe:num(d.querySelector(".tp-imp").value)})).filter(l => l.concepto || l.importe);
+    const lineas = () => [...caja.querySelectorAll(".tp-linea")].map(d => {
+      const cantidad = num(d.querySelector(".tp-can").value) || 0, precio = num(d.querySelector(".tp-pre").value) || 0, iva = Number(d.dataset.iva) || 21;
+      return {concepto:d.querySelector(".tp-con").value.trim(), cantidad, precio, iva, catId:d.dataset.cat || null, importe:Math.round(cantidad * precio * (1 + iva/100) * 100) / 100};
+    }).filter(l => l.concepto || l.importe);
     const total = () => Math.round(lineas().reduce((n,l) => n + l.importe, 0) * 100) / 100;
     const dif = () => { const c = num(el.querySelector("#tcImporte").value), p = total();
       el.querySelector("#tcPres").textContent = eur(p);
       el.querySelector("#tcDif").textContent = c && p && Math.abs(c - p) > 0.009 ? (c > p ? "Cobrado " + eur(c - p) + " más de lo presupuestado" : "Faltan " + eur(p - c) + " respecto al presupuesto") : ""; };
-    const repintar = () => { el.querySelector("#tpTotal").textContent = eur(total()); dif(); };
-    caja.addEventListener("input", repintar); el.querySelector("#tcImporte").addEventListener("input", dif); dif();
-    el.querySelector("#tpMas").onclick = () => { caja.insertAdjacentHTML("beforeend", lineaP()); caja.lastElementChild.querySelector("input").focus(); };
+    const repintar = () => {
+      caja.querySelectorAll(".tp-linea").forEach(d => { const c = num(d.querySelector(".tp-can").value) || 0, p = num(d.querySelector(".tp-pre").value) || 0, i = Number(d.dataset.iva) || 21;
+        d.querySelector(".tp-imp").textContent = c && p ? eur(Math.round(c * p * (1 + i/100) * 100) / 100) : ""; });
+      el.querySelector("#tpTotal").textContent = eur(total()); dif(); };
+    catTec();
+    caja.addEventListener("input", async e => {
+      const d = e.target.closest(".tp-linea");
+      if(e.target.classList.contains("tp-con")){
+        if(d.dataset.cat){ d.dataset.cat = ""; d.querySelector(".tp-pre").readOnly = false; }
+        const q = sinAcT(e.target.value.trim()), C = await catTec(), sug = d.querySelector(".tp-sug");
+        const M = q.length < 2 ? [] : C.filter(p => q.split(/\s+/).every(w => sinAcT(p.nombre).includes(w))).slice(0, 8);
+        sug.innerHTML = M.map(p => `<button type="button" data-id="${esc(p.id)}">${esc(p.nombre)} <b>${eur(p.precio)}</b> <span>+ IVA</span></button>`).join("") || (q.length >= 2 ? `<p class="vacio">No está en la lista: pon tú el precio.</p>` : "");
+      }
+      repintar();
+    });
+    caja.addEventListener("click", async e => {
+      const d = e.target.closest(".tp-linea"); if(!d) return;
+      if(e.target.closest(".tp-x")){ d.remove(); if(!caja.querySelector(".tp-linea")) caja.insertAdjacentHTML("beforeend", lineaP()); repintar(); return; }
+      const b = e.target.closest(".tp-sug button"); if(!b) return;
+      const p = (await catTec()).find(x => x.id === b.dataset.id); if(!p) return;
+      d.dataset.cat = p.id; d.dataset.iva = p.iva;
+      d.querySelector(".tp-con").value = p.nombre;
+      const pr = d.querySelector(".tp-pre"); pr.value = n2(p.precio); pr.readOnly = true;
+      d.querySelector(".tp-sug").innerHTML = "";
+      const cn = d.querySelector(".tp-can"); cn.focus(); cn.select(); repintar();
+    });
+    el.querySelector("#tcImporte").addEventListener("input", dif); repintar();
+    el.querySelector("#tpMas").onclick = () => { caja.insertAdjacentHTML("beforeend", lineaP()); caja.lastElementChild.querySelector(".tp-con").focus(); };
     const canal = () => (el.querySelector("input[name=tpCanal]:checked") || {}).value || "whatsapp";
     const guardarCobro = extra => ref.update({cobro:{...(t.cobro||{}), ...extra}, modificado:firma()}).then(() => { t.cobro = {...(t.cobro||{}), ...extra}; });
 
@@ -366,7 +416,7 @@
       if(!L.length) return alertar("Pon al menos un concepto con su importe.");
       if(!dest) return alertar(cn === "correo" ? "Pon el correo del cliente." : "Pon el móvil del cliente.");
       if(cn === "correo" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(dest)) return alertar("El correo no parece correcto.");
-      const txt = "Presupuesto DHS Videoporters\n" + [t.direccion, t.poblacion].filter(Boolean).join(", ") + "\n\n" + L.map(l => "· " + l.concepto + ": " + eur(l.importe)).join("\n") + "\n\nTotal: " + eur(tot) + " (IVA incluido)\n\nGracias por confiar en nosotros.";
+      const txt = "Presupuesto DHS Videoporters\n" + [t.direccion, t.poblacion].filter(Boolean).join(", ") + "\n\n" + L.map(l => "· " + (l.cantidad && l.cantidad !== 1 ? String(l.cantidad).replace(".", ",") + " × " : "") + l.concepto + ": " + eur(l.importe)).join("\n") + "\n\nTotal: " + eur(tot) + " (IVA incluido)\n\nGracias por confiar en nosotros.";
       const presupuesto = {lineas:L, total:tot, canal:cn, destino:dest, enviadoEn:Date.now(), por:D().S.usuario.email.toLowerCase()};
       try{ await guardarCobro({presupuesto}); await nota({tipo:"nota", texto:"Presupuesto enviado por " + cn + " a " + dest + ": " + eur(tot)}); }
       catch(e){ return alertar("No se ha podido guardar (" + (e.code||e) + ")."); }
