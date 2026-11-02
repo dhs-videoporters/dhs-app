@@ -497,3 +497,5 @@ body.modo-tec #btnVistaTec{display:none}
 .aus-todo{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:14px}.aus-todo input{width:auto}
 .cab-adm{font-size:.7em;font-weight:600;color:var(--gris)}
 .eco-caja.c4{background:#f4f0fb;border-color:#d6c8ee}.eco-per{display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-size:14px}.eco-per select,.eco-per input{font-size:14px}
+.h-item.editable{cursor:text}.h-edit{border:0;background:none;cursor:pointer;font-size:12px;opacity:.5;padding:0 4px}.h-edit:hover{opacity:1}
+.h-cambios{margin-top:12px}.h-cambios .historial{margin-top:6px;opacity:.85}

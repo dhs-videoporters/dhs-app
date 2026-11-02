@@ -593,7 +593,7 @@
     let t, P, notas = [];
     try{
       P = await personal(); const d = await ref.get(); if(!d.exists) throw {code:"no existe"}; t = d.data(); if(window.DHS_EMP) await window.DHS_EMP.cargar();
-      (await ref.collection("notas").orderBy("en").get()).forEach(n => notas.push(n.data()));
+      (await ref.collection("notas").orderBy("en").get()).forEach(n => notas.push({id:n.id, ...n.data()}));
     }catch(e){ el.innerHTML = `<div class="panel">No se ha podido abrir la intervención (${esc(e.code)}). <a href="#intervenciones">Volver</a></div>`; return; }
     const todo = S.puede("trabajos","todo");
     const mio = (t.asignados||[]).includes(S.personalId);
@@ -688,11 +688,17 @@
         ${puedeTocar ? `<div style="margin-bottom:10px"><textarea id="nuevaNota" rows="2" placeholder="Añadir una nota (qué se ha visto, qué falta, a quién se ha llamado…)" style="width:100%;padding:7px 9px;border:1px solid #cfd7e3;border-radius:6px;font:inherit"></textarea>
           <p style="margin-top:6px"><button class="btn sec" id="btnNota">Añadir nota</button> <span id="msgNota" class="vacio"></span></p></div>` : ""}
         ${(() => { // Ángel 28/10: lo último arriba; lo antiguo, plegado
-          const it = n => `<div class="h-item ${n.tipo === "estado" ? "" : "nota"}"><b>${horaReg(n.en)}</b> · ${esc(n.autor ? n.autor + " (Interph)" : nombreDe(n.por))} · ${n.tipo === "estado" ? (ICO_EST[n.a]||"") + " " + esc(ESTADOS[n.de]||n.de) + " → <b>" + esc(ESTADOS[n.a]||n.a) + "</b>" : (n.tipo === "cita" ? "📅 " : (n.tipo === "prioridad" ? "🎯 " : "📝 "))}${n.texto ? `<div class="h-txt">${esc(n.texto)}</div>` : ""}</div>`;
+          // Ángel 02/11: aquí solo lo escrito (notas, lo que ha hecho el técnico, lo que falta). Los cambios de cita, prioridad
+          // y estados sin texto van plegados abajo. Dirección puede corregir una nota con doble clic (o ✏️).
+          const editaNotas = S.puede("trabajos","todo");
+          const it = n => { const edit = editaNotas && n.id && n.texto && ["nota","estado","edificio",undefined].includes(n.tipo);
+            return `<div class="h-item ${n.tipo === "estado" ? "" : "nota"} ${edit ? "editable" : ""}" ${edit ? `data-nota="${esc(n.id)}" title="Doble clic para corregir"` : ""}><b>${horaReg(n.en)}</b> · ${esc(n.autor ? n.autor + " (Interph)" : nombreDe(n.por))} · ${n.tipo === "estado" ? (ICO_EST[n.a]||"") + " " + esc(ESTADOS[n.de]||n.de) + " → <b>" + esc(ESTADOS[n.a]||n.a) + "</b>" : (n.tipo === "cita" ? "📅 " : (n.tipo === "prioridad" ? "🎯 " : "📝 "))}${n.editado ? ` <span class="vacio">(corregida)</span>` : ""}${edit ? ` <button class="h-edit" title="Corregir">✏️</button>` : ""}${n.texto ? `<div class="h-txt">${esc(n.texto)}</div>` : ""}</div>`; };
           const creada = `<div class="h-item"><b>${horaReg(t.creado && t.creado.en)}</b> · ${esc(nombreDe(t.creado && t.creado.por))} · 🆕 Creada${t.creadoPorTecnico ? " (por técnico)" : ""}</div>`;
-          const rec = notas.slice().reverse(), VISTAS = 15;
-          return `<div class="historial">${rec.slice(0, VISTAS).map(it).join("")}${rec.length <= VISTAS ? creada : ""}</div>` +
-            (rec.length > VISTAS ? `<details style="margin-top:8px"><summary class="vacio" style="cursor:pointer">Ver ${rec.length - VISTAS} anteriores</summary><div class="historial">${rec.slice(VISTAS).map(it).join("")}${creada}</div></details>` : "");
+          const esCambio = n => ["cita","prioridad","cambio"].includes(n.tipo) || !n.texto;
+          const rec = notas.filter(n => !esCambio(n)).reverse(), camb = notas.filter(esCambio).reverse(), VISTAS = 15;
+          return `<div class="historial">${rec.slice(0, VISTAS).map(it).join("") || `<p class="vacio">Todavía no hay notas.</p>`}</div>` +
+            (rec.length > VISTAS ? `<details style="margin-top:8px"><summary class="vacio" style="cursor:pointer">Ver ${rec.length - VISTAS} anteriores</summary><div class="historial">${rec.slice(VISTAS).map(it).join("")}</div></details>` : "") +
+            `<details class="h-cambios"><summary class="vacio" style="cursor:pointer">📋 Cambios de cita, estado y prioridad (${camb.length + 1})</summary><div class="historial">${camb.map(it).join("")}${creada}</div></details>`;
         })()}
       </div>`;
 
@@ -717,6 +723,27 @@
       abrir.onclick = () => registro("enviada por WhatsApp");
     }
     const nota = datos => ref.collection("notas").add({...datos, por:yo, en:firebase.firestore.FieldValue.serverTimestamp()});
+    // Corregir una nota (Dirección): doble clic sobre ella o ✏️
+    el.querySelectorAll(".h-item.editable").forEach(h => {
+      const editar = () => {
+        if(h.querySelector("textarea")) return;
+        const n = notas.find(x => x.id === h.dataset.nota); if(!n) return;
+        const txt = h.querySelector(".h-txt");
+        txt.innerHTML = `<textarea rows="3" style="width:100%;padding:6px 8px;border:1px solid #cfd7e3;border-radius:6px;font:inherit"></textarea><p style="margin-top:4px"><button class="btn btn-mini h-ok">Guardar</button> <button class="btn sec btn-mini h-no">Cancelar</button> <span class="vacio h-msg"></span></p>`;
+        const ta = txt.querySelector("textarea"); ta.value = n.texto; ta.focus();
+        txt.querySelector(".h-no").onclick = e => { e.stopPropagation(); txt.textContent = n.texto; };
+        txt.querySelector(".h-ok").onclick = async e => {
+          e.stopPropagation(); const v = ta.value.trim(); if(!v || v === n.texto){ txt.textContent = n.texto; return; }
+          try{
+            await ref.collection("notas").doc(n.id).update({texto:v, editado:{por:yo, en:firebase.firestore.FieldValue.serverTimestamp(), antes:n.texto}});
+            await registro("nota corregida");
+            n.texto = v; n.editado = true; txt.textContent = v;
+          }catch(err){ txt.querySelector(".h-msg").textContent = "No se ha podido guardar (" + (err.code||err) + ")."; }
+        };
+      };
+      h.addEventListener("dblclick", editar);
+      const b = h.querySelector(".h-edit"); if(b) b.onclick = e => { e.preventDefault(); editar(); };
+    });
     const registro = accion => db.collection("dhs_registro").add({por:yo, en:firebase.firestore.FieldValue.serverTimestamp(), accion, coleccion:"dhs_trabajos", docId:id, nombre:t.numero + " · " + t.nombre});
 
     // Cambiar estado
