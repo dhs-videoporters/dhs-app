@@ -260,7 +260,7 @@ a.fila-eq:hover{background:#f6f8fb}
 /* Hecha: el mismo color, muy clarito */
 .cal-cita.hecha{background:color-mix(in srgb,var(--c) 16%,#fff);border-left-color:color-mix(in srgb,var(--c) 45%,#fff);color:#5b6675;text-shadow:none;box-shadow:none}
 .cal-cita.hecha b::before{content:"✅ "}
-.cal-aus{position:absolute;inset:0;background:repeating-linear-gradient(45deg,#e9ecf1 0 8px,#f4f6f9 8px 16px);color:var(--gris);font-size:11px;text-align:center;padding-top:6px;cursor:pointer;writing-mode:horizontal-tb}
+.cal-aus{position:absolute;inset:0;background:#e4e8ee;color:var(--gris);font-size:11px;text-align:center;padding-top:6px;cursor:pointer;writing-mode:horizontal-tb}
 .cal-sinfecha{width:240px;flex:none;border:1px solid var(--linea);border-radius:8px;padding:10px;background:#fff;max-height:calc(2*(30px + 9*44px) + 14px);overflow:auto}
 .sf-item{display:block;padding:7px 4px;border-bottom:1px solid var(--linea);text-decoration:none;color:inherit;font-size:13px}
 .sf-item span{display:block;color:var(--gris);font-size:12px}
@@ -502,7 +502,7 @@ body.modo-tec #btnVistaTec{display:none}
 .aviso-abiertas:empty{display:none}.aviso-abiertas{margin-top:10px;background:#fff6e6;border:1px solid #f3d39b;border-radius:10px;padding:10px 12px}
 .aviso-abiertas .ab-item{display:flex;flex-wrap:wrap;align-items:center;gap:6px;justify-content:space-between;border-top:1px solid #f3e1bf;padding:6px 0}
 .sf-item{cursor:grab}.sf-chip{position:fixed;z-index:999;background:var(--azul);color:#fff;padding:6px 10px;border-radius:8px;font-size:13px;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.2)}
-.cal-aus.mant{background:repeating-linear-gradient(45deg,#dbeafe 0 8px,#eef5ff 8px 16px);color:#1f3a5f;font-weight:600}
+.cal-aus.mant{background:var(--c);color:#fff;font-weight:700;border-radius:6px;margin:0 2px;opacity:.92;border:0}
 .mot-mant{flex-basis:100%!important;background:#e3eefc;font-weight:700}
 .tec-mant{background:#eef5ff;border:2px solid #9cc0ef;border-radius:12px;padding:12px 14px;margin:8px 0}.tec-mant h3{margin:0 0 6px}
 .tec-mant > .btn{display:block;text-align:center;margin:8px 0 4px;padding:12px}

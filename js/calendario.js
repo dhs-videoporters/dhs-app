@@ -114,10 +114,10 @@
                 const aus = ausencias.filter(a => a.personalId === k && a.desde <= f && a.hasta >= f);
                 const mias = carriles(citas.filter(x => x.k === k && x.c.fecha === f));
                 return `<div class="cal-col ${puedeCrear && k !== "_sin" ? "crea" : ""}" data-k="${esc(k)}" data-f="${f}" title="${esc(p.nombre)}">
-                  ${aus.map(a => { const txt = a.motivo + (a.horaIni ? " " + a.horaIni + "–" + a.horaFin : "");
-                    if(!a.horaIni) return `<div class="cal-aus ${esMant(a) ? "mant" : ""}" data-aus="${a.id}" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`;
+                  ${aus.map(a => { const txt = (esMant(a) ? "🔧 " : "") + a.motivo + (a.horaIni ? " " + a.horaIni + "–" + a.horaFin : "");
+                    if(!a.horaIni) return `<div class="cal-aus ${esMant(a) ? "mant" : ""}" style="--c:${esc(p.color||"#2f6fd6")}" data-aus="${a.id}" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`;
                     const i0 = Math.max(aMin(a.horaIni), H_INI*60), i1 = Math.min(aMin(a.horaFin), H_FIN*60);   // ausencia de unas horas (médico…), Ángel 02/11
-                    return i1 <= i0 ? "" : `<div class="cal-aus parcial ${esMant(a) ? "mant" : ""}" data-aus="${a.id}" style="top:${(i0 - H_INI*60) / 60 * PX_H}px;height:${(i1 - i0) / 60 * PX_H}px" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`; }).join("")}
+                    return i1 <= i0 ? "" : `<div class="cal-aus parcial ${esMant(a) ? "mant" : ""}" data-aus="${a.id}" style="--c:${esc(p.color||"#2f6fd6")};top:${(i0 - H_INI*60) / 60 * PX_H}px;height:${(i1 - i0) / 60 * PX_H}px" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`; }).join("")}
                   ${mias.map(x => {
                     const ini = Math.max(aMin(x.c.hora), H_INI*60), dur = Math.max(Number(x.c.duracion)||60, 30);
                     const top = (ini - H_INI*60) / 60 * PX_H, alto = Math.min(dur, H_FIN*60 - ini) / 60 * PX_H;
