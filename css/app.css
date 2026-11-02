@@ -495,3 +495,4 @@ body.modo-tec #btnVistaTec{display:none}
 .aus-elegir{max-width:420px}.aus-elegir > .btn{width:100%;padding:12px;font-size:15px}
 .aus-mot{display:flex;flex-wrap:wrap;gap:6px}.aus-mot .btn{flex:1 1 40%}
 .aus-todo{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:14px}.aus-todo input{width:auto}
+.cab-adm{font-size:.7em;font-weight:600;color:var(--gris)}

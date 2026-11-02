@@ -607,13 +607,17 @@
     const pr = PRIOR[t.urgencia] || PRIOR.normal;
     const activos = Object.entries(P).filter(([k,p]) => p.activo !== false).sort((a,b) => a[1].nombre.localeCompare(b[1].nombre));
     const cita0 = (t.citas||[])[0] || {};
+    // Ángel 02/11: de qué administración es, al lado del nombre (sin tener que entrar en la ficha de la comunidad)
+    let admNom = "";
+    if(S.puede("comunidades")){ try{ const C = await window.DHS_COM.datos(), cc = t.comunidadId ? C.coms[t.comunidadId] : null, aid = (cc && cc.adminId) || t.adminId;
+      admNom = aid && C.admins[aid] ? C.admins[aid].nombre : (t.origen === "particular" || (cc && cc.tipo === "particular") ? "Particular" : cc && cc.tipo === "comunidad" ? "Sin administración" : ""); }catch(e){} }
 
     el.innerHTML = `
       <a href="#intervenciones" class="volver">‹ Intervenciones</a>
       ${avisoEdicion(t)}
       <div class="panel cab-ficha">
         <div class="ico-ficha">${ESPEC[t.especialidad] ? ESPEC[t.especialidad][0] : "🛠️"}</div>
-        <div class="cab-txt"><h1>${cliente}</h1>
+        <div class="cab-txt"><h1>${cliente}${admNom ? ` <span class="cab-adm">(${esc(admNom)})</span>` : ""}</h1>
           <div class="vacio">${esc(t.numero)} · ${esc([t.direccion, t.poblacion].filter(Boolean).join(" · "))}</div></div>
         <div class="f-tags"><span class="tag">${pr[0]} ${pr[1]}</span><span class="tag est-${esc(t.estado)}">${ICO_EST[t.estado]||""} ${esc(ESTADOS[t.estado]||t.estado)}</span></div>
       </div>
