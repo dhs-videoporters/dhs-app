@@ -67,7 +67,8 @@
       <div id="tecFichaje"></div>
       <div class="tec-dias">${DL.map((x,i) => `<button class="${i===diaSel?"on":""}" data-d="${i}">${esc(nomDia(x))}<span>${delDia(L, x).length}</span></button>`).join("")}</div>
       <p class="tec-fecha">${esc(fmtDia(f))}${esHoy ? "" : " · si acabas pronto, puedes adelantarlas"}</p>
-      ${ausDia(AUS, f).map(a => `<p class="tec-aus">🚫 ${esc(a.motivo)}: ${a.horaIni ? "de " + esc(a.horaIni) + " a " + esc(a.horaFin) : "todo el día"}</p>`).join("")}
+      ${ausDia(AUS, f).map(a => /manten/i.test(a.motivo||"") ? `<div class="tec-mant" id="tecMant"><h3>🔧 Día de mantenimientos de cámaras${a.horaIni ? " (de " + esc(a.horaIni) + " a " + esc(a.horaFin) + ")" : ""}</h3><p class="vacio">Cargando las que tocan…</p></div>`
+        : `<p class="tec-aus">🚫 ${esc(a.motivo)}: ${a.horaIni ? "de " + esc(a.horaIni) + " a " + esc(a.horaFin) : "todo el día"}</p>`).join("")}
       ${lista.map(({t,c}) => `<a class="tec-item ${CERRADOS.includes(t.estado) ? "hecha" : ""}" href="#t/${t.id}/${f}">
         <div class="ti-hora">${esc(c.hora || "—")}<span>${esc(dur(c.duracion))}</span></div>
         <div class="ti-cuerpo"><b>${esc(t.direccion || t.nombre)}</b><span>${esc(t.poblacion || "")}</span>
@@ -76,6 +77,7 @@
         <div class="ti-ir">›</div></a>`).join("") || `<p class="vacio tec-nada">No tienes nada ${esHoy ? "hoy" : "el " + esc(fmtDia(f))}.</p>`}
     </div>`;
     el.querySelectorAll(".tec-dias button").forEach(b => b.onclick = () => { diaSel = Number(b.dataset.d); agenda(el); });
+    const mB = el.querySelector("#tecMant"); if(mB) listaMant(mB, f);
     const bD = el.querySelector("#tecDemo"), bX = el.querySelector("#tecDemoX"), mD = x => el.querySelector("#tecDemoMsg").textContent = x;
     if(bD) bD.onclick = async () => { bD.disabled = true; mD("Creando…"); try{ await crearDemo(); diaSel = 0; agenda(el); }catch(e){ mD("No se ha podido (" + (e.code||e) + ")."); bD.disabled = false; } };
     if(bX) bX.onclick = async () => { bX.disabled = true; try{ const b = D().db.batch(); L.filter(t => t.demo).forEach(t => b.delete(D().db.collection("dhs_trabajos").doc(t.id))); await b.commit(); agenda(el); }catch(e){ mD("No se ha podido (" + (e.code||e) + ")."); } };
@@ -106,6 +108,35 @@
       duracionEstimada:dur, citas:[{fecha:laborables()[dia], hora, duracion:dur, personal:[pid]}], asignados:[pid], hechoPor:[], material:[], tiempoReal:null, fotos:[],
       demo:true, creado:firma, modificado:firma}));
     await b.commit();
+  }
+
+  // ---------- MANTENIMIENTOS DE CÁMARAS (Ángel 02/11): los días reservados, la lista de las que tocan, por población.
+  // Se leen de la app de cámaras (mismo proyecto: dhs_instalaciones y dhs_revisiones). La revisión se hace en la app de cámaras.
+  // Nunca se enseñan las claves de los grabadores.
+  const APP_CAMARAS = "https://angelchiva.github.io/dhs-camaras/";
+  async function listaMant(caja, f){
+    const {db} = D(), d = new Date(f + "T12:00"), m = d.getMonth() + 1;
+    const y = m <= 2 ? d.getFullYear() - 1 : d.getFullYear(), per = m >= 3 && m <= 8 ? "verano" : "invierno";
+    const ini = new Date(y, per === "verano" ? 2 : 9, 1), fin = new Date(y, per === "verano" ? 3 : 10, 30, 23, 59);
+    const h3 = caja.querySelector("h3").outerHTML;
+    let I = [], R = {};
+    try{
+      (await db.collection("dhs_instalaciones").get()).forEach(x => I.push({id:x.id, ...x.data()}));
+      (await db.collection("dhs_revisiones").get()).forEach(x => R[x.id] = x.data());
+    }catch(e){
+      caja.innerHTML = h3 + `<p>Haz las revisiones en la app de cámaras.</p><a class="btn" href="${APP_CAMARAS}" target="_blank" rel="noopener">📹 Abrir la app de cámaras</a>`; return;
+    }
+    const pob = x => { const c = String(x.ciudad || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); return c ? c.charAt(0).toUpperCase() + c.slice(1) : "Sin población"; };
+    const est = x => { const r = R[x.id + "_" + y + "_" + per]; if(r && r.hecha) return {k:"ok", t:"✅ hecha"}; const hoy = new Date();
+      return hoy > fin ? {k:"bad", t:"⚠️ atrasada"} : r ? {k:"now", t:"a medias"} : hoy >= ini ? {k:"now", t:"toca ahora"} : {k:"", t:"pendiente"}; };
+    const L = I.filter(x => x.activa !== false && x.baja !== true).map(x => ({...x, _e:est(x), _p:pob(x)}));
+    const pend = L.filter(x => x._e.k !== "ok"), hechas = L.length - pend.length;
+    const G = {}; pend.forEach(x => (G[x._p] = G[x._p] || []).push(x));
+    caja.innerHTML = h3 + `<p class="vacio">Revisión de ${per === "verano" ? "verano" : "invierno"} ${y}: <b>${pend.length} por hacer</b> · ${hechas} hechas. Empieza por la zona que te quede más cerca; la revisión se rellena en la app de cámaras.</p>
+      <a class="btn" href="${APP_CAMARAS}" target="_blank" rel="noopener">📹 Abrir la app de cámaras</a>
+      ${Object.keys(G).sort((a,b) => (a === "Sin población") - (b === "Sin población") || G[b].length - G[a].length).map(k => `<h4 class="mant-pob">${esc(k)} (${G[k].length})</h4>` + G[k].map(x => `<div class="mant-item">
+        <div><b>${esc(x.comunidad || x.direccion || "")}</b>${x.direccion && x.direccion !== x.comunidad ? `<span>${esc(x.direccion)}</span>` : ""}${x.contacto ? `<span>👤 ${esc(x.contacto)}</span>` : ""}</div>
+        <div class="mant-der"><span class="cam-pill ${x._e.k}">${esc(x._e.t)}</span>${x.telefono ? `<a class="btn sec btn-mini" href="tel:${esc(telLimpio(x.telefono))}">📞 Llamar</a>` : ""}</div></div>`).join("")).join("") || `<p class="tv-bien">✅ Todas hechas.</p>`}`;
   }
 
   // ---------- FICHAJE: entrada (a menos de 3 km de Viladecavalls) y salida ----------

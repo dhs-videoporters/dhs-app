@@ -9,7 +9,8 @@
   const ESPEC = {videoportero:"🔔", antena:"📡", electricidad:"⚡", camaras:"📹", otros:"🔧"};
   const PRIOR = {urgente:"🔴"};
   const CERRADOS = ["esperando","facturado","cobrado","cancelado"];   // "hecho" se sigue viendo (tachado suave)
-  const MOTIVOS = ["Vacaciones","Médico","Asuntos propios","Formación","Otro"];
+  const MOTIVOS = ["Mantenimientos de cámaras","Vacaciones","Médico","Asuntos propios","Formación","Otro"];   // "Mantenimientos": días reservados para revisar cámaras (Ángel 02/11)
+  const esMant = a => /manten/i.test(a.motivo || "");
 
   const iso = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
   const lunesDe = d => { const x = new Date(d); x.setHours(12,0,0,0); x.setDate(x.getDate() - ((x.getDay()+6) % 7)); return x; };
@@ -114,9 +115,9 @@
                 const mias = carriles(citas.filter(x => x.k === k && x.c.fecha === f));
                 return `<div class="cal-col ${puedeCrear && k !== "_sin" ? "crea" : ""}" data-k="${esc(k)}" data-f="${f}" title="${esc(p.nombre)}">
                   ${aus.map(a => { const txt = a.motivo + (a.horaIni ? " " + a.horaIni + "–" + a.horaFin : "");
-                    if(!a.horaIni) return `<div class="cal-aus" data-aus="${a.id}" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`;
+                    if(!a.horaIni) return `<div class="cal-aus ${esMant(a) ? "mant" : ""}" data-aus="${a.id}" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`;
                     const i0 = Math.max(aMin(a.horaIni), H_INI*60), i1 = Math.min(aMin(a.horaFin), H_FIN*60);   // ausencia de unas horas (médico…), Ángel 02/11
-                    return i1 <= i0 ? "" : `<div class="cal-aus parcial" data-aus="${a.id}" style="top:${(i0 - H_INI*60) / 60 * PX_H}px;height:${(i1 - i0) / 60 * PX_H}px" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`; }).join("")}
+                    return i1 <= i0 ? "" : `<div class="cal-aus parcial ${esMant(a) ? "mant" : ""}" data-aus="${a.id}" style="top:${(i0 - H_INI*60) / 60 * PX_H}px;height:${(i1 - i0) / 60 * PX_H}px" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`; }).join("")}
                   ${mias.map(x => {
                     const ini = Math.max(aMin(x.c.hora), H_INI*60), dur = Math.max(Number(x.c.duracion)||60, 30);
                     const top = (ini - H_INI*60) / 60 * PX_H, alto = Math.min(dur, H_FIN*60 - ini) / 60 * PX_H;
@@ -317,8 +318,8 @@
         fondo.innerHTML = `<div class="preg-caja aus-elegir" role="dialog" aria-modal="true">
           <p><b>${esc(nom)}</b> · ${esc(diaTxt)} · ${hhmm(de)}–${hhmm(a)}</p>
           <button class="btn" data-x="int">📅 Nueva intervención</button>
-          <p style="margin:14px 0 6px"><b>🚫 o marcar ausencia:</b></p>
-          <div class="aus-mot">${MOTIVOS.map(m => `<button class="btn sec" data-m="${esc(m)}">${esc(m)}</button>`).join("")}</div>
+          <p style="margin:14px 0 6px"><b>o reservar / marcar ausencia:</b></p>
+          <div class="aus-mot">${MOTIVOS.map(m => `<button class="btn sec ${/manten/i.test(m) ? "mot-mant" : ""}" data-m="${esc(m)}">${/manten/i.test(m) ? "🔧 " : ""}${esc(m)}</button>`).join("")}</div>
           <label class="aus-todo"><input type="checkbox" id="ausTodo"> Todo el día (no solo de ${hhmm(de)} a ${hhmm(a)})</label>
           <p class="vacio" id="ausMsg"></p>
           <div class="preg-bot"><button class="btn sec" data-x="no">Cancelar</button></div></div>`;

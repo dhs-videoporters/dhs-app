@@ -502,3 +502,11 @@ body.modo-tec #btnVistaTec{display:none}
 .aviso-abiertas:empty{display:none}.aviso-abiertas{margin-top:10px;background:#fff6e6;border:1px solid #f3d39b;border-radius:10px;padding:10px 12px}
 .aviso-abiertas .ab-item{display:flex;flex-wrap:wrap;align-items:center;gap:6px;justify-content:space-between;border-top:1px solid #f3e1bf;padding:6px 0}
 .sf-item{cursor:grab}.sf-chip{position:fixed;z-index:999;background:var(--azul);color:#fff;padding:6px 10px;border-radius:8px;font-size:13px;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.cal-aus.mant{background:repeating-linear-gradient(45deg,#dbeafe 0 8px,#eef5ff 8px 16px);color:#1f3a5f;font-weight:600}
+.mot-mant{flex-basis:100%!important;background:#e3eefc;font-weight:700}
+.tec-mant{background:#eef5ff;border:2px solid #9cc0ef;border-radius:12px;padding:12px 14px;margin:8px 0}.tec-mant h3{margin:0 0 6px}
+.tec-mant > .btn{display:block;text-align:center;margin:8px 0 4px;padding:12px}
+.mant-pob{margin:12px 0 4px;font-size:14px;color:var(--azul)}
+.mant-item{display:flex;justify-content:space-between;gap:8px;align-items:center;background:#fff;border:1px solid var(--linea);border-radius:10px;padding:8px 10px;margin-bottom:6px}
+.mant-item span{display:block;font-size:13px;color:var(--gris)}.mant-der{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.tec-mant a{text-decoration:none}
