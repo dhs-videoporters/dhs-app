@@ -499,3 +499,6 @@ body.modo-tec #btnVistaTec{display:none}
 .eco-caja.c4{background:#f4f0fb;border-color:#d6c8ee}.eco-per{display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-size:14px}.eco-per select,.eco-per input{font-size:14px}
 .h-item.editable{cursor:text}.h-edit{border:0;background:none;cursor:pointer;font-size:12px;opacity:.5;padding:0 4px}.h-edit:hover{opacity:1}
 .h-cambios{margin-top:12px}.h-cambios .historial{margin-top:6px;opacity:.85}
+.aviso-abiertas:empty{display:none}.aviso-abiertas{margin-top:10px;background:#fff6e6;border:1px solid #f3d39b;border-radius:10px;padding:10px 12px}
+.aviso-abiertas .ab-item{display:flex;flex-wrap:wrap;align-items:center;gap:6px;justify-content:space-between;border-top:1px solid #f3e1bf;padding:6px 0}
+.sf-item{cursor:grab}.sf-chip{position:fixed;z-index:999;background:var(--azul);color:#fff;padding:6px 10px;border-radius:8px;font-size:13px;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.2)}

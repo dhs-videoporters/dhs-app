@@ -167,7 +167,7 @@
             : semana(inicio) + semana(masDias(inicio, 7))}</div>
           ${S.puede("trabajos","ver") ? `<aside class="cal-sinfecha"><h3>Sin fecha (${sinFecha.length})</h3>
             ${sinFecha.map(t => `<a href="#intervencion/${t.id}" class="sf-item"><b>${PRIOR[t.urgencia]||""} ${ESPEC[t.especialidad]||""} ${esc(t.direccion || t.nombre)}</b>${t.encargo && window.DHS_EMP ? window.DHS_EMP.chip(t.encargo) : ""}<span>${esc((t.descripcion||"").slice(0,70))}</span></a>`).join("") || `<p class="vacio">Todo agendado.</p>`}
-            <p class="vacio" style="margin-top:6px">Ábrela y pulsa "Poner cita".</p></aside>` : ""}
+            <p class="vacio" style="margin-top:6px">Arrástrala al hueco del técnico en el calendario (o ábrela y pulsa "Poner cita").</p></aside>` : ""}
         </div>
       </div>`;
 
@@ -244,6 +244,49 @@
       if(a.dataset.com && S.puede("comunidades")){ window.DHS_COM.abrirPestana("intervenciones"); location.hash = "comunidad/" + encodeURIComponent(a.dataset.com); }
       else location.hash = "intervencion/" + a.dataset.id;
     });
+    // Ángel 02/11: arrastrar una de "Sin fecha" al hueco de un técnico → queda agendada ahí (sin crear otra)
+    if(puedeMover) el.querySelectorAll(".sf-item").forEach(a => {
+      a.addEventListener("pointerdown", ev => {
+        if(ev.button > 0 || ev.pointerType !== "mouse") return;
+        const id = (a.getAttribute("href")||"").split("/")[1], t = trabajos.find(x => x.id === id); if(!t) return;
+        const x0 = ev.clientX, y0 = ev.clientY, dur = Number(t.duracionEstimada) || 60;
+        let moviendo = false, fantasma = null, destino = null, chip = null;
+        const mover = e => {
+          if(!moviendo && Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) < 6) return;
+          if(!moviendo){ moviendo = true; chip = document.createElement("div"); chip.className = "sf-chip"; chip.textContent = t.direccion || t.nombre; document.body.appendChild(chip); }
+          chip.style.left = e.clientX + 10 + "px"; chip.style.top = e.clientY + 10 + "px";
+          chip.style.display = "none"; const c = document.elementFromPoint(e.clientX, e.clientY); chip.style.display = "";
+          const col = c && c.closest(".cal-col.crea");
+          if(!col || col.dataset.k === "_sin"){ if(fantasma) fantasma.remove(); fantasma = null; destino = null; return; }
+          const r = col.getBoundingClientRect();
+          let m = H_INI*60 + Math.floor((e.clientY - r.top) / PX_H * 2) * 30; m = Math.min(Math.max(m, H_INI*60), H_FIN*60 - 30);
+          destino = {fecha:col.dataset.f, hora:hhmm(m), k:col.dataset.k};
+          if(!fantasma || fantasma.parentNode !== col){ if(fantasma) fantasma.remove(); fantasma = document.createElement("div"); fantasma.className = "cal-sel"; col.appendChild(fantasma); }
+          fantasma.style.top = (m - H_INI*60) / 60 * PX_H + "px"; fantasma.style.height = Math.min(dur, H_FIN*60 - m) / 60 * PX_H + "px";
+          fantasma.textContent = hhmm(m) + " · " + ((P[destino.k]||{}).nombre || "");
+        };
+        const soltar = async () => {
+          document.removeEventListener("pointermove", mover); document.removeEventListener("pointerup", soltar);
+          if(chip) chip.remove(); if(fantasma) fantasma.remove();
+          if(!moviendo) return;
+          a.addEventListener("click", e => e.preventDefault(), {once:true});
+          if(!destino) return;
+          const cita = {fecha:destino.fecha, hora:destino.hora, duracion:dur, personal:[destino.k]};
+          const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
+          const texto = new Date(destino.fecha + "T12:00").toLocaleDateString("es-ES",{weekday:"short", day:"numeric", month:"short"}) + " " + destino.hora + " · " + (dur/60) + " h · " + ((P[destino.k]||{}).nombre || "");
+          try{
+            const ref = db.collection("dhs_trabajos").doc(t.id);
+            await ref.update({citas:[cita], asignados:[destino.k], ...(["nuevo","presupuesto"].includes(t.estado) ? {estado:"agendado"} : {}), modificado:{por:yo, en}});
+            await ref.collection("notas").add({tipo:"cita", texto, por:yo, en});
+            await db.collection("dhs_registro").add({por:yo, en, accion:"cita: " + texto, coleccion:"dhs_trabajos", docId:t.id, nombre:(t.numero||"") + " · " + (t.nombre||"")});
+            vista(el, true);
+          }catch(e){ alert("No se ha podido agendar (" + (e.code||e) + ")."); }
+        };
+        document.addEventListener("pointermove", mover); document.addEventListener("pointerup", soltar);
+      });
+      a.addEventListener("dragstart", e => e.preventDefault());
+    });
+
     // Arrastrar (o tocar) en el hueco de un técnico → nueva intervención con día, hora, duración y técnico ya puestos
     if(puedeCrear) el.querySelectorAll(".cal-col.crea").forEach(col => {
       let ini = null, sel = null;

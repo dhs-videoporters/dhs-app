@@ -244,11 +244,33 @@
       f.comunidadId.value = id || "";
       const c = C.coms[id];
       info.innerHTML = c ? miniFicha(c, C.admins) : "";
+      if(c) avisoAbiertas(id);
       if(c && c.empresaId && f.encargo && !f.encargo.value) f.encargo.value = c.empresaId;
       if(c && document.activeElement !== bus) bus.value = c.nombre;
       cargarVecinos(c ? id : null);
       if(selCom.value !== (id || "")) selCom.value = id || "";
     };
+    // Ángel 02/11: si la comunidad ya tiene una intervención abierta, se avisa y se puede agendar esa (no crear otra)
+    async function avisoAbiertas(id){
+      const caja = document.createElement("div"); caja.className = "aviso-abiertas"; info.appendChild(caja);
+      let L = []; try{ (await D().db.collection("dhs_trabajos").where("comunidadId", "==", id).get()).forEach(d => { const x = d.data(); if(!CERRADOS.includes(x.estado)) L.push({id:d.id, ...x}); }); }catch(e){ return; }
+      if(f.comunidadId.value !== id || !L.length) return;
+      caja.innerHTML = `<p><b>⚠️ Esta comunidad ya tiene ${L.length === 1 ? "una intervención abierta" : L.length + " intervenciones abiertas"}:</b></p>` + L.map(x => `<div class="ab-item"><span><b>${esc(x.numero)}</b> · ${esc((x.descripcion||"").slice(0,80))} · ${(x.citas||[]).length ? "📅 " + esc(fmtFecha(x.citas[0].fecha)) + " " + esc(x.citas[0].hora||"") : "<i>sin fecha</i>"}</span>
+        ${deCal ? `<button type="button" class="btn btn-mini" data-ag="${esc(x.id)}">📅 Agendar esta aquí</button>` : ""}<a class="btn sec btn-mini" href="#intervencion/${esc(x.id)}">Abrir</a></div>`).join("") + `<p class="vacio">Si es otra cosa distinta, sigue y crea la nueva.</p>`;
+      caja.querySelectorAll("[data-ag]").forEach(b => b.onclick = async () => {
+        const x = L.find(y => y.id === b.dataset.ag); if(!x) return;
+        const {db} = D(), yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
+        const cita = {fecha:pre.fecha, hora:pre.hora, duracion:pre.duracion, personal:pre.personal || []};
+        const citas = [...(x.citas||[]).filter(c => c.fecha >= hoy), cita];
+        const texto = fmtFecha(pre.fecha) + " " + pre.hora + " · " + durTxt(pre.duracion) + " · " + (pre.personal||[]).map(k => P[k] ? P[k].nombre : "").join(", ");
+        b.disabled = true;
+        try{
+          await db.collection("dhs_trabajos").doc(x.id).update({citas, asignados:[...new Set([...(x.asignados||[]), ...(pre.personal||[])])], ...(["nuevo","presupuesto"].includes(x.estado) ? {estado:"agendado"} : {}), modificado:{por:yo, en}});
+          await db.collection("dhs_trabajos").doc(x.id).collection("notas").add({tipo:"cita", texto, por:yo, en});
+          location.hash = "calendario";
+        }catch(e){ b.disabled = false; alert("No se ha podido agendar (" + (e.code||e) + ")."); }
+      });
+    }
     const pintarComs = () => {
       const a = selAdm.value;
       const lista = Object.entries(C.coms).filter(([k,c]) => c.activo !== false && (a === "*" || (a === "-" ? !c.adminId : c.adminId === a)))
