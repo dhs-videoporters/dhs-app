@@ -113,7 +113,10 @@
                 const aus = ausencias.filter(a => a.personalId === k && a.desde <= f && a.hasta >= f);
                 const mias = carriles(citas.filter(x => x.k === k && x.c.fecha === f));
                 return `<div class="cal-col ${puedeCrear && k !== "_sin" ? "crea" : ""}" data-k="${esc(k)}" data-f="${f}" title="${esc(p.nombre)}">
-                  ${aus.map(a => `<div class="cal-aus" data-aus="${a.id}" title="${esc(p.nombre)}: ${esc(a.motivo)}">${esc(a.motivo)}</div>`).join("")}
+                  ${aus.map(a => { const txt = a.motivo + (a.horaIni ? " " + a.horaIni + "–" + a.horaFin : "");
+                    if(!a.horaIni) return `<div class="cal-aus" data-aus="${a.id}" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`;
+                    const i0 = Math.max(aMin(a.horaIni), H_INI*60), i1 = Math.min(aMin(a.horaFin), H_FIN*60);   // ausencia de unas horas (médico…), Ángel 02/11
+                    return i1 <= i0 ? "" : `<div class="cal-aus parcial" data-aus="${a.id}" style="top:${(i0 - H_INI*60) / 60 * PX_H}px;height:${(i1 - i0) / 60 * PX_H}px" title="${esc(p.nombre)}: ${esc(txt)}">${esc(txt)}</div>`; }).join("")}
                   ${mias.map(x => {
                     const ini = Math.max(aMin(x.c.hora), H_INI*60), dur = Math.max(Number(x.c.duracion)||60, 30);
                     const top = (ini - H_INI*60) / 60 * PX_H, alto = Math.min(dur, H_FIN*60 - ini) / 60 * PX_H;
@@ -151,7 +154,11 @@
             <label class="campo"><span>Desde</span><input type="date" name="desde" value="${hoy}"></label>
             <label class="campo"><span>Hasta</span><input type="date" name="hasta" value="${hoy}"></label>
             <label class="campo"><span>Motivo</span><select name="motivo">${MOTIVOS.map(m => `<option>${m}</option>`).join("")}</select></label>
+            <label class="campo"><span>Horas</span><select name="horas" id="ausHoras"><option value="todo">Todo el día</option><option value="parte">Solo unas horas</option></select></label>
+            <label class="campo aus-h oculto"><span>De</span><input type="time" name="horaIni" value="12:00" step="900"></label>
+            <label class="campo aus-h oculto"><span>A</span><input type="time" name="horaFin" value="18:00" step="900"></label>
           </div>
+          <p class="vacio aus-h oculto" style="margin:4px 0 8px">Ej.: médico a la 1 → de 12:00 a 18:00. Por la mañana puede trabajar; esas horas quedan cerradas en su agenda.</p>
           <button class="btn" type="submit">Guardar ausencia</button> <span id="msgAus" class="vacio"></span>
         </form>
         <div class="cal-cuerpo">
@@ -267,20 +274,25 @@
     if(puedeAus){
       const f = el.querySelector("#fAus");
       el.querySelector("#btnAus").onclick = () => f.classList.toggle("oculto");
+      f.querySelector("#ausHoras").onchange = e => f.querySelectorAll(".aus-h").forEach(x => x.classList.toggle("oculto", e.target.value !== "parte"));
       f.onsubmit = async ev => {
         ev.preventDefault();
         const fd = new FormData(f), d = {personalId:fd.get("personalId"), desde:fd.get("desde"), hasta:fd.get("hasta"), motivo:fd.get("motivo")};
         if(d.hasta < d.desde) return el.querySelector("#msgAus").textContent = "La fecha final es anterior a la inicial.";
+        if(fd.get("horas") === "parte"){
+          d.horaIni = fd.get("horaIni"); d.horaFin = fd.get("horaFin");
+          if(!d.horaIni || !d.horaFin || d.horaFin <= d.horaIni) return el.querySelector("#msgAus").textContent = "Pon bien las horas (la de fin, después de la de inicio).";
+        }
         const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
         try{
           const r = await db.collection("dhs_ausencias").add({...d, modificado:{por:yo, en}});
-          await db.collection("dhs_registro").add({por:yo, en, accion:"alta", coleccion:"dhs_ausencias", docId:r.id, nombre:(P[d.personalId]||{}).nombre + " · " + d.motivo + " " + d.desde + "→" + d.hasta});
+          await db.collection("dhs_registro").add({por:yo, en, accion:"alta", coleccion:"dhs_ausencias", docId:r.id, nombre:(P[d.personalId]||{}).nombre + " · " + d.motivo + " " + d.desde + "→" + d.hasta + (d.horaIni ? " (" + d.horaIni + "–" + d.horaFin + ")" : "")});
           vista(el);
         }catch(e){ el.querySelector("#msgAus").textContent = "No se ha podido guardar (" + (e.code||e) + ")."; }
       };
       el.querySelectorAll(".cal-aus").forEach(a => a.onclick = async () => {
         const au = ausencias.find(x => x.id === a.dataset.aus); if(!au) return;
-        if(!confirm("¿Borrar la ausencia de " + ((P[au.personalId]||{}).nombre||"") + " (" + au.motivo + ", " + au.desde + " a " + au.hasta + ")?")) return;
+        if(!confirm("¿Borrar la ausencia de " + ((P[au.personalId]||{}).nombre||"") + " (" + au.motivo + ", " + au.desde + " a " + au.hasta + (au.horaIni ? ", de " + au.horaIni + " a " + au.horaFin : "") + ")?")) return;
         const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
         try{
           await db.collection("dhs_ausencias").doc(au.id).delete();

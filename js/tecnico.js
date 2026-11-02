@@ -33,6 +33,9 @@
     (await D().db.collection("dhs_trabajos").where("asignados", "array-contains", yoPid()).get()).forEach(d => L.push({id:d.id, ...d.data()}));
     return L;
   }
+  // Sus ausencias (vacaciones, médico… de todo el día o de unas horas), para verlas en la agenda y no agendarse encima
+  async function leerAus(){ const L = []; try{ (await D().db.collection("dhs_ausencias").where("personalId", "==", yoPid()).get()).forEach(d => L.push(d.data())); }catch(e){} return L; }
+  const ausDia = (A, f) => A.filter(a => a.desde <= f && a.hasta >= f);
   // Citas de un día para este técnico, ordenadas por hora
   const delDia = (L, f) => {
     const R = [];
@@ -54,6 +57,7 @@
     const {S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
     if(!yoPid()){ el.innerHTML = `<div class="panel"><p class="vacio">Tu cuenta no está unida a nadie del equipo. Avisa a la oficina.</p></div>`; return; }
+    const AUS = await leerAus();
     let L; try{ L = await leerMios(); }catch(e){ el.innerHTML = `<div class="panel">No se han podido leer tus trabajos (${esc(e.code)}).</div>`; return; }
     const DL = laborables(); if(diaSel >= DL.length) diaSel = 0;
     const f = DL[diaSel], lista = delDia(L, f), esHoy = f === masDias(0);
@@ -63,6 +67,7 @@
       <div id="tecFichaje"></div>
       <div class="tec-dias">${DL.map((x,i) => `<button class="${i===diaSel?"on":""}" data-d="${i}">${esc(nomDia(x))}<span>${delDia(L, x).length}</span></button>`).join("")}</div>
       <p class="tec-fecha">${esc(fmtDia(f))}${esHoy ? "" : " · si acabas pronto, puedes adelantarlas"}</p>
+      ${ausDia(AUS, f).map(a => `<p class="tec-aus">🚫 ${esc(a.motivo)}: ${a.horaIni ? "de " + esc(a.horaIni) + " a " + esc(a.horaFin) : "todo el día"}</p>`).join("")}
       ${lista.map(({t,c}) => `<a class="tec-item ${CERRADOS.includes(t.estado) ? "hecha" : ""}" href="#t/${t.id}/${f}">
         <div class="ti-hora">${esc(c.hora || "—")}<span>${esc(dur(c.duracion))}</span></div>
         <div class="ti-cuerpo"><b>${esc(t.direccion || t.nombre)}</b><span>${esc(t.poblacion || "")}</span>
@@ -312,13 +317,14 @@
       let L = []; try{ L = await leerMios(); }catch(e){}
       const ocup = delDia(L.filter(x => x.id !== id), dia).filter(({t:x}) => !CERRADOS.includes(x.estado))
         .map(({t:x, c:cc}) => ({ini:aMin(cc.hora || "09:00"), fin:aMin(cc.hora || "09:00") + (Number(cc.duracion) || 60), txt:(cc.hora || "sin hora") + " · " + (x.direccion || x.nombre)}))
+        .concat(ausDia(await leerAus(), dia).map(a => ({ini:a.horaIni ? aMin(a.horaIni) : 0, fin:a.horaIni ? aMin(a.horaFin) : 24 * 60, txt:a.motivo + (a.horaIni ? " " + a.horaIni + "–" + a.horaFin : " (todo el día)")})))
         .sort((a,b) => a.ini - b.ini);
       // Primer hueco libre de 8:00 a 19:00 que quepa
       let libre = null; for(let m = 8 * 60; m + min <= 19 * 60; m += 15){ if(!ocup.some(o => m < o.fin && m + min > o.ini)){ libre = m; break; } }
       let h = "";
       if(dow === 0 || dow === 6) h += `<p class="tv-mal">⚠️ Ese día es ${dow === 6 ? "sábado" : "domingo"}.</p>`;
       if(dia < isoLocal(new Date())) h += `<p class="tv-mal">⚠️ Ese día ya ha pasado.</p>`;
-      h += ocup.length ? `<p>Ese día ya tienes:</p><ul>${ocup.map(o => `<li>${esc(o.txt)} (hasta las ${aHora(o.fin)})</li>`).join("")}</ul>` : `<p class="tv-bien">✅ Ese día lo tienes libre.</p>`;
+      h += ocup.length ? `<p>Ese día ya tienes:</p><ul>${ocup.map(o => `<li>${esc(o.txt)}${o.fin < 24 * 60 ? " (hasta las " + aHora(o.fin) + ")" : ""}</li>`).join("")}</ul>` : `<p class="tv-bien">✅ Ese día lo tienes libre.</p>`;
       if(hora){
         const ini = aMin(hora), fin = ini + min;
         const sol = ocup.filter(o => ini < o.fin && fin > o.ini);

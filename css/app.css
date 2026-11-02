@@ -490,3 +490,5 @@ body.modo-tec #btnVistaTec{display:none}
 .tf-volver-caja .tp-canal label{display:flex;align-items:center;gap:8px;font-size:15px;text-align:left}.tf-volver-caja .tp-canal input[type=radio]{width:auto;margin:0}
 .tp-f1 .tp-con{min-width:0;width:100%}.tp-f2 .tp-imp{flex:1}.tp-sug{margin-top:4px}
 .tf-llamar{text-decoration:none}
+.cal-aus.parcial{inset:auto 0;left:0;right:0;z-index:1;border-top:2px solid #b8c0cc;border-bottom:2px solid #b8c0cc;padding-top:2px}
+.tec-aus{background:#f1f3f6;border:1px dashed #b8c0cc;border-radius:10px;padding:8px 12px;margin:6px 0;font-weight:600;color:#4a5466}
