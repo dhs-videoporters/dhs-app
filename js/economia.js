@@ -18,7 +18,8 @@
     return FACT;
   }
 
-  let mes = new Date().toISOString().slice(0,7), adminF = "";
+  // Periodo para "Facturado" y "Cobrado": un mes o un año entero (Ángel 02/11)
+  let mes = new Date().toISOString().slice(0,7), anyo = mes.slice(0,4), verAnyo = false, adminF = "";
   async function vista(el, forzar){
     const {db, S} = D();
     if(!S.puede("cobros","ver")){ el.innerHTML = `<div class="panel">Sin permiso.</div>`; return; }
@@ -51,9 +52,15 @@
     // 2) Pendiente de cobrar
     const pend = F.filter(f => f.estado !== "Payed" && !f.rectificativa && (f.pendiente||0) > 0.01).map(f => ({...f, com:comDe(f.clienteId)})).filter(f => pasaAdmin(f.com))
       .sort((a,b) => (a.fecha||"").localeCompare(b.fecha||""));
-    // 3) Cobrado en el mes
-    const cobr = []; F.forEach(f => (f.pagos||[]).forEach(p => { if((p.fecha||"").slice(0,7) === mes){ const com = comDe(f.clienteId); if(pasaAdmin(com)) cobr.push({...p, numero:f.numero, cliente:f.cliente, com}); } }));
-    anticipos.filter(x => (x.fecha||"").slice(0,7) === mes).forEach(x => cobr.push(x));
+    // 3) Cobrado y facturado en el periodo (mes o año)
+    const enPer = fecha => verAnyo ? (fecha||"").slice(0,4) === anyo : (fecha||"").slice(0,7) === mes;
+    const perTxt = verAnyo ? "todo " + anyo : new Date(mes + "-15").toLocaleDateString("es-ES", {month:"long", year:"numeric"});
+    const cobr = []; F.forEach(f => (f.pagos||[]).forEach(p => { if(enPer(p.fecha)){ const com = comDe(f.clienteId); if(pasaAdmin(com)) cobr.push({...p, numero:f.numero, cliente:f.cliente, com}); } }));
+    anticipos.filter(x => enPer(x.fecha)).forEach(x => cobr.push(x));
+    const factP = F.filter(f => enPer(f.fecha)).map(f => ({...f, com:comDe(f.clienteId)})).filter(f => pasaAdmin(f.com)).sort((a,b) => (b.fecha||"").localeCompare(a.fecha||""));
+    // Por meses, cuando se mira el año entero
+    const porMes = {}; if(verAnyo){ factP.forEach(f => { const k = f.fecha.slice(0,7); porMes[k] = porMes[k] || {f:0, c:0}; porMes[k].f = r2(porMes[k].f + (Number(f.total)||0)); });
+      cobr.forEach(c => { const k = (c.fecha||"").slice(0,7); porMes[k] = porMes[k] || {f:0, c:0}; porMes[k].c = r2(porMes[k].c + (Number(c.importe)||0)); }); }
     cobr.sort((a,b) => (b.fecha||"").localeCompare(a.fecha||""));
     const nSin = pend.filter(f => f.sinCobros).length, tSin = r2(pend.filter(f => f.sinCobros).reduce((n,f) => n + (f.pendiente||0), 0));
     const tBanco = r2(F.filter(f => !f.rectificativa && pasaAdmin(comDe(f.clienteId))).reduce((n,f) => n + (f.importeBanco||0), 0));
@@ -66,12 +73,15 @@
       <div class="panel">
         <div class="cab-lista"><h2>Economía</h2>
           <select id="fAdm"><option value="">Todas las administraciones</option>${Object.entries(C.admins).filter(([k,a]) => a.activo !== false || adminF === k).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,a]) => `<option value="${esc(k)}" ${adminF===k?"selected":""}>${esc(a.nombre)}</option>`).join("")}<option value="-" ${adminF==="-"?"selected":""}>Sin administración</option></select>
+          <span class="eco-per">Ver: <select id="perTipo"><option value="mes" ${verAnyo?"":"selected"}>Mes</option><option value="anyo" ${verAnyo?"selected":""}>Año entero</option></select>
+            ${verAnyo ? `<select id="perAnyo">${Array.from({length:4}, (_,i) => String(new Date().getFullYear() - i)).map(y => `<option ${y===anyo?"selected":""}>${y}</option>`).join("")}</select>` : `<input type="month" id="mesC" value="${mes}">`}</span>
           <button class="btn sec" id="btnRec">⟳ Actualizar</button></div>
         <p class="vacio">Pendiente de cobrar con el mismo criterio que la app de cobros (pendientes, devueltas y en la hoja del viernes; lo cargado en el banco no cuenta).${nSin ? ` Incluye ${nSin} factura${nSin===1?"":"s"} nueva${nSin===1?"":"s"} que aún no ha${nSin===1?"":"n"} pasado a cobros (${eur(tSin)}).` : ""}${tBanco ? ` En el banco, pendiente de confirmar: ${eur(tBanco)}.` : ""}</p>
         <div class="eco-cajas">
           <a class="eco-caja c1" href="#" data-ir="acept"><span>Aceptado, pendiente de cobrar</span><b>${eur(suma(acept,"falta"))}</b><i>${acept.length} presupuesto${acept.length===1?"":"s"}${antTotal ? " · ya cobrado de anticipo " + eur(antTotal) : ""}</i></a>
           <a class="eco-caja c2" href="#" data-ir="pend"><span>Hecho, pendiente de cobrar</span><b>${eur(suma(pend,"pendiente"))}</b><i>${pend.length} factura${pend.length===1?"":"s"}</i></a>
-          <a class="eco-caja c3" href="#" data-ir="cobr"><span>Cobrado en <input type="month" id="mesC" value="${mes}"></span><b>${eur(suma(cobr,"importe"))}</b><i>${cobr.length} cobro${cobr.length===1?"":"s"}</i></a>
+          <a class="eco-caja c4" href="#" data-ir="fact"><span>Facturado en ${esc(perTxt)}</span><b>${eur(suma(factP,"total"))}</b><i>${factP.length} factura${factP.length===1?"":"s"} · IVA incluido</i></a>
+          <a class="eco-caja c3" href="#" data-ir="cobr"><span>Cobrado en ${esc(perTxt)}</span><b>${eur(suma(cobr,"importe"))}</b><i>${cobr.length} cobro${cobr.length===1?"":"s"}</i></a>
         </div>
         ${PROV ? (() => { const porPagar = r2(PROV.reduce((n,f) => n + (Number(f.total)||0), 0)), porCobrar = r2(suma(acept,"falta") + suma(pend,"pendiente"));
           return `<div class="eco-balance"><div><span>Por cobrar (aceptado + facturado)</span><b>${eur(porCobrar)}</b></div><div class="menos"><span>Por pagar a proveedores</span><b>− ${eur(porPagar)}</b><a href="#proveedores">ver</a></div><div class="${porCobrar - porPagar >= 0 ? "ok" : "mal"}"><span>Queda</span><b>${eur(r2(porCobrar - porPagar))}</b></div></div>`; })() : ""}
@@ -91,7 +101,17 @@
             <td>${f.devuelto ? `<span class="tag aviso">devuelto</span>` : ""}${f.enHoja ? `<span class="tag azul">en la hoja del viernes</span>` : ""}${f.enBanco ? `<span class="tag azul">${eur(f.importeBanco)} en el banco</span>` : ""}${f.sinCobros ? `<span class="tag gris">aún no está en cobros</span>` : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio">Nada pendiente.</td></tr>`}
         </tbody></table>
 
-        <h3 id="cobr" style="margin-top:16px">💶 Cobrado en ${esc(nomMes(mes))}</h3>
+        ${verAnyo ? `<h3 style="margin-top:16px">📊 ${esc(anyo)} mes a mes</h3>
+        <table class="tabla-fi"><thead><tr><th>Mes</th><th>Facturado</th><th>Cobrado</th></tr></thead><tbody>
+          ${Object.keys(porMes).sort().map(k => `<tr><td>${esc(nomMes(k))}</td><td>${eur(porMes[k].f)}</td><td>${eur(porMes[k].c)}</td></tr>`).join("") || `<tr><td colspan="3" class="vacio">Nada.</td></tr>`}
+          <tr><td><b>Total</b></td><td><b>${eur(suma(factP,"total"))}</b></td><td><b>${eur(suma(cobr,"importe"))}</b></td></tr></tbody></table>` : ""}
+
+        <details style="margin-top:16px"><summary><h3 id="fact" style="display:inline">🧾 Facturado en ${esc(perTxt)} (${factP.length})</h3></summary>
+        <table class="tabla-fi"><thead><tr><th>Factura</th><th>Fecha</th><th>Cliente</th><th>Administración</th><th>Total</th><th>Estado</th></tr></thead><tbody>
+          ${factP.map(f => `<tr><td>${esc(f.numero)}${f.rectificativa ? ` <span class="tag gris">rectificativa</span>` : ""}</td><td>${fch(f.fecha)}</td><td>${f.com ? `<a href="#comunidad/${encodeURIComponent(porCs[String(f.clienteId)])}">${esc(f.com.nombre)}</a>` : esc(f.cliente)}</td><td>${esc(adminDe(f.com))}</td><td>${eur(f.total)}</td><td>${f.estado === "Payed" || !(f.pendiente > 0.01) ? "✅ cobrada" : "pendiente " + eur(f.pendiente)}</td></tr>`).join("") || `<tr><td colspan="6" class="vacio">Nada.</td></tr>`}
+        </tbody></table></details>
+
+        <h3 id="cobr" style="margin-top:16px">💶 Cobrado en ${esc(perTxt)}</h3>
         <table class="tabla-fi"><thead><tr><th>Fecha</th><th>Factura</th><th>Cliente</th><th>Importe</th></tr></thead><tbody>
           ${cobr.map(c => `<tr><td>${fch(c.fecha)}</td><td>${esc(c.numero)}${c.anticipo ? ` <span class="tag est-p-aceptado">anticipo${c.forma ? " · " + esc(c.forma) : ""}</span>` : ""}</td><td>${esc(c.com ? c.com.nombre : c.cliente)}</td><td>${eur(c.importe)}</td></tr>`).join("") || `<tr><td colspan="4" class="vacio">Nada.</td></tr>`}
         </tbody></table>
@@ -100,8 +120,10 @@
     if(window.DHS_CAMS) window.DHS_CAMS.resumen(el.querySelector("#ecoCam"));
     el.querySelector("#fAdm").onchange = e => { adminF = e.target.value; vista(el); };
     el.querySelector("#btnRec").onclick = () => vista(el, true);
-    const mC = el.querySelector("#mesC"); mC.onclick = e => e.stopPropagation(); mC.onchange = e => { mes = e.target.value || mes; vista(el); };
-    el.querySelectorAll("[data-ir]").forEach(a => a.onclick = ev => { if(ev.target.tagName === "INPUT") return; ev.preventDefault(); el.querySelector("#" + a.dataset.ir).scrollIntoView({behavior:"smooth"}); });
+    const mC = el.querySelector("#mesC"); if(mC) mC.onchange = e => { mes = e.target.value || mes; vista(el); };
+    const pA = el.querySelector("#perAnyo"); if(pA) pA.onchange = e => { anyo = e.target.value; vista(el); };
+    el.querySelector("#perTipo").onchange = e => { verAnyo = e.target.value === "anyo"; if(verAnyo) anyo = mes.slice(0,4); vista(el); };
+    el.querySelectorAll("[data-ir]").forEach(a => a.onclick = ev => { ev.preventDefault(); const d = el.querySelector("#" + a.dataset.ir); const det = d.closest("details"); if(det) det.open = true; d.scrollIntoView({behavior:"smooth"}); });
   }
 
   // Facturas de una comunidad (para la pestaña de su ficha)
