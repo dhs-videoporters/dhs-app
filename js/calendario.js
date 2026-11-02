@@ -266,8 +266,36 @@
         if(ini === null) return;
         const fin = ev.pointerType === "mouse" ? minDe(ev) : ini + 30;   // tocando: 1 hora
         const [de, a] = pintar(ini, fin); ini = null;
-        window.DHS_TRAB.prefijar({fecha:col.dataset.f, hora:hhmm(de), duracion:a - de, personal:[col.dataset.k]});
-        location.hash = "nueva-intervencion";
+        const nueva = () => { window.DHS_TRAB.prefijar({fecha:col.dataset.f, hora:hhmm(de), duracion:a - de, personal:[col.dataset.k]}); location.hash = "nueva-intervencion"; };
+        if(!puedeAus || col.dataset.k === "_sin") return nueva();
+        // Ángel 02/11: al marcar un hueco, elegir si es una intervención o una ausencia (médico, día libre…)
+        const nom = (P[col.dataset.k]||{}).nombre || "", diaTxt = new Date(col.dataset.f + "T12:00").toLocaleDateString("es-ES", {weekday:"short", day:"numeric", month:"short"});
+        const fondo = document.createElement("div"); fondo.className = "preg-fondo";
+        fondo.innerHTML = `<div class="preg-caja aus-elegir" role="dialog" aria-modal="true">
+          <p><b>${esc(nom)}</b> · ${esc(diaTxt)} · ${hhmm(de)}–${hhmm(a)}</p>
+          <button class="btn" data-x="int">📅 Nueva intervención</button>
+          <p style="margin:14px 0 6px"><b>🚫 o marcar ausencia:</b></p>
+          <div class="aus-mot">${MOTIVOS.map(m => `<button class="btn sec" data-m="${esc(m)}">${esc(m)}</button>`).join("")}</div>
+          <label class="aus-todo"><input type="checkbox" id="ausTodo"> Todo el día (no solo de ${hhmm(de)} a ${hhmm(a)})</label>
+          <p class="vacio" id="ausMsg"></p>
+          <div class="preg-bot"><button class="btn sec" data-x="no">Cancelar</button></div></div>`;
+        const cerrar = () => { fondo.remove(); if(sel){ sel.remove(); sel = null; } };
+        fondo.addEventListener("click", async e => {
+          const b = e.target.closest("button"); if(!b){ if(e.target === fondo) cerrar(); return; }
+          if(b.dataset.x === "no") return cerrar();
+          if(b.dataset.x === "int"){ fondo.remove(); return nueva(); }
+          if(!b.dataset.m) return;
+          const todo = fondo.querySelector("#ausTodo").checked;
+          const d = {personalId:col.dataset.k, desde:col.dataset.f, hasta:col.dataset.f, motivo:b.dataset.m, ...(todo ? {} : {horaIni:hhmm(de), horaFin:hhmm(a)})};
+          const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
+          fondo.querySelectorAll("button").forEach(x => x.disabled = true); fondo.querySelector("#ausMsg").textContent = "Guardando…";
+          try{
+            const r = await db.collection("dhs_ausencias").add({...d, modificado:{por:yo, en}});
+            await db.collection("dhs_registro").add({por:yo, en, accion:"alta", coleccion:"dhs_ausencias", docId:r.id, nombre:nom + " · " + d.motivo + " " + d.desde + (d.horaIni ? " (" + d.horaIni + "–" + d.horaFin + ")" : " (todo el día)")});
+            fondo.remove(); vista(el);
+          }catch(err){ fondo.querySelector("#ausMsg").textContent = "No se ha podido guardar (" + (err.code||err) + ")."; fondo.querySelectorAll("button").forEach(x => x.disabled = false); }
+        });
+        document.body.appendChild(fondo);
       });
     });
 
