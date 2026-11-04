@@ -356,7 +356,7 @@
           duracionEstimada:dur, citas, asignados, hechoPor:[], material:[], tiempoReal:null, fotos:[],
           creadoPorTecnico: !S.puede("trabajos","todo"),
           ...(dePres ? {presupuestoId:pre.presupuestoId, presupuestoNumero:pre.presupuestoNumero} : {}),
-          ...(v("encargo") ? {encargo:v("encargo")} : {}),
+          ...(v("encargo") ? {encargo:v("encargo"), encargoInfo:window.DHS_EMP ? window.DHS_EMP.info(v("encargo")) : null} : {}),
           creado:firma, modificado:firma
         };
         const ref = await db.collection("dhs_trabajos").add(datos);
@@ -808,7 +808,7 @@
     if(sEF) sEF.onchange = async () => {
       const nuevo = sEF.value || null, nom = k => k && window.DHS_EMP.lista().find(x => x[0] === k) ? window.DHS_EMP.lista().find(x => x[0] === k)[1].nombre : "directo";
       try{
-        await ref.update({encargo:nuevo, modificado:firma()});
+        await ref.update({encargo:nuevo, encargoInfo:nuevo && window.DHS_EMP ? window.DHS_EMP.info(nuevo) : null, modificado:firma()});
         await nota({tipo:"cambio", texto:"De parte de: " + nom(t.encargo) + " → " + nom(nuevo)});
         if(nuevo && t.comunidadId) try{ await db.collection("dhs_comunidades").doc(t.comunidadId).set({empresaId:nuevo, modificado:firma()}, {merge:true}); }catch(e){}
         ficha(el, id);

@@ -50,7 +50,10 @@
     if(p.telefono || p.nombre) return {nombre:"Presidente: " + [p.nombre, p.piso].filter(Boolean).join(" · "), tel:p.telefono || ""};
     return {nombre:"", tel:""};
   }
-  const esPrivativo = (t, com) => t.origen === "particular" || (com && com.tipo === "particular") || (!t.comunidadId && !t.adminId);
+  // De parte de una empresa (Armengol, Álamo…): somos subcontrata, el técnico lo ve con su color y no presupuesta ni cobra (Ángel 04/11)
+  const empresa = t => { if(!t.encargo) return null; const i = t.encargoInfo || (window.DHS_EMP && window.DHS_EMP.info(t.encargo)); return i || {nombre:"otra empresa", color:"#8a5a00"}; };
+  const chipEmp = t => { const e = empresa(t); return e ? `<span class="tec-emp" style="--emp:${esc(e.color)}">🏗️ ${esc(e.nombre)}</span>` : ""; };
+  const esPrivativo = (t, com) => !t.encargo && (t.origen === "particular" || (com && com.tipo === "particular") || (!t.comunidadId && !t.adminId));
 
   // ---------- AGENDA ----------
   async function agenda(el){
@@ -69,9 +72,9 @@
       <p class="tec-fecha">${esc(fmtDia(f))}${esHoy ? "" : " · si acabas pronto, puedes adelantarlas"}</p>
       ${ausDia(AUS, f).map(a => /manten/i.test(a.motivo||"") ? `<div class="tec-mant" id="tecMant"><h3>🔧 Día de mantenimientos de cámaras${a.horaIni ? " (de " + esc(a.horaIni) + " a " + esc(a.horaFin) + ")" : ""}</h3><p class="vacio">Cargando las que tocan…</p></div>`
         : `<p class="tec-aus">🚫 ${esc(a.motivo)}: ${a.horaIni ? "de " + esc(a.horaIni) + " a " + esc(a.horaFin) : "todo el día"}</p>`).join("")}
-      ${lista.map(({t,c}) => `<a class="tec-item ${CERRADOS.includes(t.estado) ? "hecha" : ""}" href="#t/${t.id}/${f}">
+      ${lista.map(({t,c}) => `<a class="tec-item ${CERRADOS.includes(t.estado) ? "hecha" : ""} ${t.encargo ? "de-emp" : ""}" style="${empresa(t) ? "--emp:" + esc(empresa(t).color) : ""}" href="#t/${t.id}/${f}">
         <div class="ti-hora">${esc(c.hora || "—")}<span>${esc(dur(c.duracion))}</span></div>
-        <div class="ti-cuerpo"><b>${esc(t.direccion || t.nombre)}</b><span>${esc(t.poblacion || "")}</span>
+        <div class="ti-cuerpo">${chipEmp(t)}<b>${esc(t.direccion || t.nombre)}</b><span>${esc(t.poblacion || "")}</span>
           <span class="ti-desc">${esc((t.descripcion || "").slice(0,80))}</span>
           ${CERRADOS.includes(t.estado) ? `<span class="ti-est ok">✅ Terminada</span>` : t.estado === "amedias" ? `<span class="ti-est">🔁 Hay que volver</span>` : t.estado === "encurso" || t.resumenHecho ? `<span class="ti-est">▶️ Empezada</span>` : ""}</div>
         <div class="ti-ir">›</div></a>`).join("") || `<p class="vacio tec-nada">No tienes nada ${esHoy ? "hoy" : "el " + esc(fmtDia(f))}.</p>`}
@@ -235,6 +238,7 @@
       <a href="#agenda" class="volver">‹ Agenda</a>
       <div class="panel tec-ficha">
         <div class="tf-hora">🕘 ${esc(c.hora || "Sin hora")}${c.duracion ? ` <span>· ${esc(dur(c.duracion))}</span>` : ""}${c.fecha && c.fecha !== hoy ? `<span class="tf-dia">${esc(fmtDia(c.fecha))}</span>` : ""}</div>
+        ${empresa(t) ? `<div class="tf-emp" style="--emp:${esc(empresa(t).color)}">🏗️ De parte de <b>${esc(empresa(t).nombre)}</b><span>Somos su subcontrata: no hagas presupuesto ni cobres al cliente. Si hace falta algo más, avisa a la oficina.</span></div>` : ""}
         <h1>${esc(t.direccion || t.nombre)}</h1>
         <p class="vacio">${esc([t.poblacion, t.nombre !== t.direccion ? t.nombre : ""].filter(Boolean).join(" · "))} · <a href="${mapa}" target="_blank" rel="noopener">Cómo llegar</a></p>
         ${com && com.acceso ? `<p class="tf-acceso">🔑 ${esc(com.acceso)}</p>` : ""}

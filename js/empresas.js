@@ -12,5 +12,7 @@
   // Etiqueta de color: "🏗️ Armengol"
   const chip = (id, corto) => !id || !A[id] ? "" : `<span class="emp-chip" style="--emp:${esc(color(id))}" title="De parte de ${esc(A[id].nombre)}">🏗️ ${esc(corto ? A[id].nombre.split(" ")[0] : A[id].nombre)}</span>`;
   const opciones = sel => `<option value="">— Directo / su administración —</option>` + lista().map(([k,a]) => `<option value="${esc(k)}" ${k === sel ? "selected" : ""}>🏗️ ${esc(a.nombre)}</option>`).join("");
-  window.DHS_EMP = { cargar, esEmpresa, lista, color, nombre, chip, opciones };
+  // Copia del nombre y color dentro de la intervención: los técnicos no leen la lista de administraciones (Ángel 04/11)
+  const info = id => id && A[id] ? {nombre:A[id].nombre, color:color(id)} : null;
+  window.DHS_EMP = { cargar, esEmpresa, lista, color, nombre, chip, opciones, info };
 })();
