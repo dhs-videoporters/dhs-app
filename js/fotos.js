@@ -64,10 +64,11 @@
   }
 
   // Botón de cámara: en el móvil abre la cámara; en el ordenador, elegir archivo. Permite varias.
-  function botonCamara(texto, alElegir){
+  // galeria = true: sin "capture", para elegir fotos ya hechas (sin cobertura: la hacen, buscan cobertura y la suben; Ángel 04/11)
+  function botonCamara(texto, alElegir, galeria){
     const w = document.createElement("label");
-    w.className = "btn sec btn-foto";
-    w.innerHTML = `${texto}<input type="file" accept="image/*" capture="environment" multiple hidden>`;
+    w.className = "btn sec btn-foto" + (galeria ? " btn-galeria" : "");
+    w.innerHTML = `${texto}<input type="file" accept="image/*" ${galeria ? "" : 'capture="environment"'} multiple hidden>`;
     w.querySelector("input").onchange = e => { const fs = [...e.target.files]; e.target.value = ""; if(fs.length) alElegir(fs); };
     return w;
   }
@@ -80,7 +81,7 @@
     pintarMinis(caja, fotos);
     if(!puedeSubir) return;
     const carpeta = t.comunidadId ? "comunidades/" + t.comunidadId + "/" + id : "particulares/" + id;
-    el.querySelector("h3").after(botonCamara("📷 Hacer / subir foto", async files => {
+    const subirVarias = async files => {
       const {db, S} = D(), yo = S.usuario.email.toLowerCase();
       for(let i = 0; i < files.length; i++){
         msg("Subiendo foto " + (i+1) + " de " + files.length + "…");
@@ -91,7 +92,11 @@
         }catch(e){ msg("No se ha podido subir: " + e); return; }
       }
       msg(files.length === 1 ? "Foto guardada." : files.length + " fotos guardadas.");
-    }));
+    };
+    const botones = document.createElement("div"); botones.className = "fotos-botones";
+    botones.append(botonCamara("📷 Hacer foto", subirVarias), botonCamara("🖼️ Subir de la galería", subirVarias, true));
+    el.querySelector("h3").after(botones);
+    el.insertAdjacentHTML("beforeend", `<p class="vacio fotos-ayuda">¿Sin cobertura? Haz las fotos con la cámara del móvil y luego, con cobertura, súbelas con «Subir de la galería».</p>`);
   }
 
   // ---------- Galería de la comunidad: fotos de la finca + fotos de todas sus intervenciones ----------

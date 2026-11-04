@@ -245,7 +245,7 @@
         ${vistaHoy && ed && (!ed.placa || !ed.camaras) ? `<div class="tf-bloque tf-edificio" id="tfEdif"><h3>🏢 ${edEnTrabajo ? "Antes de empezar" : "Primera vez en esta finca"}</h3>
           <p>Antes de nada, 2 cosas rápidas:</p>
           <p class="ed-paso"><b>1.</b> Foto de la placa del videoportero (de cerca, que se vea la marca y los pulsadores).</p>
-          <div id="edPlaca">${ed.placa ? `<p class="ed-ok">✅ Foto de la placa hecha</p>` : `<label class="btn tf-foto-grande">📷 Foto de la placa<input type="file" accept="image/*" capture="environment" hidden></label>`}</div>
+          <div id="edPlaca">${ed.placa ? `<p class="ed-ok">✅ Foto de la placa hecha</p>` : `<label class="btn tf-foto-grande">📷 Foto de la placa<input type="file" accept="image/*" capture="environment" hidden></label><label class="btn sec tf-foto-gal">🖼️ Subir de la galería<input type="file" accept="image/*" hidden></label>`}</div>
           <p class="ed-paso"><b>2.</b> ${edEnTrabajo ? "¿Tiene cámaras (la casa o el edificio)?" : "¿El edificio tiene cámaras?"}</p>
           <div class="ed-cam" id="edCam">${ed.camaras ? `<p class="ed-ok">✅ Cámaras: ${ed.camaras === "si" ? "Sí" : "No"}</p>` : `<button class="btn sec" data-c="si">📹 Sí tiene</button><button class="btn sec" data-c="no">🚫 No tiene</button>`}</div>
           <p class="vacio" id="edMsg"></p></div>` : ""}
@@ -289,8 +289,8 @@
     if(edB && editable){
       const fRef = edEnTrabajo ? null : db.collection("dhs_comunidades").doc(t.comunidadId).collection("fotos"), edMsg = x => edB.querySelector("#edMsg").textContent = x;
       const yoE = S.usuario.email.toLowerCase();
-      const inp = edB.querySelector("#edPlaca input");
-      if(inp) inp.onchange = async e => {
+      const inps = edB.querySelectorAll("#edPlaca input");
+      inps.forEach(inp => inp.onchange = async e => {
         const file = e.target.files[0]; e.target.value = ""; if(!file) return;
         edMsg("Subiendo la foto…");
         try{
@@ -302,8 +302,8 @@
             await fRef.add({...f, etiqueta:"Placa de calle", principal:true, trabajoId:id});
           }
           ed.placa = true; edB.querySelector("#edPlaca").innerHTML = `<p class="ed-ok">✅ Foto de la placa hecha</p>`; edMsg("");
-        }catch(err){ edMsg("No se ha podido subir (" + (err.code || err) + ")."); }
-      };
+        }catch(err){ edMsg("No se ha podido subir (" + (err.code || err) + "). Si no hay cobertura, sube la foto luego desde la galería."); }
+      });
       edB.querySelectorAll("#edCam button").forEach(b => b.onclick = async () => {
         try{
           if(edEnTrabajo) await nota({tipo:"edificio", camaras:b.dataset.c, texto:"Cámaras: " + (b.dataset.c === "si" ? "sí tiene" : "no tiene")});
@@ -313,7 +313,7 @@
       });
     }
     if(vistaHoy && PREVIEW && !PRUEBAS()){   // vista previa: mismo aspecto, nada se puede tocar
-      if(fotos) fotos.querySelector("h3").insertAdjacentHTML("afterend", `<span class="btn sec btn-foto">📷 Hacer / subir foto</span>`);
+      if(fotos) fotos.querySelector("h3").insertAdjacentHTML("afterend", `<div class="fotos-botones"><span class="btn sec btn-foto">📷 Hacer foto</span><span class="btn sec btn-foto btn-galeria">🖼️ Subir de la galería</span></div>`);
       el.querySelectorAll(".tec-ficha textarea, .tec-ficha input, .tec-ficha button").forEach(x => x.disabled = true);
       el.querySelector("#tfMsg").textContent = "Vista previa: así lo verá el técnico. Desde aquí no se puede guardar.";
     }
