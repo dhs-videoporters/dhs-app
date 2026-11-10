@@ -398,11 +398,17 @@
       let C = null; try{ C = await window.DHS_COM.datos(); }catch(e){}
       const citasHoy = trabajos.filter(t => (t.citas||[]).some(c => c.fecha === hoy) && t.comunidadId && C && C.coms[t.comunidadId] && C.coms[t.comunidadId].geo && C.coms[t.comunidadId].geo.lat)
         .map(t => ({t, geo:C.coms[t.comunidadId].geo, hora:((t.citas||[]).find(c => c.fecha === hoy)||{}).hora || ""}));
+      // Localiza da la posición en radianes (0,725 = 41,55°): se pasa a grados
+      L.forEach(v => { if(Math.abs(v.lat) <= Math.PI && Math.abs(v.lon) <= Math.PI){ v.lat = v.lat * 180 / Math.PI; v.lon = v.lon * 180 / Math.PI; } });
+      // Calle donde está (OpenStreetMap)
+      await Promise.all(L.map(async v => { try{ const j = await (await fetch("https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&lat=" + v.lat + "&lon=" + v.lon, {headers:{"Accept-Language":"es"}})).json();
+        const a = j.address || {}; v.calle = [[a.road, a.house_number].filter(Boolean).join(" "), a.town || a.city || a.village || a.suburb].filter(Boolean).join(", "); }catch(e){} }));
       caja.innerHTML = L.map(v => {
         const ok = isFinite(v.lat) && isFinite(v.lon) && (v.lat || v.lon);
         const cerca = ok ? citasHoy.map(x => ({...x, d:km({lat:v.lat, lon:v.lon}, {lat:Number(x.geo.lat), lon:Number(x.geo.lon)})})).sort((a,b) => a.d - b.d)[0] : null;
         const bb = ok ? [v.lon - 0.006, v.lat - 0.004, v.lon + 0.006, v.lat + 0.004].join(",") : "";
         return `<div class="furgo-item"><p><b>${esc(v.nombre)}</b> · ${v.velocidad > 3 ? `🚗 en marcha, ${Math.round(v.velocidad)} km/h` : "🅿️ parada"} · GPS de las ${esc(String(v.fecha||"").split(" ")[1] || v.fecha || "")}</p>
+          ${v.calle ? `<p>📍 <b>${esc(v.calle)}</b></p>` : ""}
           ${cerca && cerca.d < 0.3 ? `<p class="tv-bien">📍 Está en <b>${esc(cerca.t.direccion || cerca.t.nombre)}</b> (cita de las ${esc(cerca.hora)})</p>`
             : cerca ? `<p class="vacio">La cita de hoy más cercana: ${esc(cerca.t.direccion || cerca.t.nombre)} (${esc(cerca.hora)}), a ${cerca.d < 1 ? Math.round(cerca.d * 1000) + " m" : cerca.d.toFixed(1).replace(".", ",") + " km"}.</p>` : ""}
           ${ok ? `<iframe class="furgo-mapa" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=${bb}&layer=mapnik&marker=${v.lat},${v.lon}"></iframe>
