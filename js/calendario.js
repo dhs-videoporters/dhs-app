@@ -381,6 +381,7 @@
   async function verFurgoneta(trabajos){
     const fondo = document.createElement("div"); fondo.className = "preg-fondo";
     fondo.innerHTML = `<div class="preg-caja furgo-caja" role="dialog" aria-modal="true"><h3>🚐 Furgoneta</h3><div id="furgoTxt"><p class="vacio">Preguntando a Localiza…</p></div>
+      <div class="furgo-rec"><label>🗺️ Recorrido del día <input type="date" id="furgoDia" value="${new Date().toLocaleDateString("sv-SE")}"></label> <button class="btn sec" id="furgoRec">Ver recorrido</button></div>
       <div class="preg-bot"><button class="btn sec" id="furgoAct">⟳ Actualizar</button> <button class="btn" id="furgoX">Cerrar</button></div></div>`;
     document.body.appendChild(fondo);
     const cerrar = () => fondo.remove();
@@ -416,7 +417,68 @@
       }).join("");
     };
     fondo.querySelector("#furgoAct").onclick = pintar;
+    fondo.querySelector("#furgoRec").onclick = () => { const dia = fondo.querySelector("#furgoDia").value; cerrar(); verRecorrido(dia, trabajos); };
     pintar();
+  }
+
+  // ---------- 🗺️ Recorrido de un día y paradas (para saber cuánto ha estado en cada sitio) ----------
+  let leaflet = null;
+  const cargarLeaflet = () => leaflet || (leaflet = new Promise((ok, ko) => {
+    if(window.L && window.L.map) return ok(window.L);
+    const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(css);
+    const sc = document.createElement("script"); sc.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+    sc.onload = () => ok(window.L); sc.onerror = () => { leaflet = null; ko(new Error("No se ha podido cargar el mapa")); }; document.head.appendChild(sc); }));
+  async function verRecorrido(dia, trabajos){
+    const fondo = document.createElement("div"); fondo.className = "preg-fondo";
+    const diaTxt = new Date(dia + "T12:00").toLocaleDateString("es-ES", {weekday:"long", day:"numeric", month:"long"});
+    fondo.innerHTML = `<div class="preg-caja rec-caja" role="dialog" aria-modal="true"><h3>🗺️ Recorrido · ${esc(diaTxt)}</h3><div id="recTxt"><p class="vacio">Pidiendo el recorrido a Localiza…</p></div>
+      <div class="preg-bot"><button class="btn" id="recX">Cerrar</button></div></div>`;
+    document.body.appendChild(fondo);
+    fondo.querySelector("#recX").onclick = () => fondo.remove(); fondo.addEventListener("click", e => { if(e.target === fondo) fondo.remove(); });
+    const caja = fondo.querySelector("#recTxt");
+    let V, Lf, C = null;
+    try{ [V, Lf] = await Promise.all([window.DHS_PRES.llamar("recorrido", {fecha:dia}), cargarLeaflet()]); }
+    catch(e){ caja.innerHTML = `<p>No se ha podido sacar el recorrido: ${esc(e.message || e)}</p>`; return; }
+    try{ C = await window.DHS_COM.datos(); }catch(e){}
+    const km = (a, b) => { const R = 6371, dLa = (b[0] - a[0]) * Math.PI/180, dLo = (b[1] - a[1]) * Math.PI/180;
+      const x = Math.sin(dLa/2)**2 + Math.cos(a[0]*Math.PI/180) * Math.cos(b[0]*Math.PI/180) * Math.sin(dLo/2)**2; return 2 * R * Math.asin(Math.sqrt(x)); };
+    const hm = f => { const m = String(f).match(/(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+    const hh = m => String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m % 60).padStart(2,"0");
+    const durT = m => m < 60 ? m + " min" : Math.floor(m/60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
+    // Comunidades con coordenadas y las citas de ese día
+    const COMS = C ? Object.entries(C.coms).filter(([k,c]) => c.geo && c.geo.lat).map(([k,c]) => ({k, n:c.nombre || c.direccion, d:c.direccion, p:[Number(c.geo.lat), Number(c.geo.lon)]})) : [];
+    const citaDe = k => { const t = trabajos.find(t => t.comunidadId === k && (t.citas||[]).some(c => c.fecha === dia)); return t ? ((t.citas||[]).find(c => c.fecha === dia)||{}).hora || "" : null; };
+    caja.innerHTML = "";
+    V.forEach((v, n) => {
+      const P = (v.puntos||[]).filter(p => isFinite(p[0]) && isFinite(p[1]) && p[0]).map(p => ({p:[p[0], p[1]], m:hm(p[2]), vel:p[3], kms:p[4]})).filter(x => x.m != null).sort((a,b) => a.m - b.m);
+      const bloque = document.createElement("div"); bloque.className = "rec-veh"; caja.appendChild(bloque);
+      if(!P.length){ bloque.innerHTML = `<p><b>${esc(v.nombre)}</b>: sin recorrido ese día.</p>`; return; }
+      // Paradas: puntos seguidos a menos de 150 m, parado o sin señal, durante 5 minutos o más
+      const par = []; let cur = null;
+      for(let i = 1; i < P.length; i++){ const a = P[i-1], b = P[i];
+        if(km(a.p, b.p) < 0.15 && (b.vel < 3 || b.m - a.m >= 5)){ if(!cur) cur = {ini:a.m, fin:b.m, p:a.p}; else cur.fin = b.m; }
+        else if(cur){ par.push(cur); cur = null; } }
+      if(cur) par.push(cur);
+      const paradas = par.filter(x => x.fin - x.ini >= 5).map(x => { const c = COMS.map(c => ({...c, d2:km(x.p, c.p)})).sort((a,b) => a.d2 - b.d2)[0];
+        return {...x, dur:x.fin - x.ini, com:c && c.d2 < 0.2 ? c : null}; });
+      const kms = P[P.length-1].kms && P[0].kms ? Math.round(P[P.length-1].kms - P[0].kms) : Math.round(P.slice(1).reduce((s,x,i) => s + km(P[i].p, x.p), 0));
+      bloque.innerHTML = `<p><b>${esc(v.nombre)}</b> · de ${hh(P[0].m)} a ${hh(P[P.length-1].m)} · ${kms} km · ${paradas.length} parada${paradas.length===1?"":"s"}</p>
+        <div class="rec-mapa" id="recMapa${n}"></div>
+        <table class="tabla-fi rec-tabla"><thead><tr><th>#</th><th>Llega</th><th>Se va</th><th>Tiempo</th><th>Dónde</th></tr></thead><tbody>
+        ${paradas.map((x,i) => `<tr><td>${i+1}</td><td>${hh(x.ini)}</td><td>${hh(x.fin)}</td><td><b>${durT(x.dur)}</b></td><td class="rec-donde" data-i="${i}">${x.com ? `<b>${esc(x.com.n)}</b>${citaDe(x.com.k) != null ? ` <span class="tag">cita ${esc(citaDe(x.com.k))}</span>` : ""}` : `<span class="vacio">buscando calle…</span>`}</td></tr>`).join("") || `<tr><td colspan="5" class="vacio">Sin paradas de 5 minutos o más.</td></tr>`}</tbody></table>`;
+      const mapa = Lf.map(bloque.querySelector(".rec-mapa"));
+      Lf.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(mapa);
+      const linea = Lf.polyline(P.map(x => x.p), {color:"#2f6fd6", weight:4}).addTo(mapa);
+      paradas.forEach((x,i) => Lf.marker(x.p, {icon:Lf.divIcon({className:"pin-parada", html:String(i+1)})}).addTo(mapa).bindPopup(`${hh(x.ini)}–${hh(x.fin)} · ${durT(x.dur)}${x.com ? "<br>" + esc(x.com.n) : ""}`));
+      Lf.circleMarker(P[0].p, {radius:7, color:"#1f7a3d", fillOpacity:1}).addTo(mapa).bindPopup("Sale " + hh(P[0].m));
+      Lf.circleMarker(P[P.length-1].p, {radius:7, color:"#b03a2e", fillOpacity:1}).addTo(mapa).bindPopup("Última posición " + hh(P[P.length-1].m));
+      mapa.fitBounds(linea.getBounds(), {padding:[20,20]});
+      // Calle de las paradas que no están en una comunidad conocida (de una en una, como pide OpenStreetMap)
+      (async () => { for(let i = 0; i < paradas.length && i < 12; i++){ const x = paradas[i]; if(x.com) continue;
+        try{ const j = await (await fetch("https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&lat=" + x.p[0] + "&lon=" + x.p[1], {headers:{"Accept-Language":"es"}})).json();
+          const a = j.address || {}; const td = bloque.querySelector(`.rec-donde[data-i="${i}"]`); if(td) td.textContent = [[a.road, a.house_number].filter(Boolean).join(" "), a.town || a.city || a.village || a.suburb].filter(Boolean).join(", ") || "—"; }catch(e){}
+        await new Promise(r => setTimeout(r, 1100)); } })();
+    });
   }
 
   window.DHS_CAL = { vista };
