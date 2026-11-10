@@ -518,3 +518,4 @@ body.modo-tec #btnVistaTec{display:none}
 .fotos-ayuda{font-size:12px;margin-top:4px}
 .tf-foto-gal{display:block;text-align:center;font-size:15px;padding:10px;margin-top:6px;cursor:pointer}
 .tec-item .ti-cuerpo .tec-emp{color:#fff;display:inline-block;width:auto;font-size:12px;font-weight:700}
+.eco-cab{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px}.eco-cab h2{margin:0}.tabla-fi.prod td,.tabla-fi.prod th{font-size:15px}

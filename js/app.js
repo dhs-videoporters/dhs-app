@@ -142,7 +142,7 @@
       return window.DHS_TEC.agenda($("#contenido"));
     }
     if(window.DHS_TEC) window.DHS_TEC.salirVista();
-    const ALIAS = {comunidad:"comunidades", administrador:"administradores", intervencion:"intervenciones", "nueva-intervencion":"intervenciones", ruta:"intervenciones", trabajos:"intervenciones"};
+    const ALIAS = {comunidad:"comunidades", administrador:"administradores", intervencion:"intervenciones", "nueva-intervencion":"intervenciones", ruta:"intervenciones", trabajos:"intervenciones", produccion:"economia"};
     // La ficha de trabajo la abre el técnico (desde Mi trabajo) y también la oficina (desde la intervención).
     if(id0 === "trabajo" && arg && S.puede("trabajos","propios")){
       document.querySelectorAll("#menu a, #menuMovil a").forEach(a => a.classList.toggle("on", a.dataset.id === "mitrabajo"));
@@ -160,6 +160,7 @@
     if(id0 === "nueva-intervencion" && S.puede("trabajos","editar")) return window.DHS_TRAB.nueva($("#contenido"), arg);
     if(id0 === "ruta" && S.puede("trabajos","todo")) return window.DHS_RUTA.vista($("#contenido"));
     if(id0 === "ajustes" && arg) return window.DHS_AJ.vista($("#contenido"), arg);
+    if(id0 === "produccion") return window.DHS_ECO.produccion($("#contenido"));
     (VISTAS[id] || (()=>{}))($("#contenido"));
   }
 
