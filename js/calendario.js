@@ -144,6 +144,7 @@
           <div class="cal-leyenda">${tecnicos.map(([k,p]) => `<label class="${ocultos[k] ? "off" : ""}"><input type="checkbox" data-k="${esc(k)}" ${ocultos[k] ? "" : "checked"}><i style="background:${esc(p.color||"#9aa5b5")}"></i>${esc(p.nombre)}</label>`).join("")}</div>
           ${S.puede("trabajos","editar") ? `<a class="btn" href="#nueva-intervencion">+ Intervención</a>` : ""}
           ${puedeAus ? `<button class="btn sec" id="btnAus">+ Ausencia</button>` : ""}
+          ${S.direccion ? `<button class="btn sec" id="btnFurgo">🚐 Furgoneta</button>` : ""}
         </div>
         ${window.DHS_PREPARA ? window.DHS_PREPARA.aviso(trabajos) : ""}
         ${puedeCrear && tecnicos.length ? `<p class="vacio cal-ayuda-movil" style="margin-top:6px">Toca la hora en la columna del técnico para apuntar una intervención.</p><p class="vacio cal-ayuda" style="margin-top:6px">Para apuntar una intervención: <b>arrastra</b> en la columna del técnico desde la hora de inicio hasta la de fin (en el móvil, <b>toca</b> la hora).${puedeMover ? " Para <b>mover</b> una cita, arrástrala a otro día, hora o técnico; para cambiar lo que dura, <b>estira</b> su borde de abajo." : ""}</p>` : ""}
@@ -346,6 +347,7 @@
     if(puedeAus){
       const f = el.querySelector("#fAus");
       el.querySelector("#btnAus").onclick = () => f.classList.toggle("oculto");
+      const bF = el.querySelector("#btnFurgo"); if(bF) bF.onclick = () => verFurgoneta(trabajos);
       f.querySelector("#ausHoras").onchange = e => f.querySelectorAll(".aus-h").forEach(x => x.classList.toggle("oculto", e.target.value !== "parte"));
       f.onsubmit = async ev => {
         ev.preventDefault();
@@ -373,6 +375,42 @@
         }catch(e){ alert("No se ha podido borrar (" + (e.code||e) + ")."); }
       });
     }
+  }
+
+  // ---------- 🚐 Dónde está la furgoneta (GPS de Localiza, a través del puente) — Ángel 10/11 ----------
+  async function verFurgoneta(trabajos){
+    const fondo = document.createElement("div"); fondo.className = "preg-fondo";
+    fondo.innerHTML = `<div class="preg-caja furgo-caja" role="dialog" aria-modal="true"><h3>🚐 Furgoneta</h3><div id="furgoTxt"><p class="vacio">Preguntando a Localiza…</p></div>
+      <div class="preg-bot"><button class="btn sec" id="furgoAct">⟳ Actualizar</button> <button class="btn" id="furgoX">Cerrar</button></div></div>`;
+    document.body.appendChild(fondo);
+    const cerrar = () => fondo.remove();
+    fondo.querySelector("#furgoX").onclick = cerrar; fondo.addEventListener("click", e => { if(e.target === fondo) cerrar(); });
+    const km = (a, b) => { const R = 6371, dLa = (b.lat - a.lat) * Math.PI/180, dLo = (b.lon - a.lon) * Math.PI/180;
+      const x = Math.sin(dLa/2)**2 + Math.cos(a.lat*Math.PI/180) * Math.cos(b.lat*Math.PI/180) * Math.sin(dLo/2)**2; return 2 * R * Math.asin(Math.sqrt(x)); };
+    const pintar = async () => {
+      const caja = fondo.querySelector("#furgoTxt"); caja.innerHTML = `<p class="vacio">Preguntando a Localiza…</p>`;
+      let L;
+      try{ L = await window.DHS_PRES.llamar("furgoneta", {}); }
+      catch(e){ caja.innerHTML = `<p>No se ha podido saber dónde está: ${esc(e.message || e)}</p>`; return; }
+      if(!L || !L.length){ caja.innerHTML = `<p>Localiza no devuelve ninguna furgoneta.</p>`; return; }
+      // Citas de hoy con coordenadas, para decir "cerca de…"
+      const hoy = new Date().toLocaleDateString("sv-SE");
+      let C = null; try{ C = await window.DHS_COM.datos(); }catch(e){}
+      const citasHoy = trabajos.filter(t => (t.citas||[]).some(c => c.fecha === hoy) && t.comunidadId && C && C.coms[t.comunidadId] && C.coms[t.comunidadId].geo && C.coms[t.comunidadId].geo.lat)
+        .map(t => ({t, geo:C.coms[t.comunidadId].geo, hora:((t.citas||[]).find(c => c.fecha === hoy)||{}).hora || ""}));
+      caja.innerHTML = L.map(v => {
+        const ok = isFinite(v.lat) && isFinite(v.lon) && (v.lat || v.lon);
+        const cerca = ok ? citasHoy.map(x => ({...x, d:km({lat:v.lat, lon:v.lon}, {lat:Number(x.geo.lat), lon:Number(x.geo.lon)})})).sort((a,b) => a.d - b.d)[0] : null;
+        const bb = ok ? [v.lon - 0.006, v.lat - 0.004, v.lon + 0.006, v.lat + 0.004].join(",") : "";
+        return `<div class="furgo-item"><p><b>${esc(v.nombre)}</b> · ${v.velocidad > 3 ? `🚗 en marcha, ${Math.round(v.velocidad)} km/h` : "🅿️ parada"} · GPS de las ${esc(String(v.fecha||"").split(" ")[1] || v.fecha || "")}</p>
+          ${cerca && cerca.d < 0.3 ? `<p class="tv-bien">📍 Está en <b>${esc(cerca.t.direccion || cerca.t.nombre)}</b> (cita de las ${esc(cerca.hora)})</p>`
+            : cerca ? `<p class="vacio">La cita de hoy más cercana: ${esc(cerca.t.direccion || cerca.t.nombre)} (${esc(cerca.hora)}), a ${cerca.d < 1 ? Math.round(cerca.d * 1000) + " m" : cerca.d.toFixed(1).replace(".", ",") + " km"}.</p>` : ""}
+          ${ok ? `<iframe class="furgo-mapa" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=${bb}&layer=mapnik&marker=${v.lat},${v.lon}"></iframe>
+          <p><a class="btn sec btn-mini" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${v.lat},${v.lon}">Abrir en Google Maps</a></p>` : `<p class="vacio">Sin posición GPS ahora mismo.</p>`}</div>`;
+      }).join("");
+    };
+    fondo.querySelector("#furgoAct").onclick = pintar;
+    pintar();
   }
 
   window.DHS_CAL = { vista };
