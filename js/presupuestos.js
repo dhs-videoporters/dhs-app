@@ -313,6 +313,9 @@
         <label class="campo" style="flex:2;min-width:200px"><span>Dirección (si la da)</span><input id="rDir" placeholder="Calle, número…"></label>
         <label class="campo" style="flex:1;min-width:140px"><span>Población</span><input id="rPob" placeholder="Sabadell, Terrassa…"></label></div>` : ""}
       <div class="bloque" style="margin-top:10px">
+        <div class="plantillas"><b>📋 Plantilla:</b> <button class="btn sec" id="plCam">📹 Instalación de cámaras</button>
+          <span id="plCamF" class="oculto"> ¿Cuántas cámaras? <input id="plN" type="number" min="1" max="32" value="4" style="width:60px"> · Disco <select id="plDisco"><option>2 TB</option><option>1 TB</option><option>4 TB</option></select> <button class="btn" id="plPoner">Poner líneas</button></span>
+          <p class="vacio" id="plMsg"></p></div>
         <label class="campo"><span>Añadir del catálogo</span><input id="busCat" placeholder="Escribe: LNB, monitor Fermax, hora de trabajo…" autocomplete="off"><div id="resCat" class="res-local oculto"></div></label>
         ${dir ? `<button class="btn sec" id="btnLibre">+ Línea libre (fuera de catálogo)</button>` : ""}
         <table class="tabla-fi tabla-lineas"><thead><tr><th>Concepto</th><th>Cant.</th><th>Precio</th><th>Dto. %</th><th>Importe</th><th></th></tr></thead><tbody id="tbL"></tbody></table>
@@ -356,6 +359,32 @@
         lineas.push({productoId:p.csId || Number(d.dataset.k), concepto:p.nombre, cantidad:1, precio:p.precio, descuento:0, dtoMax:Number(p.dtoMax)||0}); bus.value = ""; res.classList.add("oculto"); pintar(); });
     };
     bus.onblur = () => setTimeout(() => res.classList.add("oculto"), 150);
+    // ---------- Plantilla de instalación de cámaras (Ángel 12/11): pone todas las líneas para que no se olvide ninguna ----------
+    let plantilla = null;   // conceptos que deben estar al guardar
+    const buscaCat = (...claves) => { const q = claves.map(sinAc); const e = Object.entries(C).find(([k,p]) => p.activo !== false && q.every(w => sinAc(p.nombre).includes(w))); return e ? {k:e[0], p:e[1]} : null; };
+    el.querySelector("#plCam").onclick = () => el.querySelector("#plCamF").classList.toggle("oculto");
+    el.querySelector("#plPoner").onclick = () => {
+      const n = Math.max(1, Math.round(Number(el.querySelector("#plN").value) || 0)), disco = el.querySelector("#plDisco").value.split(" ")[0];
+      const canales = n <= 4 ? "4" : n <= 8 ? "8" : n <= 16 ? "16" : "32";
+      const P = [
+        {txt:"Cámaras", b:["camara", "domo"], cant:n},
+        {txt:"Alimentador y conectores", b:["alimentador", "conectores"], cant:n},
+        {txt:"Grabador de " + canales + " canales", b:["grabador", canales + " canales"], alt:["grabador"], cant:1},
+        {txt:"Disco duro " + disco + " TB", b:["disco duro", disco + " tb"], alt:["disco duro"], cant:1},
+        {txt:"Instalación, cableado y puesta en marcha", b:["instalacion", "camaras"], cant:1},
+        {txt:"Arcón / registro", b:["arcon"], cant:1},
+        {txt:"Letreros de zona videovigilada", b:["letrero", "cctv"], cant:2},
+        {txt:"Mantenimiento anual (primer año regalado)", b:["mantenimiento camaras anual"], cant:1, dto:100}
+      ];
+      const faltan = [];
+      lineas.length = 0;
+      P.forEach(x => { const r = buscaCat(...x.b) || (x.alt && buscaCat(...x.alt));
+        if(!r){ faltan.push(x.txt); lineas.push({concepto:x.txt.toUpperCase() + " (no está en el catálogo: revisa)", cantidad:x.cant, precio:0, descuento:x.dto||0}); return; }
+        lineas.push({productoId:r.p.csId || Number(r.k), concepto:r.p.nombre, cantidad:x.cant, precio:r.p.precio, descuento:x.dto||0, dtoMax:Number(r.p.dtoMax)||0}); });
+      plantilla = P.map(x => x.txt);
+      el.querySelector("#plMsg").innerHTML = `Puestas ${P.length} líneas para ${n} cámara${n===1?"":"s"}. Revisa cantidades y precios (cable, metros, alturas…).` + (faltan.length ? ` <b class="tv-mal">No encontrado en el catálogo: ${esc(faltan.join(", "))}</b>` : "");
+      el.querySelector("#plCamF").classList.add("oculto"); pintar();
+    };
     const bL = el.querySelector("#btnLibre"); if(bL) bL.onclick = () => { lineas.push({concepto:"", cantidad:1, precio:0, descuento:0}); pintar(); tb.querySelector("tr:last-child .lC").focus(); };
     el.querySelector("#btnVolverP").onclick = () => vuelve();
     el.querySelector("#btnGuardarP").onclick = async () => {
@@ -363,6 +392,13 @@
       const L = lineas.filter(l => l.concepto && l.cantidad > 0);
       if(!L.length) return m("Añade al menos una línea con concepto y cantidad.");
       if(L.some(l => !l.productoId && !dir)) return m("Solo Dirección puede añadir líneas fuera de catálogo.");
+      if(plantilla){   // con la plantilla de cámaras: que no falte nada
+        const C2 = sinAc(L.map(l => l.concepto).join(" | "));
+        const falta = [["cámaras", ["camara"]], ["alimentadores", ["alimentador"]], ["grabador", ["grabador"]], ["disco duro", ["disco"]], ["instalación", ["instalacion"]], ["letreros", ["letrero"]], ["mantenimiento", ["mantenimiento"]]]
+          .filter(([n, w]) => !w.some(x => C2.includes(x))).map(([n]) => n);
+        if(L.some(l => /no esta en el catalogo/.test(sinAc(l.concepto)))) return m("Hay líneas marcadas «no está en el catálogo»: cámbialas por el producto correcto o pon su precio y quita esa nota.");
+        if(falta.length && !await DHS_PREGUNTA("En el presupuesto de cámaras falta: " + falta.join(", ") + ". ¿Guardarlo igualmente?")) return;
+      }
       const rNom = rapido ? el.querySelector("#rNombre").value.trim() : "", rTel = rapido ? el.querySelector("#rTel").value.trim() : "";
       const rDir = rapido ? el.querySelector("#rDir").value.trim() : "", rPob = rapido ? el.querySelector("#rPob").value.trim() : "";
       if(rapido && rTel.replace(/\D/g,"").length < 9) return m("El teléfono es obligatorio (9 cifras como mínimo).");
