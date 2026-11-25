@@ -87,6 +87,48 @@ function avisosAdministradores() {
       marcar_(id, 'error', [], '', String(e).slice(0, 200));
     }
   });
+  try { avisosCobros_(); } catch (e) { Logger.log('Cobros: ' + e); }
+}
+
+/** PARTICULARES (Ángel 25/11): al cerrar, el técnico tiene que decir si ha cobrado o no y la app marca cobro.aviso = "pendiente".
+ *  Aquí (cada 10 min, con el mismo activador) se manda un correo a DHS (AVISAR_A) con el resultado y se marca "enviado". */
+function avisosCobros_() {
+  const q = pedir_(BASE + ':runQuery', { method: 'post', payload: JSON.stringify({ structuredQuery: {
+    from: [{ collectionId: 'dhs_trabajos' }],
+    where: { fieldFilter: { field: { fieldPath: 'cobro.aviso' }, op: 'EQUAL', value: { stringValue: 'pendiente' } } }
+  } }) });
+  const e = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const eur = n => (Math.round(Number(n || 0) * 100) / 100).toFixed(2).replace('.', ',') + ' €';
+  const durT = m => !m ? '' : m < 60 ? m + ' min' : Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '');
+  (q || []).filter(r => r.document).forEach(r => {
+    const id = r.document.name.split('/').pop(), t = aJSON_(r.document.fields || {}), c = t.cobro || {};
+    try {
+      let quien = (t.hechoPor || []).join(', ');
+      try { quien = (t.hechoPor || []).map(pid => aJSON_(pedir_(BASE + '/dhs_personal/' + encodeURIComponent(pid)).fields || {}).nombre || pid).join(', '); } catch (x) {}
+      const donde = [t.direccion || t.nombre, t.poblacion].filter(Boolean).join(', ');
+      const pres = c.presupuestado || (c.presupuesto && c.presupuesto.total) || 0;
+      const si = c.cobrado != null && !c.noCobrado;
+      const dif = si && pres && Math.abs(c.cobrado - pres) > 0.009 ? (c.cobrado > pres ? 'cobrado ' + eur(c.cobrado - pres) + ' MÁS de lo presupuestado' : 'FALTAN ' + eur(pres - c.cobrado) + ' respecto al presupuesto') : '';
+      const res = si ? '💶 COBRADO ' + eur(c.cobrado) + ' por ' + (c.forma === 'efectivo' ? 'EFECTIVO' : 'TPV') : '❌ NO COBRADO · ' + (c.motivo || '¿?') + (c.motivoTx ? ' (' + c.motivoTx + ')' : '');
+      const asunto = (ENTORNO !== 'oficial' ? '[PRUEBAS] ' : '') + (si ? '💶 Cobrado ' + eur(c.cobrado) : '❌ Sin cobrar') + ' · ' + (t.numero || '') + ' · ' + donde;
+      const filas = [['Técnico', quien], ['Dónde', donde], ['Referencia', t.numero], ['Cerrada', t.fechaHecho ? t.fechaHecho.split('-').reverse().join('/') : ''],
+        ['Resultado', res], ['Presupuestado', pres ? eur(pres) : '—'], dif ? ['Diferencia', dif] : null, ['Tiempo', durT(t.tiempoReal)], ['Qué ha hecho', t.resumenHecho]].filter(Boolean);
+      const texto = 'Intervención de particular terminada.\n\n' + filas.map(f => f[0] + ': ' + (f[1] || '')).join('\n') + '\n\nDHS App';
+      const color = si ? (dif ? '#b45309' : '#15803d') : '#b91c1c';
+      const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2933;line-height:1.5">' +
+        '<p style="font-size:18px;font-weight:bold;color:' + color + ';margin:0 0 10px">' + e(res) + '</p>' +
+        '<table style="font-size:14px;border-collapse:collapse">' + filas.map(f => '<tr><td style="color:#6b7785;padding:3px 14px 3px 0;vertical-align:top">' + e(f[0]) + '</td><td' + (f[0] === 'Diferencia' ? ' style="color:#b45309;font-weight:bold"' : '') + '>' + e(f[1]) + '</td></tr>').join('') + '</table>' +
+        '<p style="color:#6b7785;font-size:12px;margin-top:14px">Correo automático de la DHS App al cerrar una intervención de particular.</p></div>';
+      MailApp.sendEmail({ to: AVISAR_A, subject: asunto, body: texto, htmlBody: html, name: 'DHS App' });
+      pedir_(BASE + '/dhs_trabajos/' + id + '?updateMask.fieldPaths=cobro.aviso&updateMask.fieldPaths=cobro.avisoEn', { method: 'patch',
+        payload: JSON.stringify({ fields: { cobro: { mapValue: { fields: { aviso: { stringValue: 'enviado' }, avisoEn: { timestampValue: new Date().toISOString() } } } } } }) });
+      registro_(id, t, 'correo a DHS del cobro: ' + res);
+    } catch (x) {
+      Logger.log('Cobro ' + id + ': ' + x);
+      pedir_(BASE + '/dhs_trabajos/' + id + '?updateMask.fieldPaths=cobro.aviso', { method: 'patch',
+        payload: JSON.stringify({ fields: { cobro: { mapValue: { fields: { aviso: { stringValue: 'error' } } } } } }) });
+    }
+  });
 }
 
 function mensaje_(t, a) {

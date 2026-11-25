@@ -198,6 +198,7 @@
 
   // ---------- FICHA DE LA INTERVENCIÓN ----------
   async function ficha(el, id, fecha){
+    let pv = null;   // particular: control del cobro (obligatorio al cerrar)
     const {db, S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
     const ref = db.collection("dhs_trabajos").doc(id);
@@ -410,10 +411,12 @@
       let fs = []; try{ fs = ((await ref.get()).data().fotos) || []; }catch(e){}
       if(!fs.length) return msg("Para cerrar, añade al menos una foto del trabajo.");
       if(ed && (!ed.placa || !ed.camaras)){ el.querySelector("#tfEdif").scrollIntoView({block:"center"}); return msg("Para cerrar, arriba del todo: foto de la placa del videoportero y si el edificio tiene cámaras."); }
+      if(pv && !await pv.alCerrar()){ el.querySelector("#tcBloque").scrollIntoView({block:"center"}); return msg("Para cerrar un particular, di si has cobrado o no (en «Cobro»)."); }
       if(!await DHS_PREGUNTA("¿Cerrar la intervención? Quedará como terminada.")) return;
       msg("Cerrando…");
       try{
         const cambio = {estado:"hecho", resumenHecho:tx, hechoPor:[yoPid()], fechaHecho:isoLocal(new Date()), falta:"", editando:null, modificado:firma()};
+        if(pv) cambio["cobro.aviso"] = "pendiente";   // particular: correo a la oficina con el cobro (lo manda el Apps Script, Ángel 25/11)
         cambio.tiempoReal = (yaFue ? (t.tiempoReal||0) : 0) + hoyMin;
         if(t.adminId && t.comunidadId && !(t.avisoAdmin && ["enviado","enviadoPruebas","pendiente"].includes(t.avisoAdmin.estado))) cambio.avisoAdmin = {estado:"pendiente", pedidoPor:yo, pedidoEn:Date.now()};
         await ref.update(cambio);
@@ -421,7 +424,7 @@
         location.hash = "agenda";
       }catch(e){ msg("No se ha podido cerrar (" + (e.code||e) + ")."); }
     };
-    if(priv) activarPrivativo(el, ref, t, firma, nota);
+    pv = priv ? activarPrivativo(el, ref, t, firma, nota) : null;
   }
 
   // ---------- PRIVATIVOS: presupuesto sencillo y cobro ----------
@@ -456,13 +459,18 @@
         <button type="button" class="btn sec" id="tpEnviar">📤 Enviar presupuesto</button>
         ${pres.enviadoEn ? `<p class="vacio">Enviado por ${esc(pres.canal)} el ${esc(new Date(pres.enviadoEn).toLocaleDateString("es-ES"))}</p>` : ""}
       </div>
-      <div class="tf-bloque"><h3>Cobro</h3>
+      <div class="tf-bloque tc-bloque" id="tcBloque"><h3>Cobro <span class="tc-oblig">obligatorio para cerrar</span></h3>
         <p class="vacio">Presupuestado: <b id="tcPres">${eur(pres.total)}</b></p>
-        <div class="tp-canal"><label><input type="radio" name="tcForma" value="tpv" ${cobro.forma !== "efectivo" ? "checked" : ""}> 💳 TPV</label><label><input type="radio" name="tcForma" value="efectivo" ${cobro.forma === "efectivo" ? "checked" : ""}> 💶 Efectivo</label></div>
-        <input id="tcImporte" inputmode="decimal" placeholder="Importe cobrado €" value="${cobro.cobrado != null ? esc(String(cobro.cobrado).replace(".", ",")) : ""}">
-        <p class="vacio" id="tcDif"></p>
+        <div class="tp-canal tc-si-no"><label><input type="radio" name="tcSiNo" value="si" ${cobro.cobrado != null ? "checked" : ""}> ✅ Sí, he cobrado</label><label><input type="radio" name="tcSiNo" value="no" ${cobro.noCobrado ? "checked" : ""}> ❌ No he cobrado</label></div>
+        <div id="tcSi" class="${cobro.cobrado != null ? "" : "oculto"}">
+          <div class="tp-canal"><label><input type="radio" name="tcForma" value="tpv" ${cobro.forma !== "efectivo" ? "checked" : ""}> 💳 TPV</label><label><input type="radio" name="tcForma" value="efectivo" ${cobro.forma === "efectivo" ? "checked" : ""}> 💶 Efectivo</label></div>
+          <input id="tcImporte" inputmode="decimal" placeholder="Importe cobrado €" value="${cobro.cobrado != null ? esc(String(cobro.cobrado).replace(".", ",")) : ""}">
+          <p class="vacio" id="tcDif"></p></div>
+        <div id="tcNo" class="${cobro.noCobrado ? "" : "oculto"}">
+          <select id="tcMotivo"><option value="">— ¿Por qué no? —</option>${["Paga por transferencia", "Se cobra en la próxima visita", "Garantía: no se cobra", "El cliente no estaba", "Lo factura la oficina", "Otro"].map(m => `<option ${cobro.motivo === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>
+          <input id="tcMotivoTx" placeholder="Explica un poco (opcional)" value="${esc(cobro.motivoTx || "")}"></div>
         <button type="button" class="btn sec" id="tcGuardar">💾 Guardar cobro</button>
-        <p class="vacio" id="tcMsg">${cobro.cobrado != null ? "Cobrado " + eur(cobro.cobrado) + " por " + (cobro.forma === "efectivo" ? "efectivo" : "TPV") : ""}</p>
+        <p class="vacio" id="tcMsg">${cobro.cobrado != null ? "✔️ Cobrado " + eur(cobro.cobrado) + " por " + (cobro.forma === "efectivo" ? "efectivo" : "TPV") : cobro.noCobrado ? "✔️ Apuntado: no cobrado (" + esc(cobro.motivo || "") + ")" : ""}</p>
       </div>`;
   }
   function activarPrivativo(el, ref, t, firma, nota){
@@ -518,15 +526,32 @@
       if(cn === "correo") location.href = "mailto:" + encodeURIComponent(dest) + "?subject=" + encodeURIComponent("Presupuesto DHS Videoporters") + "&body=" + encodeURIComponent(txt);
       else { let n = telLimpio(dest).replace(/^\+/, ""); if(n.length === 9) n = "34" + n; window.open("https://wa.me/" + n + "?text=" + encodeURIComponent(txt), "_blank"); }
     };
-    el.querySelector("#tcGuardar").onclick = async () => {
-      const c = num(el.querySelector("#tcImporte").value), forma = (el.querySelector("input[name=tcForma]:checked") || {}).value || "tpv";
-      if(!c) return el.querySelector("#tcMsg").textContent = "Pon el importe cobrado.";
-      try{
-        await guardarCobro({cobrado:c, forma, fecha:isoLocal(new Date()), presupuestado:total(), entregado:forma === "tpv"});
-        await nota({tipo:"nota", texto:"Cobrado " + eur(c) + " por " + (forma === "tpv" ? "TPV" : "efectivo") + (total() ? " (presupuestado " + eur(total()) + ")" : "")});
-        el.querySelector("#tcMsg").textContent = "✔️ Cobro guardado: " + eur(c) + " por " + (forma === "tpv" ? "TPV" : "efectivo") + ".";
-      }catch(e){ el.querySelector("#tcMsg").textContent = "No se ha podido guardar (" + (e.code||e) + ")."; }
-    };
+    // Cobro: obligatorio decir si se ha cobrado o no (Ángel 25/11). Devuelve true si queda apuntado.
+    el.querySelectorAll("input[name=tcSiNo]").forEach(r => r.onchange = () => { const v = siNo();
+      el.querySelector("#tcSi").classList.toggle("oculto", v !== "si"); el.querySelector("#tcNo").classList.toggle("oculto", v !== "no"); });
+    const siNo = () => (el.querySelector("input[name=tcSiNo]:checked") || {}).value || "";
+    const tcMsg = x => { const m = el.querySelector("#tcMsg"); m.textContent = x; };
+    async function guardarElCobro(){
+      const v = siNo();
+      if(!v){ tcMsg("⚠️ Marca si has cobrado o no."); return false; }
+      if(v === "si"){
+        const c = num(el.querySelector("#tcImporte").value), forma = (el.querySelector("input[name=tcForma]:checked") || {}).value || "tpv";
+        if(!c){ tcMsg("⚠️ Pon el importe cobrado."); el.querySelector("#tcImporte").focus(); return false; }
+        if(t.cobro && t.cobro.cobrado === c && t.cobro.forma === forma) return true;
+        await guardarCobro({cobrado:c, forma, fecha:isoLocal(new Date()), presupuestado:total(), entregado:forma === "tpv", noCobrado:false, motivo:null, motivoTx:null});
+        await nota({tipo:"nota", texto:"💶 Cobrado " + eur(c) + " por " + (forma === "tpv" ? "TPV" : "efectivo") + (total() ? " (presupuestado " + eur(total()) + ")" : "")});
+        tcMsg("✔️ Cobro guardado: " + eur(c) + " por " + (forma === "tpv" ? "TPV" : "efectivo") + "."); return true;
+      }
+      const motivo = el.querySelector("#tcMotivo").value, motivoTx = el.querySelector("#tcMotivoTx").value.trim();
+      if(!motivo){ tcMsg("⚠️ Elige por qué no has cobrado."); el.querySelector("#tcMotivo").focus(); return false; }
+      if(motivo === "Otro" && !motivoTx){ tcMsg("⚠️ Explica por qué no has cobrado."); el.querySelector("#tcMotivoTx").focus(); return false; }
+      if(t.cobro && t.cobro.noCobrado && t.cobro.motivo === motivo && (t.cobro.motivoTx || "") === motivoTx) return true;
+      await guardarCobro({noCobrado:true, motivo, motivoTx, fecha:isoLocal(new Date()), presupuestado:total(), cobrado:null, forma:null});
+      await nota({tipo:"nota", texto:"❌ No cobrado: " + motivo + (motivoTx ? " · " + motivoTx : "") + (total() ? " (presupuestado " + eur(total()) + ")" : "")});
+      tcMsg("✔️ Apuntado: no cobrado (" + motivo + ")."); return true;
+    }
+    el.querySelector("#tcGuardar").onclick = async () => { try{ await guardarElCobro(); }catch(e){ tcMsg("No se ha podido guardar (" + (e.code||e) + ")."); } };
+    return { alCerrar: async () => { try{ return await guardarElCobro(); }catch(e){ tcMsg("No se ha podido guardar (" + (e.code||e) + ")."); return false; } } };
     function alertar(x){ el.querySelector("#tfMsg").textContent = x; el.querySelector("#tfMsg").scrollIntoView({block:"center"}); }
   }
 
