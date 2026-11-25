@@ -7,7 +7,7 @@ function localizaApi_(nueva) {
   const pr = PropertiesService.getScriptProperties(), usr = pr.getProperty('LOCALIZA_USR'), pass = pr.getProperty('LOCALIZA_PASS');
   if (!usr || !pass) throw new Error('Falta poner el usuario y la clave de Localiza en las propiedades del script.');
   const W = 'https://iotsensores.com', cache = CacheService.getScriptCache();
-  let api = nueva ? null : cache.get('localiza_api');
+  let api = nueva ? null : cache.get('localiza_api2');
   if (!api) {
     const galletas = {};
     const guardar = r => { let sc = r.getAllHeaders()['Set-Cookie']; if (!sc) return; (Array.isArray(sc) ? sc : [sc]).forEach(c => { const p = String(c).split(';')[0].split('='); galletas[p[0].trim()] = p.slice(1).join('='); }); };
@@ -26,11 +26,12 @@ function localizaApi_(nueva) {
     const seg = h.slice(Math.max(0, i - 400), i + 100);
     const au = (seg.match(/"?usr"?\s*:\s*['"]([^'"]+)/) || [])[1], ap = (seg.match(/"UserPass"\s*:\s*['"]([^'"]+)/) || [])[1];
     if (!au || !ap) throw new Error('Localiza ha cambiado su web: avisa a Claude.');
-    api = au + '|' + ap; cache.put('localiza_api', api, 21600);
+    // 13/11: se guardan también las galletas de la sesión (15 min)
+    api = JSON.stringify([au, ap, cab().Cookie]); cache.put('localiza_api2', api, 900);
   }
-  const [au, ap] = api.split('|');
+  const [au, ap, galleta] = JSON.parse(api);
   return function (datos) {
-    const r = UrlFetchApp.fetch(W + '/Utilidades/APIManager.aspx', { method: 'post', payload: Object.assign({ usr: au, UserPass: ap }, datos), muteHttpExceptions: true });
+    const r = UrlFetchApp.fetch(W + '/Utilidades/APIManager.aspx', { method: 'post', headers: { Cookie: galleta || '' }, payload: Object.assign({ usr: au, UserPass: ap }, datos), muteHttpExceptions: true });
     try { return JSON.parse(r.getContentText() || 'null'); } catch (e) { return null; }
   };
 }
@@ -53,8 +54,12 @@ PUENTE.recorrido = function (d, u) {
   if (!u.direccion) throw new Error('No tienes permiso para esto.');
   const f = String(d.fecha || '').match(/^\d{4}-\d{2}-\d{2}$/) ? d.fecha : Utilities.formatDate(new Date(), 'Europe/Madrid', 'yyyy-MM-dd');
   const v = vehiculosLoc_();
+  // 13/11: deviceid TIENE que ir como texto (si va como número Localiza devuelve vacío)
+  const ruta = (pedir, x) => { const P = pedir({ fn: 'routes', deviceid: String(x.id), startdate: f + ' 00:00:00', enddate: f + ' 23:59:59', rs: 'JSON' }); return Array.isArray(P) ? P : []; };
+  let nueva = null;   // si sale vacío, se vuelve a entrar en la web una vez (la sesión puede haber caducado)
   return v.L.map(x => {
-    const P = v.pedir({ fn: 'routes', deviceid: x.id, startdate: f + ' 00:00:00', enddate: f + ' 23:59:59', rs: 'JSON' }) || [];
-    return { id: x.id, nombre: x.Nombre, puntos: (Array.isArray(P) ? P : []).map(p => [gradosLoc_(p.Latitud), gradosLoc_(p.Longitud), String(p.Fecha || ''), Number(p.Velocidad) || 0, Number(p.Kms) || 0]) };
+    let P = ruta(v.pedir, x);
+    if (!P.length) { nueva = nueva || localizaApi_(true); P = ruta(nueva, x); }
+    return { id: x.id, nombre: x.Nombre, puntos: P.map(p => [gradosLoc_(p.Latitud), gradosLoc_(p.Longitud), String(p.Fecha || ''), Number(p.Velocidad) || 0, Number(p.Kms) || 0]) };
   });
 };

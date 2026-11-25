@@ -453,10 +453,11 @@
       const P = (v.puntos||[]).filter(p => isFinite(p[0]) && isFinite(p[1]) && p[0]).map(p => ({p:[p[0], p[1]], m:hm(p[2]), vel:p[3], kms:p[4]})).filter(x => x.m != null).sort((a,b) => a.m - b.m);
       const bloque = document.createElement("div"); bloque.className = "rec-veh"; caja.appendChild(bloque);
       if(!P.length){ bloque.innerHTML = `<p><b>${esc(v.nombre)}</b>: sin recorrido ese día.</p>`; return; }
-      // Paradas: puntos seguidos a menos de 150 m, parado o sin señal, durante 5 minutos o más
+      // Paradas: (1) con el motor apagado Localiza no apunta nada: un hueco de 5 min o más es una parada en el último punto
+      // (el primer punto al arrancar ya sale a unos cientos de metros); (2) puntos seguidos a menos de 150 m casi parado.
       const par = []; let cur = null;
-      for(let i = 1; i < P.length; i++){ const a = P[i-1], b = P[i];
-        if(km(a.p, b.p) < 0.15 && (b.vel < 3 || b.m - a.m >= 5)){ if(!cur) cur = {ini:a.m, fin:b.m, p:a.p}; else cur.fin = b.m; }
+      for(let i = 1; i < P.length; i++){ const a = P[i-1], b = P[i], d = km(a.p, b.p);
+        if((b.m - a.m >= 5 && d < 1.5) || (d < 0.15 && b.vel < 3)){ if(cur && km(cur.p, a.p) < 0.15) cur.fin = b.m; else { if(cur) par.push(cur); cur = {ini:a.m, fin:b.m, p:a.p}; } }
         else if(cur){ par.push(cur); cur = null; } }
       if(cur) par.push(cur);
       const paradas = par.filter(x => x.fin - x.ini >= 5).map(x => { const c = COMS.map(c => ({...c, d2:km(x.p, c.p)})).sort((a,b) => a.d2 - b.d2)[0];
