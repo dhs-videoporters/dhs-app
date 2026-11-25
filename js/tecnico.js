@@ -56,6 +56,50 @@
   const esPrivativo = (t, com) => !t.encargo && (t.origen === "particular" || (com && com.tipo === "particular") || (!t.comunidadId && !t.adminId));
 
   // ---------- AGENDA ----------
+  // ---------- RECORDATORIOS (Ángel 25/11): no bloquea nada, pero cada vez que entra en la agenda o en una intervención
+  // le sale una pantalla que tiene que cerrar con lo que tiene pendiente: fichar y cerrar las intervenciones de días anteriores.
+  async function recordatorios(L, aquiId){
+    if(PREVIEW && !PRUEBAS()) return;
+    const {db, S} = D(), hoy = isoLocal(new Date()), ahora = new Date(), hm = ahora.getHours() * 60 + ahora.getMinutes();
+    if(!L){ try{ L = await leerMios(); }catch(e){ return; } }
+    const items = [];
+    // 1) Intervenciones de días anteriores sin cerrar (ni "hay que volver")
+    L.filter(t => !t.demo || PRUEBAS()).forEach(t => {
+      if(CERRADOS.includes(t.estado) || t.estado === "amedias" || t.id === aquiId) return;
+      const pasada = (t.citas||[]).filter(c => mio(c) && c.fecha < hoy).map(c => c.fecha).sort().pop();
+      const empez = t.empezado && isoLocal(new Date(t.empezado)) < hoy ? isoLocal(new Date(t.empezado)) : null;
+      const f = pasada || empez; if(!f) return;
+      if((t.citas||[]).some(c => mio(c) && c.fecha >= hoy) && !empez) return;   // ya tiene otra cita: no es olvido
+      items.push({ico:"⚠️", txt:"<b>" + esc(t.direccion || t.nombre) + "</b> (" + esc(fmtDia(f)) + ") no está cerrada. Ciérrala o pulsa «Tengo que volver».", href:"#t/" + t.id + "/" + f});
+    });
+    // 2) Fichaje (días laborables, si hoy no está de vacaciones o similar todo el día)
+    const lab = d => d.getDay() !== 0 && d.getDay() !== 6;
+    if(lab(ahora)){
+      const AUS = await leerAus(), fuera = ausDia(AUS, hoy).some(a => !a.horaIni);
+      let F = [];
+      if(PREVIEW) F = SIM.filter(f => f.pid === PREVIEW.pid);
+      else try{ (await db.collection("dhs_fichajes").where("email", "==", S.usuario.email.toLowerCase()).get()).forEach(d => { const f = d.data(); if(f.tipo !== "correccion") F.push(f); }); }catch(e){}
+      const ms = f => (f.en && f.en.toMillis && f.en.toMillis()) || 0, hoyF = F.filter(f => f.fecha === hoy).sort((a,b) => ms(a) - ms(b));
+      if(!fuera && hm >= 8 * 60 && !hoyF.some(f => f.tipo === "entrada"))
+        items.unshift({ico:"🕘", txt:"<b>No has fichado la entrada hoy.</b> Fíchala arriba de la agenda.", href:"#agenda"});
+      const dentro = hoyF.length && hoyF[hoyF.length - 1].tipo !== "salida";
+      if(dentro && hm >= 18 * 60 + 30) items.push({ico:"🔴", txt:"Cuando acabes, <b>ficha la salida</b>.", href:"#agenda"});
+      let ay = new Date(ahora); do ay.setDate(ay.getDate() - 1); while(!lab(ay)); const ayer = isoLocal(ay);
+      const ayF = F.filter(f => f.fecha === ayer);
+      if(ayF.some(f => f.tipo === "entrada") && !ayF.some(f => f.tipo === "salida"))
+        items.push({ico:"🕔", txt:"<b>Ayer no fichaste la salida.</b> Dile a la oficina a qué hora acabaste.", href:"#agenda"});
+    }
+    if(!items.length || document.querySelector(".rec-tec")) return;
+    const fondo = document.createElement("div"); fondo.className = "preg-fondo rec-tec";
+    fondo.innerHTML = `<div class="preg-caja" role="dialog" aria-modal="true"><h3>📌 Tienes cosas pendientes</h3>
+      <ul class="rec-lista">${items.map(i => `<li><span>${i.ico}</span><a href="${i.href}">${i.txt}</a></li>`).join("")}</ul>
+      <div class="preg-bot"><button class="btn" id="recOk">Vale, ahora lo hago</button></div></div>`;
+    document.body.appendChild(fondo);
+    const fin = () => fondo.remove();
+    fondo.querySelector("#recOk").onclick = fin;
+    fondo.querySelectorAll(".rec-lista a").forEach(a => a.addEventListener("click", fin));
+  }
+
   async function agenda(el){
     const {S} = D();
     el.innerHTML = `<div class="panel">Cargando…</div>`;
@@ -86,6 +130,7 @@
     if(bX) bX.onclick = async () => { bX.disabled = true; try{ const b = D().db.batch(); L.filter(t => t.demo).forEach(t => b.delete(D().db.collection("dhs_trabajos").doc(t.id))); await b.commit(); agenda(el); }catch(e){ mD("No se ha podido (" + (e.code||e) + ")."); } };
     if(!PREVIEW || PRUEBAS()) fichaje(el.querySelector("#tecFichaje"));
     else el.querySelector("#tecFichaje").innerHTML = `<div class="tec-fichaje"><div>⚪ Sin fichar hoy</div><button class="btn" disabled>🟢 Fichar entrada</button></div>`;
+    recordatorios(L);
   }
 
   // Solo en PRUEBAS: intervenciones de mentira para el técnico que se está probando (hoy, mañana y pasado), para ver cómo entra, escribe, hace fotos y cierra
@@ -205,6 +250,7 @@
     let t, com = null, antes = [], notas = [];
     try{ const d = await ref.get(); if(!d.exists) throw {code:"no existe"}; t = d.data(); }
     catch(e){ el.innerHTML = `<div class="panel">No se ha podido abrir (${esc(e.code)}). <a href="#agenda">Volver</a></div>`; return; }
+    recordatorios(null, id);
     if(t.comunidadId){
       try{ const x = await db.collection("dhs_comunidades").doc(t.comunidadId).get(); com = x.exists ? x.data() : null; }catch(e){}
       try{ (await db.collection("dhs_trabajos").where("comunidadId", "==", t.comunidadId).get()).forEach(x => { const v = x.data(); if(x.id !== id && ["hecho","facturado","cobrado"].includes(v.estado)) antes.push(v); }); }catch(e){}
