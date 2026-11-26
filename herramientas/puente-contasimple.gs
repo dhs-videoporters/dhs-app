@@ -119,6 +119,19 @@ const PUENTE = {
     return { id: est.id, numero: est.number || num, clienteId: cli, aviso: aviso, totales: totales_(lineas) };
   },
 
+  // Editar un presupuesto (Ángel 26/11): mismas condiciones (número, fecha, estado, cliente), cambian líneas y notas.
+  // No se deja si ya tiene factura (lo comprueba también la app).
+  editarPresupuesto: function (d, u) {
+    exige_(u, 'precios', 'editar');
+    if (!u.direccion) descuentos_(d.lineas);
+    const tk = csToken_(), f = formatoPresupuesto_(tk), lineas = lineas_(d.lineas);
+    const cuerpo = { numberingFormatId: f.id, number: d.numero, status: d.estadoCS || 'Creado',
+      date: (d.fecha || Utilities.formatDate(new Date(), 'Europe/Madrid', 'yyyy-MM-dd')) + 'T00:00:00', notes: d.notas || '', lines: lineas };
+    if (d.clienteId) cuerpo.targetEntityId = d.clienteId;
+    cs_(tk, 'put', '/accounting/estimates/' + Number(d.id), cuerpo);
+    return { id: d.id, totales: totales_(lineas) };
+  },
+
   // PDF del presupuesto (en base64, para verlo o descargarlo)
   pdfPresupuesto: function (d, u) {
     exige_(u, 'precios', 'ver');

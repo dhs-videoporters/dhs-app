@@ -298,15 +298,18 @@
   }
 
   // ---------- Nuevo presupuesto ----------
-  async function editor(el, comId, com, volver){
-    const vuelve = volver || (() => pestana(el, comId, com)), rapido = !comId;
+  // pre (Ángel 26/11): {modo:"editar", p} cambia ese presupuesto (mismo número); {modo:"duplicar", p} hace uno nuevo con sus líneas
+  async function editor(el, comId, com, volver, pre){
+    const edita = pre && pre.modo === "editar";
+    const vuelve = volver || (() => pestana(el, comId, com)), rapido = !comId && !edita;
     const {db, S} = D();
     let C; try{ C = await catalogo(); }catch(e){ C = {}; }
     const dir = puedePrecios();
-    const lineas = [];
+    const lineas = pre ? (pre.p.lineas||[]).map(l => ({...l})) : [];
     el.innerHTML = `
-      <div class="cab-lista"><h3>${rapido ? "⚡ Presupuesto rápido" : "Nuevo presupuesto · " + esc(com.nombre)}</h3><button class="btn sec" id="btnVolverP">‹ Volver</button></div>
-      <p class="vacio">${rapido ? "Para un particular que aún no ha dado la dirección: solo nombre y teléfono. Se guarda en Contasimple con el siguiente número, sin cliente; cuando lo acepte, lo asocias a su ficha." : "Se guarda en Contasimple con el siguiente número correlativo y esta comunidad como cliente."} IVA 21 %.</p>
+      <div class="cab-lista"><h3>${edita ? "✏️ Editar " + esc(pre.p.numero) + " · " + esc(com.nombre || pre.p.nombre || "") : rapido ? "⚡ Presupuesto rápido" : (pre ? "📑 Copia de " + esc(pre.p.numero) + " · " : "Nuevo presupuesto · ") + esc(com.nombre)}</h3><button class="btn sec" id="btnVolverP">‹ Volver</button></div>
+      ${edita ? `<p class="aviso-cal">Cambias el presupuesto ${esc(pre.p.numero)}: mismo número y misma fecha, aquí y en Contasimple.</p>` : ""}
+      <p class="vacio">${edita ? "" : rapido ? "Para un particular que aún no ha dado la dirección: solo nombre y teléfono. Se guarda en Contasimple con el siguiente número, sin cliente; cuando lo acepte, lo asocias a su ficha." : "Se guarda en Contasimple con el siguiente número correlativo y esta comunidad como cliente."} IVA 21 %.</p>
       ${rapido ? `<div class="bloque" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
         <label class="campo" style="flex:1;min-width:150px"><span>Teléfono *</span><input id="rTel" type="tel" value="${esc(com.telefono||"")}" placeholder="600 000 000"></label>
         <label class="campo" style="flex:1;min-width:180px"><span>Nombre</span><input id="rNombre" value="${esc(com.nombre||"")}" placeholder="Como se presenta: «soy Marta…»"></label>
@@ -320,8 +323,8 @@
         ${dir ? `<button class="btn sec" id="btnLibre">+ Línea libre (fuera de catálogo)</button>` : ""}
         <table class="tabla-fi tabla-lineas"><thead><tr><th>Concepto</th><th>Cant.</th><th>Precio</th><th>Dto. %</th><th>Importe</th><th></th></tr></thead><tbody id="tbL"></tbody></table>
         <div class="totales" id="totP"></div>
-        <label class="campo" style="margin-top:8px"><span>Notas (salen en el presupuesto)</span><textarea id="notasP" rows="2"></textarea></label>
-        <p><button class="btn" id="btnGuardarP">Guardar presupuesto</button> <span id="msgP" class="vacio"></span></p>
+        <label class="campo" style="margin-top:8px"><span>Notas (salen en el presupuesto)</span><textarea id="notasP" rows="2">${esc(pre ? pre.p.notas || "" : "")}</textarea></label>
+        <p><button class="btn" id="btnGuardarP">${edita ? "Guardar cambios" : "Guardar presupuesto"}</button> <span id="msgP" class="vacio"></span></p>
       </div>`;
     const tb = el.querySelector("#tbL");
     const calc = l => r2(l.cantidad * l.precio * (1 - (l.descuento||0)/100));
@@ -410,7 +413,7 @@
           [["precio", "Guardar con su precio"], ["cero", "Guardar sin precio"], ["no", "No guardar"]]);
         if(alCatalogo === null) return;
       }
-      if(!await DHS_PREGUNTA("Se va a crear el presupuesto en Contasimple con el siguiente número. ¿Seguir?")) return;
+      if(!await DHS_PREGUNTA(edita ? "Se va a cambiar el presupuesto " + pre.p.numero + " en Contasimple (mismo número). ¿Seguir?" : "Se va a crear el presupuesto en Contasimple con el siguiente número. ¿Seguir?")) return;
       const b = el.querySelector("#btnGuardarP"); b.disabled = true;
       if(alCatalogo !== "no"){
         m("Guardando en el catálogo…");
@@ -426,6 +429,21 @@
         }catch(e){ m("No se han podido guardar en el catálogo (" + (e.message||e) + "). Sigo con el presupuesto…"); }
       }
       m("Guardando en Contasimple…");
+      if(edita){
+        try{
+          const P0 = pre.p, notas = el.querySelector("#notasP").value.trim();
+          const map = {pendiente:"Creado", enviado:"Enviado", aceptado:"Aceptado", rechazado:"Rechazado"};
+          const r = await llamar("editarPresupuesto", {id:P0.csId, numero:P0.numero, fecha:P0.fecha, estadoCS:map[P0.estado] || "Creado", clienteId:P0.clienteId || null, lineas:L, notas});
+          const yo = S.usuario.email.toLowerCase(), en = firebase.firestore.FieldValue.serverTimestamp();
+          const antes = eur((P0.totales||{}).total || 0);
+          await db.collection("dhs_presupuestos").doc(String(P0.id)).update({lineas:L, totales:r.totales, notas, editadoEl:new Date().toISOString().slice(0,10), modificado:{por:yo, en}});
+          Object.assign(P0, {lineas:L, totales:r.totales, notas});
+          await db.collection("dhs_registro").add({por:yo, en, accion:"presupuesto " + P0.numero + " editado (" + antes + " → " + eur(r.totales.total) + ")", coleccion:"dhs_presupuestos", docId:String(P0.id), nombre:com.nombre || P0.nombre || ""});
+          if(r.aviso) await DHS_PREGUNTA("Guardado. Aviso: " + r.aviso, "Vale", "Cerrar");
+          vuelve();
+        }catch(e){ m("No se ha podido: " + (e.message||e)); b.disabled = false; }
+        return;
+      }
       try{
         const notas = el.querySelector("#notasP").value.trim();
         const sinNif = !rapido && !com.csId && !com.nif;   // comunidad sin NIF todavía: sale sin cliente y el nombre va en las notas
@@ -490,6 +508,8 @@
         ${edita && comId && ["aceptado","parcial"].includes(p.estado) ? (p.intervencionId ? `<a class="btn sec" href="#intervencion/${esc(p.intervencionId)}">🛠️ Ver intervención ${esc(p.numeroIntervencion||"")}</a>` : `<button class="btn" id="bProgramar">📅 Programar intervención</button>`) : ""}
         ${dir && p.clienteId && ["aceptado","parcial"].includes(p.estado) ? `<button class="btn" id="bFacturar">🧾 Facturar…</button>` : ""}
         ${dir && ["aceptado","rechazado"].includes(p.estado) && !(p.facturas||[]).length ? `<button class="btn sec" id="bDeshacer">↩️ Volver a pendiente</button>` : ""}
+        ${edita && !(p.facturas||[]).length && p.estado !== "facturado" ? `<button class="btn sec" id="bEditarP">✏️ Editar</button>` : ""}
+        ${edita ? `<button class="btn sec" id="bDuplicarP">📑 Duplicar</button>` : ""}
         ${dir && !(p.facturas||[]).length ? `<button class="btn sec" id="bBorrarP" style="color:#c0392b">🗑️ Borrar presupuesto</button>` : ""}
       </div>
       ${["aceptado","parcial"].includes(p.estado) && (!comId || !p.clienteId) ? `<p class="aviso-cal" style="margin-top:8px">Para ${!comId ? "programar la intervención y facturar, asócialo a su ficha" : "facturar, completa el NIF en la ficha y pulsa «Unir al cliente de Contasimple»"} (dirección${!comId ? ", teléfono" : ""} y NIF).</p>` : ""}
@@ -607,6 +627,28 @@
       m("Guardando…");
       try{ await llamar("estadoPresupuesto", {id:p.csId, estado:csEstado}); await ref.update({estado:nuevo, ...extra, modificado:{por:yo, en:en()}}); await reg(ESTADOS[nuevo][1].toLowerCase()); Object.assign(p, {estado:nuevo}, extra); detalle(el, comId, com, p, volver); }
       catch(e){ m("No se ha podido: " + (e.message||e)); }
+    };
+    // Editar (mismo número) y duplicar (uno nuevo con las mismas líneas, en esta ficha o en otra) — Ángel 26/11
+    const bEd = el.querySelector("#bEditarP");
+    if(bEd) bEd.onclick = () => editor(el, comId, com, () => detalle(el, comId, com, p, volver), {modo:"editar", p});
+    const bDu = el.querySelector("#bDuplicarP");
+    if(bDu) bDu.onclick = async () => {
+      const C = await window.DHS_COM.datos();
+      const nombres = {}; Object.entries(C.coms).forEach(([k,c]) => { let n = (c.nombre || k) + (c.poblacion ? " (" + c.poblacion + ")" : ""); while(nombres[n]) n += " ·"; nombres[n] = k; });
+      caja.classList.remove("oculto");
+      caja.innerHTML = `<h4>📑 Duplicar ${esc(p.numero)}</h4><p class="vacio">Se hace un presupuesto nuevo (con el siguiente número) con las mismas líneas; las puedes cambiar antes de guardar.</p>
+        ${comId ? `<label class="chk"><input type="radio" name="duT" value="aqui" checked> Para esta misma ficha (${esc(com.nombre)})</label>` : ""}
+        <label class="chk"><input type="radio" name="duT" value="otra" ${comId ? "" : "checked"}> Para otra comunidad o cliente:</label>
+        <div style="margin:4px 0 8px 22px"><input id="duBus" list="dlDu" placeholder="Escribe y elige…" style="width:100%;max-width:420px"><datalist id="dlDu">${Object.keys(nombres).map(n => `<option value="${esc(n)}">`).join("")}</datalist></div>
+        <p><button class="btn" id="okDu">Seguir</button></p>`;
+      caja.querySelector("#duBus").onfocus = () => { const r = caja.querySelector('input[name=duT][value=otra]'); if(r) r.checked = true; };
+      caja.querySelector("#okDu").onclick = () => {
+        const otra = caja.querySelector('input[name=duT]:checked').value === "otra";
+        const cid = otra ? nombres[caja.querySelector("#duBus").value] : comId;
+        if(!cid) return m("Elige la ficha de la lista.");
+        const c2 = otra ? C.coms[cid] : com;
+        editor(el, cid, c2, otra ? (() => { window.DHS_COM.abrirPestana("presupuestos"); location.hash = "comunidad/" + encodeURIComponent(cid); }) : volver, {modo:"duplicar", p});
+      };
     };
     const bBo = el.querySelector("#bBorrarP");
     if(bBo) bBo.onclick = async () => {
