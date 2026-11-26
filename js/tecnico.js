@@ -58,7 +58,7 @@
   // ---------- AGENDA ----------
   // ---------- RECORDATORIOS (Ángel 25/11): no bloquea nada, pero cada vez que entra en la agenda o en una intervención
   // le sale una pantalla que tiene que cerrar con lo que tiene pendiente: fichar y cerrar las intervenciones de días anteriores.
-  const DESDE_APP = "2026-10-26";   // la app oficial empezó el 26/10
+  const DESDE_APP = "2026-11-26";   // los avisos cuentan desde el 26/11 (lo anterior no, Ángel 26/11)
   async function recordatorios(L, aquiId){
     if(PREVIEW && !PRUEBAS()) return;
     const {db, S} = D(), hoy = isoLocal(new Date()), ahora = new Date(), hm = ahora.getHours() * 60 + ahora.getMinutes();
@@ -93,7 +93,7 @@
     if(!items.length || document.querySelector(".rec-tec")) return;
     const fondo = document.createElement("div"); fondo.className = "preg-fondo rec-tec";
     fondo.innerHTML = `<div class="preg-caja" role="dialog" aria-modal="true"><h3>📌 Tienes cosas pendientes</h3>
-      <ul class="rec-lista">${items.slice(0, 6).map(i => `<li><span>${i.ico}</span><a href="${i.href}">${i.txt}</a></li>`).join("")}${items.length > 6 ? `<li><span>➕</span><span class="rec-mas">y ${items.length - 6} más sin cerrar</span></li>` : ""}</ul>
+      <ul class="rec-lista">${items.slice(0, 4).map(i => `<li><span>${i.ico}</span><a href="${i.href}">${i.txt}</a></li>`).join("")}${items.length > 4 ? `<li><span>➕</span><span class="rec-mas">y ${items.length - 4} más sin cerrar</span></li>` : ""}</ul>
       <div class="preg-bot"><button class="btn" id="recOk">Vale, ahora lo hago</button></div></div>`;
     document.body.appendChild(fondo);
     const fin = () => fondo.remove();
